@@ -85,15 +85,40 @@ func GetBootstrapToken(c *gin.Context) {
 		return
 	}
 
-	cmd, err := machineService.GetBootstrapToken(uint(id), projectKey, config.Common().AppUrl, config.Database())
+	cmd, err := machineService.GetBootstrapToken(uint(id), projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
 	if err != nil {
 		log.Printf("Error getting bootstrap token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"command": cmd,
-	})
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, cmd)
+}
+
+func GetUninstallCommand(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "read")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid machine id"})
+		return
+	}
+
+	cmd, err := machineService.GetUninstallCommand(uint(id), projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
+	if err != nil {
+		log.Printf("Error getting uninstall command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, cmd)
 }

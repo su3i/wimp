@@ -172,50 +172,39 @@ Per application (rolling across all instances):
 
 ---
 
-## 2-Week Build Plan
+## Bootstrap
 
-### Week 1 — Agent + Control Plane Core
+Minimal control plane: one endpoint only — GET /bootstrap?token=abc123
+Token generation (just a random string stored in postgres against a machine record)
+Bootstrap script that the endpoint serves:
 
-**Days 1–2: Shared protocol + agent skeleton**
+Downloads and installs windows_exporter as a Windows Service
+Downloads and installs Fluent Bit + writes config pointing at Loki
+Downloads and installs the agent binary + writes config.json with token + control plane URL
+Starts all three services
 
-- Define shared Go types: Command, Response, DiscoveryResult, Site, AppPool
-- Agent Windows Service skeleton (start/stop/install)
-- WebSocket dial-out from agent to control plane
-- Registration handshake with token validation
+The agent binary at this point is a stub — it starts, reads config, does nothing else. Just proves the install works.
+At the end of day 1 you can run one PowerShell command on a Windows machine and three services appear.
 
-**Days 3–4: IIS operations**
+## Agent
 
-- PowerShell execution wrapper in Go
-- Discover: `Get-Website`, `Get-WebAppPool` → parse JSON output
-- Actions: start/stop site, start/stop/recycle pool via PowerShell
-- Agent command dispatch loop
+Now flesh out the agent fully with the working install pipeline already in place
+WebSocket dial-out + registration handshake
+Heartbeat
+IIS discovery
+Action command dispatch
+Reconnection logic
+Every change you make you can test by just restarting the Windows Service on your test machine
 
-**Day 5: Control plane foundations**
+## Control plane (full)
 
-- PostgreSQL schema: projects, applications, machines, instances
-- Machine registration API
-- WebSocket agent connection registry
-- Token generation endpoint
+Machine registry
+WebSocket agent connection manager
+Command routing to agents
+Application/project/instance data model
+All action endpoints the frontend will call
 
-### Week 2 — Frontend + Observability + Polish
+## Frontend
 
-**Days 6–7: Frontend core**
-
-- Login screen
-- Project → Application → Instance navigation
-- Health status display (online/offline, N/M healthy)
-- Action buttons with confirmation
-
-**Days 8–9: Observability wiring**
-
-- Grafana iframe embed per machine/application
-- Loki log tail component (poll or SSE)
-- Fluent Bit config template in bootstrap script
-- Bootstrap script generator (token injection + all 3 services)
-
-**Day 10: End-to-end testing + hardening**
-
-- Full flow test on a clean Windows Server VM
-- Agent reconnection on disconnect
-- Rolling action sequencing (wait for health before next instance)
-- README + deployment instructions
+Everything the control plane exposes is real and testable
+No mocking needed

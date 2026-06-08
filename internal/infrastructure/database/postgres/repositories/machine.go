@@ -35,6 +35,19 @@ func (r *machineRepository) FindOneByID(id uint) (*machine.Machine, error) {
 	return &m, nil
 }
 
+func (r *machineRepository) FindOneByToken(token string) (*machine.Machine, error) {
+	var m machine.Machine
+
+	if err := r.db.Where("token = ?", token).First(&m).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &m, nil
+}
+
 func (r *machineRepository) FindOneByHostname(hostname string) (*machine.Machine, error) {
 	var m machine.Machine
 

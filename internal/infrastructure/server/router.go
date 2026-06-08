@@ -19,6 +19,10 @@ func InitializeRouter() *gin.Engine {
 		AllowCredentials: false,
 	}))
 
+	// Bootstrap (public — token is the credential)
+	router.GET("/bootstrap", handlers.Bootstrap)
+	router.GET("/bootstrap/uninstall", handlers.Uninstall)
+
 	// Health
 	router.GET("/health", handlers.Health)
 
@@ -61,6 +65,7 @@ func InitializeRouter() *gin.Engine {
 	router.POST("/projects/:key/machines", middleware.AuthMiddleware(), handlers.NewMachine)
 	router.GET("/projects/:key/machines", middleware.AuthMiddleware(), handlers.RetrieveMachines)
 	router.GET("/projects/:key/machines/:id/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
+	router.GET("/projects/:key/machines/:id/uninstall", middleware.AuthMiddleware(), handlers.GetUninstallCommand)
 
 	// Metrics
 	handlers.MetricsHandler(router)
