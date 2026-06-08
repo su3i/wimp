@@ -1,0 +1,17 @@
+p, org_superadmin, org, organization, read
+p, org_superadmin, org, organization, write
+p, org_superadmin, org, organization, admin
+
+p, org_admin, org, organization, read
+p, org_admin, org, organization, write
+
+p, org_guest, org, organization, read
+
+p, project_owner, project, project, read
+p, project_owner, project, project, write
+
+p, project_editor, project, project, write
+
+p, project_viewer, project, project, read
+
+g2, org_superadmin, project_owner

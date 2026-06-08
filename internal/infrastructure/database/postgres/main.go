@@ -1,0 +1,88 @@
+package postgres
+
+import (
+	"errors"
+	"fmt"
+	"log"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+
+	"github.com/su3i/wimp/internal/config"
+	"github.com/su3i/wimp/internal/domain/account"
+	"github.com/su3i/wimp/internal/domain/metadata"
+	"github.com/su3i/wimp/internal/domain/organization"
+	"github.com/su3i/wimp/internal/domain/project"
+)
+
+var DB *gorm.DB
+
+func ValidateConfig(c *config.DatabaseConfig) error {
+	if c.DatabaseHost == "" {
+		return errors.New("DATABASE_HOST is required")
+	}
+	if c.DatabasePort == "" {
+		return errors.New("DATABASE_PORT is required")
+	}
+	if c.DatabaseUsername == "" {
+		return errors.New("DATABASE_USERNAME is required")
+	}
+	if c.DatabasePassword == "" {
+		return errors.New("DATABASE_PASSWORD is required")
+	}
+	if c.DatabaseName == "" {
+		return errors.New("DATABASE_NAME is required")
+	}
+	return nil
+}
+
+func Connect(config *config.DatabaseConfig) {
+	if err := ValidateConfig(config); err != nil {
+		log.Fatalf("Invalid postgres config: %v", err)
+	}
+
+	sslMode := "disable"
+	if config.DatabaseUseSSL {
+		sslMode = "require"
+	}
+
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		config.DatabaseHost,
+		config.DatabasePort,
+		config.DatabaseUsername,
+		config.DatabasePassword,
+		config.DatabaseName,
+		sslMode,
+	)
+
+	var err error
+	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to postgres: %v", err)
+	}
+
+	log.Printf("Successfully connected to postgres")
+}
+
+func Migrate() {
+	err := DB.AutoMigrate(&organization.Organization{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (organization): %v", err)
+	}
+
+	err = DB.AutoMigrate(&account.Account{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (account): %v", err)
+	}
+
+	err = DB.AutoMigrate(&metadata.Metadata{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (metadata): %v", err)
+	}
+	
+	err = DB.AutoMigrate(&project.Project{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (project): %v", err)
+	}
+}

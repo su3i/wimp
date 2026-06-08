@@ -1,0 +1,8 @@
+.vscode/
+.env
+.env.*
+!.env.example
+.DS_Store
+main
+**/*.db
+**/*todo
