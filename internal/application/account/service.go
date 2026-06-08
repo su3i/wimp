@@ -5,11 +5,12 @@ import (
 
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/account"
+	"github.com/su3i/wimp/internal/domain/authorization"
 	"github.com/su3i/wimp/internal/domain/mfa"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
-func NewAccount(name string, email string, password string, role account.AccountRole, internalRoleJson map[string]string, cfg *config.DatabaseConfig) (*account.Account, error) {
+func NewAccount(name string, email string, password string, role account.AccountRole, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
 	// Check if email already exists - Fail fast
@@ -37,6 +38,12 @@ func NewAccount(name string, email string, password string, role account.Account
 
 	if err != nil {
 		return nil, err
+	}
+
+	internalRoleKey := account.BuildRoleKey("default", authorization.AuthorizationDomainOrg, string(role))
+
+	internalRoleJson := map[string]string{
+		"default": internalRoleKey,
 	}
 
 	// Create account

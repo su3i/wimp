@@ -14,7 +14,6 @@ import (
 
 var Languages = []map[string]string{
 	{"name": "English", "code": "EN", "default": "true"},
-	{"name": "دری", "code": "AF"},
 }
 
 func SupportedLanguages(c *gin.Context) {

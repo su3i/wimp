@@ -7,4 +7,6 @@ type CommonConfig struct {
 	BootstrapToken string `required:"true"`
 	EnforceMfa bool `required:"false"`
 	JWTSecret string `required:"true"`
+	DefaultAdminEmail string `required:"true"`
+	DefaultAdminPassword string `required:"true"`
 }

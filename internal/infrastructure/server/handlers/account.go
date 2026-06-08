@@ -39,14 +39,8 @@ func NewAccount(c *gin.Context) {
 		return
 	}
 
-	internalRoleKey := accountDomain.BuildRoleKey("default", authorizationDomain.AuthorizationDomainOrg, req.Role)
-
-	internalRoleJson := map[string]string{
-		"default": internalRoleKey,
-	}
-
 	// Create account
-	_account, err := accountService.NewAccount(req.Name, req.Email, req.Password, role, internalRoleJson, config.Database())
+	_account, err := accountService.NewAccount(req.Name, req.Email, req.Password, role, config.Database())
 
 	if err != nil {
 		log.Printf("Error creating account: %v", err)

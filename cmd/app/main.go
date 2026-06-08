@@ -16,6 +16,12 @@ import (
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 	"github.com/su3i/wimp/internal/infrastructure/server"
+
+	accountService "github.com/su3i/wimp/internal/application/account"
+	organizationService "github.com/su3i/wimp/internal/application/organization"
+	projectService "github.com/su3i/wimp/internal/application/project"
+	"github.com/su3i/wimp/internal/domain/account"
+	organizationDomain "github.com/su3i/wimp/internal/domain/organization"
 )
 
 func main() {
@@ -36,6 +42,21 @@ func main() {
 
 	// Load bootstrap token
 	metadata.LoadBootstrapToken(config.Common().BootstrapToken, config.Database())
+
+	// Seed default account
+	if _, err := accountService.NewAccount("Administrator", config.Common().DefaultAdminEmail, config.Common().DefaultAdminPassword, account.SuperAdmin, config.Database()); err != nil {
+		log.Printf("Seed account: %v", err)
+	}
+
+	// Seed default organization
+	if _, err := organizationService.NewOrganization("Default", "default", string(organizationDomain.Public), config.Database()); err != nil {
+		log.Printf("Seed organization: %v", err)
+	}
+
+	// Seed default project
+	if _, err := projectService.NewProject("Default", "default", "", config.Common().DefaultAdminEmail, config.Database()); err != nil {
+		log.Printf("Seed project: %v", err)
+	}
 
 	// Initialize authorization module
 	authorization.Initialize(config.Casbin())
