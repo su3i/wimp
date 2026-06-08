@@ -44,11 +44,12 @@ func (r *projectRepository) FindOneByKey(key string) (*project.Project, error) {
 
 func (r *projectRepository) Create(payload *project.Project) (*project.Project, error) {
 	_project := project.Project{
-		Name: payload.Name,
-		Key: payload.Key,
-		Status: payload.Status,
+		OrganizationID: payload.OrganizationID,
+		Name:           payload.Name,
+		Key:            payload.Key,
+		Status:         payload.Status,
 		BusinessDomain: payload.BusinessDomain,
-		CreatedBy: payload.CreatedBy,
+		CreatedBy:      payload.CreatedBy,
 	}
 
 	err := r.db.Create(&_project).Error

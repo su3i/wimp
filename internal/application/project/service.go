@@ -7,9 +7,10 @@ import (
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/project"
 	"github.com/su3i/wimp/internal/infrastructure/database"
+	organizationService "github.com/su3i/wimp/internal/application/organization"
 )
 
-func NewProject(name string, key string, businessDomain string, createdByEmail string, cfg *config.DatabaseConfig) (*project.Project, error) {
+func NewProject(name string, key string, businessDomain string, orgKey string, createdByEmail string, cfg *config.DatabaseConfig) (*project.Project, error) {
 	_projectRepository := database.NewProjectRepository(cfg)
 
 	_project, err := _projectRepository.FindOneByKey(key)
@@ -22,6 +23,11 @@ func NewProject(name string, key string, businessDomain string, createdByEmail s
 		return nil, errors.New("Project already exists.")
 	}
 
+	org, err := organizationService.RetrieveOrganization(orgKey, cfg)
+	if err != nil || org == nil {
+		return nil, errors.New("Organization not found")
+	}
+
 	createdByAccount, err := account.RetrieveAccount(createdByEmail, cfg)
 
 	if err != nil {
@@ -30,15 +36,16 @@ func NewProject(name string, key string, businessDomain string, createdByEmail s
 
 	createdBy := map[string]string{
 		"Email": createdByEmail,
-		"Name": createdByAccount.Name,
+		"Name":  createdByAccount.Name,
 	}
 
 	_project = &project.Project{
-		Name:  name,
-		Key: key,
-		Status: project.Active,
+		OrganizationID: org.ID,
+		Name:           name,
+		Key:            key,
+		Status:         project.Active,
 		BusinessDomain: businessDomain,
-		CreatedBy: createdBy,
+		CreatedBy:      createdBy,
 	}
 
 	return _projectRepository.Create(_project)

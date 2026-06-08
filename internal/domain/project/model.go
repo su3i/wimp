@@ -7,6 +7,7 @@ import (
 type Project struct {
 	gorm.Model
 
+	OrganizationID  uint                     `gorm:"not null"`
 	Name            string                   `gorm:"unique;not null"`
 	Key             string                   `gorm:"unique;not null"`
 	Status          ProjectStatus            `gorm:"type:text;not null"`

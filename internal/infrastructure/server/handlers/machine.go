@@ -1,0 +1,99 @@
+package handlers
+
+import (
+	"log"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	authorizationService "github.com/su3i/wimp/internal/application/authorization"
+	machineService "github.com/su3i/wimp/internal/application/machine"
+	"github.com/su3i/wimp/internal/config"
+	authorizationDomain "github.com/su3i/wimp/internal/domain/authorization"
+	"github.com/su3i/wimp/internal/infrastructure/server/utils"
+)
+
+func NewMachine(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	var req struct {
+		Hostname string `json:"hostname" binding:"required"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"message": "Validation failed.",
+			"errors":  utils.FormatValidationErrors(err),
+		})
+		return
+	}
+
+	m, err := machineService.NewMachine(req.Hostname, projectKey, config.Database())
+	if err != nil {
+		log.Printf("Error creating machine: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "success",
+		"machine": m,
+	})
+}
+
+func RetrieveMachines(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "read")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	machines, err := machineService.RetrieveMachines(projectKey, config.Database())
+	if err != nil {
+		log.Printf("Error retrieving machines: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "success",
+		"machines": machines,
+	})
+}
+
+func GetBootstrapToken(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "read")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid machine id"})
+		return
+	}
+
+	cmd, err := machineService.GetBootstrapToken(uint(id), projectKey, config.Common().AppUrl, config.Database())
+	if err != nil {
+		log.Printf("Error getting bootstrap token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success",
+		"command": cmd,
+	})
+}

@@ -15,9 +15,10 @@ import (
 func NewProject(c *gin.Context) {
 	// Parse the request body
 	var req struct {
-		Name string `json:"name" binding:"required"`
-		Key string `json:"key" binding:"required"`
+		Name           string `json:"name" binding:"required"`
+		Key            string `json:"key" binding:"required"`
 		BusinessDomain string `json:"businessDomain" binding:"required"`
+		OrgKey         string `json:"orgKey"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
@@ -47,8 +48,13 @@ func NewProject(c *gin.Context) {
 		return
 	}
 
+	orgKey := req.OrgKey
+	if orgKey == "" {
+		orgKey = "default"
+	}
+
 	// Create project
-	_project, err := project.NewProject(req.Name, req.Key, req.BusinessDomain, *createdByEmail, config.Database())
+	_project, err := project.NewProject(req.Name, req.Key, req.BusinessDomain, orgKey, *createdByEmail, config.Database())
 
 	if err != nil {
 		log.Printf("Error creating project: %v", err)

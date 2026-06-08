@@ -57,6 +57,11 @@ func InitializeRouter() *gin.Engine {
 	router.PUT("/project/:key", middleware.AuthMiddleware(), handlers.UpdateProject)
 	router.GET("/projects", middleware.AuthMiddleware(), handlers.RetrieveProjects)
 
+	// Machine (project-scoped)
+	router.POST("/projects/:key/machines", middleware.AuthMiddleware(), handlers.NewMachine)
+	router.GET("/projects/:key/machines", middleware.AuthMiddleware(), handlers.RetrieveMachines)
+	router.GET("/projects/:key/machines/:id/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
+
 	// Metrics
 	handlers.MetricsHandler(router)
 

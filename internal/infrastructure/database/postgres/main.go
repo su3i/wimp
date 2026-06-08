@@ -10,6 +10,7 @@ import (
 
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/account"
+	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
@@ -84,5 +85,10 @@ func Migrate() {
 	err = DB.AutoMigrate(&project.Project{})
 	if err != nil {
 		log.Fatalf("failed to migrate postgres database (project): %v", err)
+	}
+
+	err = DB.AutoMigrate(&machine.Machine{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (machine): %v", err)
 	}
 }

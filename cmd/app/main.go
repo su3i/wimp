@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// Seed default project
-	if _, err := projectService.NewProject("Default", "default", "", config.Common().DefaultAdminEmail, config.Database()); err != nil {
+	if _, err := projectService.NewProject("Default", "default", "", "default", config.Common().DefaultAdminEmail, config.Database()); err != nil {
 		log.Printf("Seed project: %v", err)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/account"
 	databaseDomain "github.com/su3i/wimp/internal/domain/database"
+	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
@@ -75,4 +76,8 @@ func NewAccountRepository(config *config.DatabaseConfig) account.AccountReposito
 
 func NewProjectRepository(config *config.DatabaseConfig) project.ProjectRepository {
 	return newRepository(config, postgresRepository.NewProjectRepository, sqliteRepository.NewProjectRepository)
+}
+
+func NewMachineRepository(config *config.DatabaseConfig) machine.MachineRepository {
+	return newRepository(config, postgresRepository.NewMachineRepository, sqliteRepository.NewMachineRepository)
 }
