@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 
 # ── Baked-in values (substituted by control plane at request time) ─────────────
 $ControlPlaneUrl   = "{{.ControlPlaneUrl}}"
+$AgentExeUrl       = "{{.AgentExeUrl}}"
 $RegistrationToken = "{{.RegistrationToken}}"
 $MachineId         = {{.MachineId}}
 $LokiHost          = "{{.LokiHost}}"
@@ -103,7 +104,7 @@ Write-Host "  Done."
 Write-Host ""
 Write-Host "[3/3] Installing wimp agent..."
 $agentExe = "$AgentDir\agent.exe"
-Get-File "$ControlPlaneUrl/agent.exe" $agentExe
+Get-File $AgentExeUrl $agentExe
 
 @{
     control_plane_url  = $ControlPlaneUrl

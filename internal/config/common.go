@@ -7,6 +7,7 @@ type CommonConfig struct {
 	LokiHost             string `required:"true"`
 	LokiPort             string `required:"true"`
 	BootstrapToken       string `required:"true"`
+	AgentVersion         string `required:"true"`
 	EnforceMfa           bool   `required:"false"`
 	JWTSecret            string `required:"true"`
 	DefaultAdminEmail    string `required:"true"`

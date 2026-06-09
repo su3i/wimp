@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"os"
 	"text/template"
@@ -11,8 +12,11 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
+const agentReleaseBaseURL = "https://github.com/su3i/wimp/releases/download"
+
 type bootstrapData struct {
 	ControlPlaneUrl   string
+	AgentExeUrl       string
 	RegistrationToken string
 	MachineId         uint
 	LokiHost          string
@@ -51,13 +55,17 @@ func Bootstrap(c *gin.Context) {
 		return
 	}
 
+	cfg := config.Common()
+	agentExeUrl := fmt.Sprintf("%s/v%s/agent.exe", agentReleaseBaseURL, cfg.AgentVersion)
+
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, bootstrapData{
-		ControlPlaneUrl:   config.Common().AppUrl,
+		ControlPlaneUrl:   cfg.AppUrl,
+		AgentExeUrl:       agentExeUrl,
 		RegistrationToken: m.Token,
 		MachineId:         m.ID,
-		LokiHost:          config.Common().LokiHost,
-		LokiPort:          config.Common().LokiPort,
+		LokiHost:          cfg.LokiHost,
+		LokiPort:          cfg.LokiPort,
 	}); err != nil {
 		c.String(http.StatusInternalServerError, "# Error: bootstrap script render error\nexit 1")
 		return
@@ -78,6 +86,3 @@ func Uninstall(c *gin.Context) {
 	c.String(http.StatusOK, string(scriptBytes))
 }
 
-func AgentExe(c *gin.Context) {
-	c.FileAttachment("./data/agent.exe", "agent.exe")
-}

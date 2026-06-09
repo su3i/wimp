@@ -25,7 +25,6 @@ func InitializeRouter() *gin.Engine {
 	// Bootstrap (public — token is the credential)
 	router.GET("/bootstrap", handlers.Bootstrap)
 	router.GET("/bootstrap/uninstall", handlers.Uninstall)
-	router.GET("/agent.exe", handlers.AgentExe)
 
 	// Health
 	router.GET("/health", handlers.Health)
