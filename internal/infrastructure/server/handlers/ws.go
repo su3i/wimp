@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"log"
-	"net"
 	"net/http"
 	"time"
 
@@ -58,13 +57,13 @@ func AgentWebSocket(c *gin.Context) {
 	}
 
 	hub.Get().Register(m.ID, conn)
-	log.Printf("agent connected: machine_id=%d", m.ID)
+	log.Printf("machine (%d) agent connected", m.ID)
 
 	defer func() {
 		hub.Get().Deregister(m.ID)
 		m.Status = machineDomain.Offline
 		repo.Update(m)
-		log.Printf("agent disconnected: machine_id=%d", m.ID)
+		log.Printf("machine (%d) agent disconnected", m.ID)
 	}()
 
 	for {
@@ -81,13 +80,9 @@ func AgentWebSocket(c *gin.Context) {
 		switch msg.Type {
 		case protocol.TypeRegister:
 			var reg protocol.RegisterPayload
-			if err := json.Unmarshal(msg.Payload, &reg); err == nil && reg.Hostname != "" {
+			if err := json.Unmarshal(msg.Payload, &reg); err == nil {
 				m.Hostname = reg.Hostname
-			}
-			// Extract IP from the remote address (host:port → host)
-			remoteAddr := conn.RemoteAddr().String()
-			if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
-				m.IP = host
+				m.IPs = reg.IPs
 			}
 			repo.Update(m)
 

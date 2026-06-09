@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -68,8 +69,12 @@ func (a *Agent) dial(ctx context.Context) error {
 
 	hostname, _ := os.Hostname()
 	if err := wc.writeJSON(protocol.Message{
-		Type:    protocol.TypeRegister,
-		Payload: mustMarshal(protocol.RegisterPayload{MachineId: a.cfg.MachineId, Hostname: hostname}),
+		Type: protocol.TypeRegister,
+		Payload: mustMarshal(protocol.RegisterPayload{
+			MachineId: a.cfg.MachineId,
+			Hostname:  hostname,
+			IPs:       localIPs(),
+		}),
 	}); err != nil {
 		return fmt.Errorf("registration send: %w", err)
 	}
@@ -165,6 +170,36 @@ func buildWSURL(controlPlaneUrl, token string) (string, error) {
 	parsed.RawQuery = url.Values{"token": {token}}.Encode()
 
 	return parsed.String(), nil
+}
+
+func localIPs() []string {
+	var ips []string
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ips
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && !ip.IsLoopback() {
+				ips = append(ips, ip.String())
+			}
+		}
+	}
+	return ips
 }
 
 func mustMarshal(v any) json.RawMessage {

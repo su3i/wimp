@@ -19,8 +19,9 @@ type Message struct {
 
 // RegisterPayload is sent by the agent immediately after connecting.
 type RegisterPayload struct {
-	MachineId uint   `json:"machine_id"`
-	Hostname  string `json:"hostname"`
+	MachineId uint     `json:"machine_id"`
+	Hostname  string   `json:"hostname"`
+	IPs       []string `json:"ips"`
 }
 
 // HeartbeatPayload is sent by the agent every 30 seconds.

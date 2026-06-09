@@ -28,13 +28,14 @@ function Get-File($url, $dest) {
     Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
 }
 
+function Remove-Existing($name) {
+    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+    & sc.exe delete $name 2>&1 | Out-Null
+    Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+}
+
 function Install-Service($name, $binPath) {
-    $existing = Get-Service -Name $name -ErrorAction SilentlyContinue
-    if ($existing) {
-        Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
-        & sc.exe delete $name | Out-Null
-        Start-Sleep -Seconds 1
-    }
     New-Service -Name $name -BinaryPathName $binPath -StartupType Automatic | Out-Null
 }
 
@@ -64,6 +65,8 @@ Write-Host "  Done."
 # ── 2. Fluent Bit ─────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "[2/3] Installing Fluent Bit v$FluentBitVersion..."
+Remove-Existing "fluent-bit"
+
 $fbZip = "$TmpDir\fluent-bit.zip"
 Get-File "https://packages.fluentbit.io/windows/fluent-bit-$FluentBitVersion-win64.zip" $fbZip
 Expand-Archive -Path $fbZip -DestinationPath $TmpDir -Force
@@ -103,6 +106,8 @@ Write-Host "  Done."
 # ── 3. wimp Agent ─────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "[3/3] Installing wimp agent..."
+Remove-Existing "wimp-agent"
+
 $agentExe = "$AgentDir\agent.exe"
 Get-File $AgentExeUrl $agentExe
 
