@@ -1,0 +1,106 @@
+package handlers
+
+import (
+	"encoding/json"
+	"log"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/su3i/wimp/internal/config"
+	machineDomain "github.com/su3i/wimp/internal/domain/machine"
+	"github.com/su3i/wimp/internal/domain/protocol"
+	"github.com/su3i/wimp/internal/hub"
+	"github.com/su3i/wimp/internal/infrastructure/database"
+)
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func AgentWebSocket(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	repo := database.NewMachineRepository(config.Database())
+
+	m, err := repo.FindOneByToken(token)
+	if err != nil || m == nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	if time.Now().After(m.TokenExpiresAt) {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("ws upgrade failed: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// Mark online and extend token validity so reconnects always work.
+	now := time.Now()
+	m.Status = machineDomain.Online
+	m.LastSeenAt = &now
+	m.TokenExpiresAt = now.Add(100 * 365 * 24 * time.Hour)
+	if err := repo.Update(m); err != nil {
+		log.Printf("failed to mark machine online: %v", err)
+		return
+	}
+
+	hub.Get().Register(m.ID, conn)
+	log.Printf("agent connected: machine_id=%d", m.ID)
+
+	defer func() {
+		hub.Get().Deregister(m.ID)
+		m.Status = machineDomain.Offline
+		repo.Update(m)
+		log.Printf("agent disconnected: machine_id=%d", m.ID)
+	}()
+
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		var msg protocol.Message
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			continue
+		}
+
+		switch msg.Type {
+		case protocol.TypeRegister:
+			var reg protocol.RegisterPayload
+			if err := json.Unmarshal(msg.Payload, &reg); err == nil && reg.Hostname != "" {
+				m.Hostname = reg.Hostname
+			}
+			// Extract IP from the remote address (host:port → host)
+			remoteAddr := conn.RemoteAddr().String()
+			if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+				m.IP = host
+			}
+			repo.Update(m)
+
+			ack, _ := json.Marshal(protocol.Message{Type: protocol.TypeRegisterAck})
+			conn.WriteMessage(websocket.TextMessage, ack)
+
+		case protocol.TypeHeartbeat:
+			t := time.Now()
+			m.LastSeenAt = &t
+			repo.Update(m)
+
+		case protocol.TypeCommandResult:
+			// TODO: route result back to waiting HTTP handler
+		}
+	}
+}

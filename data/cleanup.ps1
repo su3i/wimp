@@ -45,10 +45,10 @@ if (Test-Path $FBDir) {
     Write-Host "  [DEL]  $FBDir"
 }
 
-# ── 3. su3i Agent ─────────────────────────────────────────────────────────────
+# ── 3. wimp Agent ─────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "[3/3] Removing su3i agent..."
-Remove-Svc "su3i-agent"
+Write-Host "[3/3] Removing wimp agent..."
+Remove-Svc "wimp-agent"
 if (Test-Path $AgentDir) {
     Remove-Item -Path $AgentDir -Recurse -Force
     Write-Host "  [DEL]  $AgentDir"

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"text/template"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/su3i/wimp/internal/config"
@@ -35,10 +34,10 @@ func Bootstrap(c *gin.Context) {
 		return
 	}
 
-	if time.Now().After(m.TokenExpiresAt) {
-		c.String(http.StatusUnauthorized, "# Error: token has expired\nexit 1")
-		return
-	}
+	// if time.Now().After(m.TokenExpiresAt) {
+	// 	c.String(http.StatusUnauthorized, "# Error: token has expired\nexit 1")
+	// 	return
+	// }
 
 	scriptBytes, err := os.ReadFile("./data/bootstrap.ps1")
 	if err != nil {
@@ -77,4 +76,8 @@ func Uninstall(c *gin.Context) {
 
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusOK, string(scriptBytes))
+}
+
+func AgentExe(c *gin.Context) {
+	c.FileAttachment("./data/agent.exe", "agent.exe")
 }

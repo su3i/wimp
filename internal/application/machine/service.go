@@ -12,17 +12,7 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
-func NewMachine(hostname string, projectKey string, cfg *config.DatabaseConfig) (*machine.Machine, error) {
-	repo := database.NewMachineRepository(cfg)
-
-	existing, err := repo.FindOneByHostname(hostname)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil {
-		return nil, errors.New("machine with that hostname already exists")
-	}
-
+func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return nil, errors.New("project not found")
@@ -35,12 +25,12 @@ func NewMachine(hostname string, projectKey string, cfg *config.DatabaseConfig) 
 
 	m := &machine.Machine{
 		ProjectID:      proj.ID,
-		Hostname:       hostname,
 		Status:         machine.Pending,
 		Token:          token,
 		TokenExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 
+	repo := database.NewMachineRepository(cfg)
 	return repo.Create(m)
 }
 

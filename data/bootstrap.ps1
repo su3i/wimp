@@ -13,10 +13,10 @@ $WinExpVersion    = "0.31.7"
 $FluentBitVersion = "5.0.7"
 
 # ── Install directories ────────────────────────────────────────────────────────
-$BaseDir  = "."
-$FBDir    = ".\fluent-bit"
-$AgentDir = ".\agent"
-$TmpDir   = ".\tmp"
+$BaseDir  = [System.IO.Path]::GetFullPath(".")
+$FBDir    = [System.IO.Path]::GetFullPath(".\fluent-bit")
+$AgentDir = [System.IO.Path]::GetFullPath(".\wimp")
+$TmpDir   = [System.IO.Path]::GetFullPath(".\tmp")
 
 foreach ($d in @($BaseDir, $FBDir, $AgentDir, $TmpDir)) {
     if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
@@ -25,6 +25,16 @@ foreach ($d in @($BaseDir, $FBDir, $AgentDir, $TmpDir)) {
 function Get-File($url, $dest) {
     Write-Host "    $url"
     Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+}
+
+function Install-Service($name, $binPath) {
+    $existing = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($existing) {
+        Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+        & sc.exe delete $name | Out-Null
+        Start-Sleep -Seconds 1
+    }
+    New-Service -Name $name -BinaryPathName $binPath -StartupType Automatic | Out-Null
 }
 
 function Test-ServiceRunning($name) {
@@ -45,7 +55,7 @@ $msi = "$TmpDir\windows_exporter.msi"
 Get-File "https://github.com/prometheus-community/windows_exporter/releases/download/v$WinExpVersion/windows_exporter-$WinExpVersion-amd64.msi" $msi
 Start-Process msiexec.exe -Wait -ArgumentList @(
     "/i", $msi, "/quiet",
-    "ENABLED_COLLECTORS=cpu,cs,logical_disk,net,os,service,system,tcp,iis",
+    "ENABLED_COLLECTORS=cpu,logical_disk,net,os,service,system,tcp,iis",
     "ADD_FIREWALL_EXCEPTION=yes"
 )
 Write-Host "  Done."
@@ -86,12 +96,12 @@ $fbConf = @"
 Set-Content "$FBDir\fluent-bit.conf" $fbConf
 
 $fbExe = if (Test-Path "$FBDir\bin\fluent-bit.exe") { "$FBDir\bin\fluent-bit.exe" } else { "$FBDir\fluent-bit.exe" }
-New-Service -Name "fluent-bit" -BinaryPathName "$fbExe -c $FBDir\fluent-bit.conf" -StartupType Automatic | Out-Null
+Install-Service "fluent-bit" "$fbExe -c $FBDir\fluent-bit.conf"
 Write-Host "  Done."
 
-# ── 3. su3i Agent ─────────────────────────────────────────────────────────────
+# ── 3. wimp Agent ─────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "[3/3] Installing su3i agent..."
+Write-Host "[3/3] Installing wimp agent..."
 $agentExe = "$AgentDir\agent.exe"
 Get-File "$ControlPlaneUrl/agent.exe" $agentExe
 
@@ -101,13 +111,13 @@ Get-File "$ControlPlaneUrl/agent.exe" $agentExe
     machine_id         = $MachineId
 } | ConvertTo-Json | Set-Content "$AgentDir\config.json"
 
-New-Service -Name "su3i-agent" -BinaryPathName $agentExe -StartupType Automatic | Out-Null
+Install-Service "wimp-agent" $agentExe
 Write-Host "  Done."
 
 # ── Start services ─────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Starting services..."
-foreach ($svc in @("windows_exporter", "fluent-bit", "su3i-agent")) {
+foreach ($svc in @("windows_exporter", "fluent-bit", "wimp-agent")) {
     Start-Service -Name $svc -ErrorAction SilentlyContinue
 }
 
@@ -117,7 +127,7 @@ Start-Sleep -Seconds 3
 Write-Host ""
 Write-Host "Verifying..."
 $allOk = $true
-foreach ($svc in @("windows_exporter", "fluent-bit", "su3i-agent")) {
+foreach ($svc in @("windows_exporter", "fluent-bit", "wimp-agent")) {
     if (-not (Test-ServiceRunning $svc)) { $allOk = $false }
 }
 

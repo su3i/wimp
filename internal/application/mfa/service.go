@@ -7,7 +7,7 @@ import (
 	"github.com/su3i/wimp/internal/domain/mfa"
 )
 
-var ISSUER = "su3i"
+var ISSUER = "wimp"
 
 func RetrieveTotpURI(email string, secret string) (string, error) {
 	uri := fmt.Sprintf(

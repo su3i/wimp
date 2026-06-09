@@ -22,28 +22,24 @@ func NewMachine(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Hostname string `json:"hostname" binding:"required"`
-	}
-
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"message": "Validation failed.",
-			"errors":  utils.FormatValidationErrors(err),
-		})
-		return
-	}
-
-	m, err := machineService.NewMachine(req.Hostname, projectKey, config.Database())
+	m, err := machineService.NewMachine(projectKey, config.Database())
 	if err != nil {
 		log.Printf("Error creating machine: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	cmd, err := machineService.GetBootstrapToken(m.ID, projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
+	if err != nil {
+		log.Printf("Error building bootstrap command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "success",
-		"machine": m,
+		"message":           "success",
+		"machine":           m,
+		"bootstrap_command": cmd,
 	})
 }
 

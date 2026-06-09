@@ -1,4 +1,4 @@
-# su3i
+# wimp
 
 **Windows Infrastructure Management Platform — MVP**
 
@@ -6,7 +6,7 @@
 
 ## What It Is
 
-su3i is an internal platform for managing pools of Windows/IIS application instances across multiple machines. It replaces the need to RDP into individual servers for routine operational tasks, and provides a unified view of application health, metrics, and logs across a horizontally scaled fleet.
+wimp is an internal platform for managing pools of Windows/IIS application instances across multiple machines. It replaces the need to RDP into individual servers for routine operational tasks, and provides a unified view of application health, metrics, and logs across a horizontally scaled fleet.
 
 It is not a deployment tool. It is not a cloud orchestration platform. It does one thing: give operators full operational visibility and control over legacy IIS workloads running on Windows servers, from a single browser tab.
 
@@ -22,7 +22,7 @@ Managing 10–100+ Windows servers today means:
 - No metrics aggregation — you find out something is wrong when users complain
 - Restarting an app pool across 20 machines is a manual, error-prone process
 
-su3i eliminates all of this.
+wimp eliminates all of this.
 
 ---
 
@@ -75,14 +75,14 @@ Central API server. Responsibilities:
 One command run on each machine:
 
 ```powershell
-iex (iwr "https://su3i-host/bootstrap?token=abc123").Content
+iex (iwr "https://wimp-host/bootstrap?token=abc123").Content
 ```
 
 Installs and starts three Windows Services:
 
 1. `windows_exporter` (metrics)
 2. `Fluent Bit` (log shipping → Loki)
-3. `su3i-agent` (control plane connection)
+3. `wimp-agent` (control plane connection)
 
 Machine appears in dashboard within 60 seconds of running this command.
 
