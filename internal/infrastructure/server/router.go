@@ -70,6 +70,13 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/machines/:id/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
 	router.GET("/projects/:key/machines/:id/uninstall", middleware.AuthMiddleware(), handlers.GetUninstallCommand)
 
+	// App Pools (machine-scoped)
+	router.GET("/projects/:key/machines/:machineId/app-pools", middleware.AuthMiddleware(), handlers.RetrieveAppPools)
+	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/start", middleware.AuthMiddleware(), handlers.AppPoolCommand("start"))
+	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/stop", middleware.AuthMiddleware(), handlers.AppPoolCommand("stop"))
+	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/restart", middleware.AuthMiddleware(), handlers.AppPoolCommand("restart"))
+	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/recycle", middleware.AuthMiddleware(), handlers.AppPoolCommand("recycle"))
+
 	// Metrics
 	handlers.MetricsHandler(router)
 

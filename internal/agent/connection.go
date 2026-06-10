@@ -97,8 +97,12 @@ func (a *Agent) heartbeat(ctx context.Context, wc *safeConn) {
 			return
 		case <-ticker.C:
 			err := wc.writeJSON(protocol.Message{
-				Type:    protocol.TypeHeartbeat,
-				Payload: mustMarshal(protocol.HeartbeatPayload{MachineId: a.cfg.MachineId}),
+				Type: protocol.TypeHeartbeat,
+				Payload: mustMarshal(protocol.HeartbeatPayload{
+					MachineId: a.cfg.MachineId,
+					AppPools:  runningAppPools(),
+					Sites:     runningSites(),
+				}),
 			})
 			if err != nil {
 				a.logger().Errorf("heartbeat: %v", err)
@@ -128,8 +132,37 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 		switch msg.Type {
 		case protocol.TypeRegisterAck:
 			a.logger().Info("registration acknowledged by control plane")
+			disc := protocol.DiscoveryPayload{
+				AppPools: discoverAppPools(),
+				Sites:    discoverSites(),
+			}
+			if err := wc.writeJSON(protocol.Message{
+				Type:    protocol.TypeDiscovery,
+				Payload: mustMarshal(disc),
+			}); err != nil {
+				a.logger().Errorf("discovery send: %v", err)
+			}
+
 		case protocol.TypeCommand:
-			// TODO: IIS command dispatch
+			var cmd protocol.CommandPayload
+			if err := json.Unmarshal(msg.Payload, &cmd); err != nil {
+				continue
+			}
+			go func(c protocol.CommandPayload) {
+				output, err := executeCommand(c.Action, c.TargetType, c.Target)
+				result := protocol.CommandResultPayload{
+					CommandID: c.CommandID,
+					Success:   err == nil,
+					Output:    output,
+				}
+				if err != nil {
+					result.Error = err.Error()
+				}
+				wc.writeJSON(protocol.Message{ //nolint:errcheck
+					Type:    protocol.TypeCommandResult,
+					Payload: mustMarshal(result),
+				})
+			}(cmd)
 		}
 	}
 }

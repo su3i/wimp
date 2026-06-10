@@ -8,6 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	appPoolService "github.com/su3i/wimp/internal/application/apppool"
+	siteService "github.com/su3i/wimp/internal/application/site"
 	"github.com/su3i/wimp/internal/config"
 	machineDomain "github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/protocol"
@@ -89,13 +91,42 @@ func AgentWebSocket(c *gin.Context) {
 			ack, _ := json.Marshal(protocol.Message{Type: protocol.TypeRegisterAck})
 			conn.WriteMessage(websocket.TextMessage, ack)
 
+		case protocol.TypeDiscovery:
+			var disc protocol.DiscoveryPayload
+			if err := json.Unmarshal(msg.Payload, &disc); err != nil {
+				log.Printf("machine (%d) bad discovery payload: %v", m.ID, err)
+				continue
+			}
+			cfg := config.Database()
+			if err := appPoolService.UpsertFromDiscovery(m.ID, disc.AppPools, cfg); err != nil {
+				log.Printf("machine (%d) app pool upsert failed: %v", m.ID, err)
+			}
+			if err := siteService.UpsertFromDiscovery(m.ID, disc.Sites, cfg); err != nil {
+				log.Printf("machine (%d) site upsert failed: %v", m.ID, err)
+			}
+
 		case protocol.TypeHeartbeat:
+			var hb protocol.HeartbeatPayload
+			if err := json.Unmarshal(msg.Payload, &hb); err != nil {
+				continue
+			}
 			t := time.Now()
 			m.LastSeenAt = &t
 			repo.Update(m)
+			cfg := config.Database()
+			appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
+			siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
 
 		case protocol.TypeCommandResult:
-			// TODO: route result back to waiting HTTP handler
+			var result protocol.CommandResultPayload
+			if err := json.Unmarshal(msg.Payload, &result); err != nil {
+				continue
+			}
+			hub.ResolveCommand(result.CommandID, hub.CommandResult{
+				Success: result.Success,
+				Output:  result.Output,
+				Error:   result.Error,
+			})
 		}
 	}
 }

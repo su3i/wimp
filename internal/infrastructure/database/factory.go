@@ -3,11 +3,13 @@ package database
 import (
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/account"
+	"github.com/su3i/wimp/internal/domain/apppool"
 	databaseDomain "github.com/su3i/wimp/internal/domain/database"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
+	"github.com/su3i/wimp/internal/domain/site"
 	"github.com/su3i/wimp/internal/infrastructure/database/postgres"
 	postgresRepository "github.com/su3i/wimp/internal/infrastructure/database/postgres/repositories"
 	"github.com/su3i/wimp/internal/infrastructure/database/sqlite"
@@ -80,4 +82,12 @@ func NewProjectRepository(config *config.DatabaseConfig) project.ProjectReposito
 
 func NewMachineRepository(config *config.DatabaseConfig) machine.MachineRepository {
 	return newRepository(config, postgresRepository.NewMachineRepository, sqliteRepository.NewMachineRepository)
+}
+
+func NewAppPoolRepository(config *config.DatabaseConfig) apppool.AppPoolRepository {
+	return newRepository(config, postgresRepository.NewAppPoolRepository, sqliteRepository.NewAppPoolRepository)
+}
+
+func NewSiteRepository(config *config.DatabaseConfig) site.SiteRepository {
+	return newRepository(config, postgresRepository.NewSiteRepository, sqliteRepository.NewSiteRepository)
 }
