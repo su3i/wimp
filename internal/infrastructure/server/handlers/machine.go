@@ -74,7 +74,7 @@ func GetBootstrapToken(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
+	idParam := c.Param("machineId")
 	id, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid machine id"})
@@ -101,7 +101,7 @@ func GetUninstallCommand(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
+	idParam := c.Param("machineId")
 	id, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid machine id"})
