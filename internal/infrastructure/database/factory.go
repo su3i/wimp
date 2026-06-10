@@ -4,6 +4,7 @@ import (
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/account"
 	"github.com/su3i/wimp/internal/domain/apppool"
+	"github.com/su3i/wimp/internal/domain/application"
 	databaseDomain "github.com/su3i/wimp/internal/domain/database"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
@@ -90,4 +91,8 @@ func NewAppPoolRepository(config *config.DatabaseConfig) apppool.AppPoolReposito
 
 func NewSiteRepository(config *config.DatabaseConfig) site.SiteRepository {
 	return newRepository(config, postgresRepository.NewSiteRepository, sqliteRepository.NewSiteRepository)
+}
+
+func NewApplicationRepository(config *config.DatabaseConfig) application.ApplicationRepository {
+	return newRepository(config, postgresRepository.NewApplicationRepository, sqliteRepository.NewApplicationRepository)
 }

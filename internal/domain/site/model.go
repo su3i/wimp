@@ -12,8 +12,8 @@ type Binding struct {
 type Site struct {
 	gorm.Model
 
-	MachineID    uint      `gorm:"not null;index"`
-	Name         string    `gorm:"not null"`
+	MachineID    uint      `gorm:"not null;uniqueIndex:idx_site_machine_name"`
+	Name         string    `gorm:"not null;uniqueIndex:idx_site_machine_name"`
 	State        string    `gorm:"type:text;not null"`
 	PhysicalPath string
 	AppPoolName  string

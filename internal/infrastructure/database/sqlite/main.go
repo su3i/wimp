@@ -10,6 +10,7 @@ import (
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/account"
 	"github.com/su3i/wimp/internal/domain/apppool"
+	"github.com/su3i/wimp/internal/domain/application"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
 	"github.com/su3i/wimp/internal/domain/organization"
@@ -75,5 +76,15 @@ func Migrate() {
 	err = DB.AutoMigrate(&site.Site{})
 	if err != nil {
 		log.Fatalf("failed to migrate sqlite database (site): %v", err)
+	}
+
+	err = DB.AutoMigrate(&application.Application{})
+	if err != nil {
+		log.Fatalf("failed to migrate sqlite database (application): %v", err)
+	}
+
+	err = DB.AutoMigrate(&application.ApplicationAppPool{})
+	if err != nil {
+		log.Fatalf("failed to migrate sqlite database (application_app_pool): %v", err)
 	}
 }

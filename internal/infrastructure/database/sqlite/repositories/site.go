@@ -10,6 +10,14 @@ type siteRepository struct {
 	db *gorm.DB
 }
 
+func (r *siteRepository) FindByMachineAndAppPool(machineID uint, appPoolName string) (*[]site.Site, error) {
+	var sites []site.Site
+	if err := r.db.Where("machine_id = ? AND app_pool_name = ?", machineID, appPoolName).Find(&sites).Error; err != nil {
+		return nil, err
+	}
+	return &sites, nil
+}
+
 func (r *siteRepository) FindByMachineID(machineID uint) (*[]site.Site, error) {
 	var sites []site.Site
 	if err := r.db.Where("machine_id = ?", machineID).Find(&sites).Error; err != nil {
@@ -29,15 +37,44 @@ func (r *siteRepository) FindOneByID(id uint) (*site.Site, error) {
 	return &s, nil
 }
 
-func (r *siteRepository) ReplaceAll(machineID uint, sites []site.Site) error {
+func (r *siteRepository) SyncFromDiscovery(machineID uint, sites []site.Site) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("machine_id = ?", machineID).Delete(&site.Site{}).Error; err != nil {
+		var existing []site.Site
+		if err := tx.Where("machine_id = ?", machineID).Find(&existing).Error; err != nil {
 			return err
 		}
-		if len(sites) == 0 {
-			return nil
+
+		byName := make(map[string]*site.Site, len(existing))
+		for i := range existing {
+			byName[existing[i].Name] = &existing[i]
 		}
-		return tx.Create(&sites).Error
+
+		incomingNames := make(map[string]bool, len(sites))
+		for _, s := range sites {
+			incomingNames[s.Name] = true
+			if ex, ok := byName[s.Name]; ok {
+				ex.State = s.State
+				ex.PhysicalPath = s.PhysicalPath
+				ex.AppPoolName = s.AppPoolName
+				ex.Bindings = s.Bindings
+				if err := tx.Save(ex).Error; err != nil {
+					return err
+				}
+			} else {
+				if err := tx.Create(&s).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, ex := range existing {
+			if !incomingNames[ex.Name] {
+				if err := tx.Delete(&ex).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 }
 

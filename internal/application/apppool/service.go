@@ -22,7 +22,7 @@ func UpsertFromDiscovery(machineID uint, pools []protocol.AppPoolInfo, cfg *conf
 			IdentityType:   p.IdentityType,
 		})
 	}
-	return database.NewAppPoolRepository(cfg).ReplaceAll(machineID, records)
+	return database.NewAppPoolRepository(cfg).SyncFromDiscovery(machineID, records)
 }
 
 func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseConfig) error {

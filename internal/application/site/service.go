@@ -28,7 +28,7 @@ func UpsertFromDiscovery(machineID uint, sites []protocol.SiteInfo, cfg *config.
 			Bindings:     bindings,
 		})
 	}
-	return database.NewSiteRepository(cfg).ReplaceAll(machineID, records)
+	return database.NewSiteRepository(cfg).SyncFromDiscovery(machineID, records)
 }
 
 func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseConfig) error {

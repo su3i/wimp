@@ -29,15 +29,45 @@ func (r *appPoolRepository) FindOneByID(id uint) (*apppool.AppPool, error) {
 	return &pool, nil
 }
 
-func (r *appPoolRepository) ReplaceAll(machineID uint, pools []apppool.AppPool) error {
+func (r *appPoolRepository) SyncFromDiscovery(machineID uint, pools []apppool.AppPool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("machine_id = ?", machineID).Delete(&apppool.AppPool{}).Error; err != nil {
+		var existing []apppool.AppPool
+		if err := tx.Where("machine_id = ?", machineID).Find(&existing).Error; err != nil {
 			return err
 		}
-		if len(pools) == 0 {
-			return nil
+
+		byName := make(map[string]*apppool.AppPool, len(existing))
+		for i := range existing {
+			byName[existing[i].Name] = &existing[i]
 		}
-		return tx.Create(&pools).Error
+
+		incomingNames := make(map[string]bool, len(pools))
+		for _, p := range pools {
+			incomingNames[p.Name] = true
+			if ex, ok := byName[p.Name]; ok {
+				ex.State = p.State
+				ex.RuntimeVersion = p.RuntimeVersion
+				ex.PipelineMode = p.PipelineMode
+				ex.StartMode = p.StartMode
+				ex.IdentityType = p.IdentityType
+				if err := tx.Save(ex).Error; err != nil {
+					return err
+				}
+			} else {
+				if err := tx.Create(&p).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, ex := range existing {
+			if !incomingNames[ex.Name] {
+				if err := tx.Delete(&ex).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 }
 

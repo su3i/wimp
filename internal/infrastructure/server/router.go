@@ -70,6 +70,12 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/machines/:machineId/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
 	router.GET("/projects/:key/machines/:machineId/uninstall", middleware.AuthMiddleware(), handlers.GetUninstallCommand)
 
+	// Applications (project-scoped)
+	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)
+	router.GET("/projects/:key/applications", middleware.AuthMiddleware(), handlers.RetrieveApplications)
+	router.GET("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.RetrieveApplication)
+	router.POST("/projects/:key/applications/:appId/app-pools", middleware.AuthMiddleware(), handlers.AddAppPoolToApplication)
+
 	// App Pools (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/app-pools", middleware.AuthMiddleware(), handlers.RetrieveAppPools)
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/start", middleware.AuthMiddleware(), handlers.AppPoolCommand("start"))
