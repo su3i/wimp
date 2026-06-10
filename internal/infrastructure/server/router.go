@@ -29,6 +29,9 @@ func InitializeRouter() *gin.Engine {
 	// Health
 	router.GET("/health", handlers.Health)
 
+	// Prometheus HTTP service discovery
+	router.GET("/prometheus/targets", handlers.PrometheusTargets)
+
 	// Config
 	router.GET("/config", handlers.RetrieveConfig)
 

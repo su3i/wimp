@@ -1,6 +1,7 @@
 package machine
 
 type MachineRepository interface {
+	FindAll() (*[]Machine, error)
 	FindByProjectID(projectID uint) (*[]Machine, error)
 	FindOneByID(id uint) (*Machine, error)
 	FindOneByHostname(hostname string) (*Machine, error)

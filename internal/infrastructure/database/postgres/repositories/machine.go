@@ -12,6 +12,14 @@ type machineRepository struct {
 	db *gorm.DB
 }
 
+func (r *machineRepository) FindAll() (*[]machine.Machine, error) {
+	var machines []machine.Machine
+	if err := r.db.Find(&machines).Error; err != nil {
+		return nil, err
+	}
+	return &machines, nil
+}
+
 func (r *machineRepository) FindByProjectID(projectID uint) (*[]machine.Machine, error) {
 	var machines []machine.Machine
 
