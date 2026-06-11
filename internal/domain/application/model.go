@@ -12,6 +12,7 @@ type Application struct {
 type ApplicationAppPool struct {
 	gorm.Model
 
-	ApplicationID uint `gorm:"not null;uniqueIndex:idx_application_app_pool"`
-	AppPoolID     uint `gorm:"not null;uniqueIndex:idx_application_app_pool"`
+	ApplicationID uint    `gorm:"not null;uniqueIndex:idx_application_app_pool"`
+	AppPoolID     uint    `gorm:"not null;uniqueIndex:idx_application_app_pool"`
+	LogPath       *string `gorm:"type:text"`
 }

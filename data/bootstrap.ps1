@@ -115,6 +115,9 @@ Get-File $AgentExeUrl $agentExe
     control_plane_url  = $ControlPlaneUrl
     registration_token = $RegistrationToken
     machine_id         = $MachineId
+    base_dir           = $BaseDir
+    agent_dir          = $AgentDir
+    fluent_bit_dir     = $FBDir
 } | ConvertTo-Json | Set-Content "$AgentDir\config.json"
 
 Install-Service "wimp-agent" $agentExe

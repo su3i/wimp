@@ -10,6 +10,7 @@ const (
 	TypeHeartbeat     = "heartbeat"
 	TypeCommand       = "command"
 	TypeCommandResult = "command_result"
+	TypeFluentConfig  = "fluent_config"
 )
 
 // Message is the envelope for every WebSocket frame.
@@ -76,4 +77,20 @@ type CommandResultPayload struct {
 	Success   bool   `json:"success"`
 	Output    string `json:"output"`
 	Error     string `json:"error,omitempty"`
+}
+
+// FluentConfigPayload is sent by the control plane to configure fluent-bit log tailing.
+// It carries the full set of active pool log configs for a machine; the agent reconciles
+// its conf.d directory against this list on every receive.
+type FluentConfigPayload struct {
+	MachineID uint              `json:"machine_id"`
+	LokiHost  string            `json:"loki_host"`
+	LokiPort  string            `json:"loki_port"`
+	Configs   []FluentAppConfig `json:"configs"`
+}
+
+type FluentAppConfig struct {
+	ApplicationID uint   `json:"application_id"`
+	PoolID        uint   `json:"pool_id"`
+	LogPath       string `json:"log_path"`
 }

@@ -163,6 +163,18 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 					Payload: mustMarshal(result),
 				})
 			}(cmd)
+
+		case protocol.TypeFluentConfig:
+			var payload protocol.FluentConfigPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				a.logger().Warningf("bad fluent config payload: %v", err)
+				continue
+			}
+			go func(p protocol.FluentConfigPayload) {
+				if err := applyFluentConfig(a.cfg.FluentBitDir, p); err != nil {
+					a.logger().Errorf("fluent config apply: %v", err)
+				}
+			}(payload)
 		}
 	}
 }

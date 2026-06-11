@@ -56,6 +56,33 @@ func (r *applicationRepository) HasAppPool(applicationID, appPoolID uint) (bool,
 	return count > 0, err
 }
 
+func (r *applicationRepository) FindAppPoolRelation(applicationID, appPoolID uint) (*application.ApplicationAppPool, error) {
+	var rel application.ApplicationAppPool
+	err := r.db.Where("application_id = ? AND app_pool_id = ?", applicationID, appPoolID).First(&rel).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &rel, nil
+}
+
+func (r *applicationRepository) UpdateAppPoolRelation(rel *application.ApplicationAppPool) error {
+	return r.db.Save(rel).Error
+}
+
+func (r *applicationRepository) FindAppPoolRelationsByPoolIDs(poolIDs []uint) (*[]application.ApplicationAppPool, error) {
+	var relations []application.ApplicationAppPool
+	if len(poolIDs) == 0 {
+		return &relations, nil
+	}
+	if err := r.db.Where("app_pool_id IN ?", poolIDs).Find(&relations).Error; err != nil {
+		return nil, err
+	}
+	return &relations, nil
+}
+
 func NewApplicationRepository(db *gorm.DB) application.ApplicationRepository {
 	return &applicationRepository{db: db}
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	applicationService "github.com/su3i/wimp/internal/application/application"
 	appPoolService "github.com/su3i/wimp/internal/application/apppool"
 	siteService "github.com/su3i/wimp/internal/application/site"
 	"github.com/su3i/wimp/internal/config"
@@ -90,6 +91,12 @@ func AgentWebSocket(c *gin.Context) {
 
 			ack, _ := json.Marshal(protocol.Message{Type: protocol.TypeRegisterAck})
 			conn.WriteMessage(websocket.TextMessage, ack)
+
+			go func(machineID uint) {
+				if err := applicationService.PushFluentConfig(machineID, config.Database()); err != nil {
+					log.Printf("machine (%d) fluent config push: %v", machineID, err)
+				}
+			}(m.ID)
 
 		case protocol.TypeDiscovery:
 			var disc protocol.DiscoveryPayload

@@ -102,8 +102,9 @@ func AddAppPoolToApplication(c *gin.Context) {
 	}
 
 	var req struct {
-		MachineID uint `json:"machine_id" binding:"required"`
-		AppPoolID uint `json:"app_pool_id" binding:"required"`
+		MachineID uint    `json:"machine_id" binding:"required"`
+		AppPoolID uint    `json:"app_pool_id" binding:"required"`
+		LogPath   *string `json:"log_path"`
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -113,8 +114,49 @@ func AddAppPoolToApplication(c *gin.Context) {
 		return
 	}
 
-	if err := applicationService.AddAppPool(uint(appId), req.MachineID, req.AppPoolID, projectKey, config.Database()); err != nil {
+	if err := applicationService.AddAppPool(uint(appId), req.MachineID, req.AppPoolID, req.LogPath, projectKey, config.Database()); err != nil {
 		log.Printf("Error adding app pool to application: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+func UpdateAppPoolInApplication(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	appId, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	poolId, err := strconv.ParseUint(c.Param("poolId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pool id"})
+		return
+	}
+
+	var req struct {
+		LogPath string `json:"log_path" binding:"required"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"message": "Validation failed.",
+			"errors":  utils.FormatValidationErrors(err),
+		})
+		return
+	}
+
+	if err := applicationService.UpdateAppPoolLogPath(uint(appId), uint(poolId), req.LogPath, projectKey, config.Database()); err != nil {
+		log.Printf("Error updating app pool log path: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

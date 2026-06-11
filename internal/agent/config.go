@@ -11,6 +11,10 @@ type Config struct {
 	ControlPlaneUrl   string `json:"control_plane_url"`
 	RegistrationToken string `json:"registration_token"`
 	MachineId         uint   `json:"machine_id"`
+	BaseDir           string `json:"base_dir"`
+	AgentDir          string `json:"agent_dir"`
+	FluentBitDir      string `json:"fluent_bit_dir"`
+	TmpDir            string `json:"tmp_dir"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -39,6 +43,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.MachineId == 0 {
 		return nil, fmt.Errorf("config.json: machine_id is required")
+	}
+	if cfg.FluentBitDir == "" {
+		return nil, fmt.Errorf("config.json: fluent_bit_dir is required")
 	}
 
 	return &cfg, nil

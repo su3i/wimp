@@ -1,6 +1,7 @@
 package application
 
 import (
+	"encoding/json"
 	"errors"
 
 	projectService "github.com/su3i/wimp/internal/application/project"
@@ -8,7 +9,9 @@ import (
 	"github.com/su3i/wimp/internal/domain/apppool"
 	"github.com/su3i/wimp/internal/domain/application"
 	"github.com/su3i/wimp/internal/domain/machine"
+	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/domain/site"
+	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
@@ -92,7 +95,7 @@ func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*Applica
 	}, nil
 }
 
-func AddAppPool(applicationID, machineID, appPoolID uint, projectKey string, cfg *config.DatabaseConfig) error {
+func AddAppPool(applicationID, machineID, appPoolID uint, logPath *string, projectKey string, cfg *config.DatabaseConfig) error {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return errors.New("project not found")
@@ -120,8 +123,123 @@ func AddAppPool(applicationID, machineID, appPoolID uint, projectKey string, cfg
 		return errors.New("app pool already added to this application")
 	}
 
-	return appRepo.AddAppPool(&application.ApplicationAppPool{
+	if err := appRepo.AddAppPool(&application.ApplicationAppPool{
 		ApplicationID: applicationID,
 		AppPoolID:     appPoolID,
+		LogPath:       logPath,
+	}); err != nil {
+		return err
+	}
+
+	if logPath != nil && *logPath != "" {
+		_ = PushFluentConfig(machineID, cfg) // best-effort; machine may be offline
+	}
+	return nil
+}
+
+func UpdateAppPoolLogPath(applicationID, appPoolID uint, logPath string, projectKey string, cfg *config.DatabaseConfig) error {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return errors.New("project not found")
+	}
+
+	appRepo := database.NewApplicationRepository(cfg)
+	app, err := appRepo.FindOneByID(applicationID)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return errors.New("application not found")
+	}
+
+	rel, err := appRepo.FindAppPoolRelation(applicationID, appPoolID)
+	if err != nil || rel == nil {
+		return errors.New("app pool not assigned to this application")
+	}
+
+	currentPath := ""
+	if rel.LogPath != nil {
+		currentPath = *rel.LogPath
+	}
+	if currentPath == logPath {
+		return nil
+	}
+
+	rel.LogPath = &logPath
+	if err := appRepo.UpdateAppPoolRelation(rel); err != nil {
+		return err
+	}
+
+	pool, err := database.NewAppPoolRepository(cfg).FindOneByID(appPoolID)
+	if err != nil || pool == nil {
+		return errors.New("app pool not found")
+	}
+
+	_ = PushFluentConfig(pool.MachineID, cfg) // best-effort
+	return nil
+}
+
+// BuildFluentConfig assembles the full fluent-bit config payload for a machine,
+// covering all app pool log paths currently configured.
+func BuildFluentConfig(machineID uint, cfg *config.DatabaseConfig) (*protocol.FluentConfigPayload, error) {
+	common := config.Common()
+	pools, err := database.NewAppPoolRepository(cfg).FindByMachineID(machineID)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := &protocol.FluentConfigPayload{
+		MachineID: machineID,
+		LokiHost:  common.LokiHost,
+		LokiPort:  common.LokiPort,
+		Configs:   []protocol.FluentAppConfig{},
+	}
+
+	if len(*pools) == 0 {
+		return payload, nil
+	}
+
+	poolIDs := make([]uint, 0, len(*pools))
+	for _, p := range *pools {
+		poolIDs = append(poolIDs, p.ID)
+	}
+
+	relations, err := database.NewApplicationRepository(cfg).FindAppPoolRelationsByPoolIDs(poolIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rel := range *relations {
+		if rel.LogPath != nil && *rel.LogPath != "" {
+			payload.Configs = append(payload.Configs, protocol.FluentAppConfig{
+				ApplicationID: rel.ApplicationID,
+				PoolID:        rel.AppPoolID,
+				LogPath:       *rel.LogPath,
+			})
+		}
+	}
+
+	return payload, nil
+}
+
+// PushFluentConfig sends the current fluent-bit config for a machine over the WebSocket.
+// Silently no-ops if the machine is offline — it will receive the config on reconnect.
+func PushFluentConfig(machineID uint, cfg *config.DatabaseConfig) error {
+	payload, err := BuildFluentConfig(machineID, cfg)
+	if err != nil {
+		return err
+	}
+
+	payloadData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	msgData, err := json.Marshal(protocol.Message{
+		Type:    protocol.TypeFluentConfig,
+		Payload: json.RawMessage(payloadData),
 	})
+	if err != nil {
+		return err
+	}
+
+	_ = hub.Get().Send(machineID, msgData)
+	return nil
 }
