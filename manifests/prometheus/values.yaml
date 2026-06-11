@@ -2,24 +2,11 @@ prometheus:
   prometheusSpec:
     scrapeInterval: 1m
     additionalScrapeConfigs:
-      - job_name: "wimp-windows"
+      - job_name: "windows_exporter"
         scrape_interval: 30s
         http_sd_configs:
-          - url: https://4b96-102-89-85-160.ngrok-free.app/prometheus/targets
+          - url: https://wimp.suei.io/prometheus/targets
             refresh_interval: 60s
         relabel_configs:
           - source_labels: [__address__]
             target_label: instance
-
-      - job_name: "iis-app-blackbox"
-        metrics_path: /probe
-        params:
-          module: [http_2xx_follow_redirects]
-        static_configs:
-          - targets:
-              - https://leelam.af/af/
-        relabel_configs:
-          - source_labels: [__address__]
-            target_label: __param_target
-          - target_label: __address__
-            replacement: blackbox-exporter.monitoring.svc.cluster.local:9115

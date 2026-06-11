@@ -15,6 +15,7 @@ fi
 
 helm upgrade --install $RELEASE prometheus-community/kube-prometheus-stack \
   --namespace "$NS" \
+  -f "$SCRIPT_DIR/values.yaml" \
   \
   --set alertmanager.enabled=true \
   --set grafana.enabled=true \
