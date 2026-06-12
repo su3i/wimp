@@ -44,6 +44,7 @@ func QueryLogs(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "100")
 	direction := c.DefaultQuery("direction", "backward")
 	machineID := c.Query("machine_id")
+	appPoolID := c.Query("app_pool_id")
 	filename := c.Query("filename")
 
 	labels := []string{
@@ -53,10 +54,13 @@ func QueryLogs(c *gin.Context) {
 	if machineID != "" {
 		labels = append(labels, fmt.Sprintf(`machine_id="%s"`, machineID))
 	}
+	if appPoolID != "" {
+		labels = append(labels, fmt.Sprintf(`pool_id="%s"`, appPoolID))
+	}
 	if filename != "" {
 		escaped := strings.ReplaceAll(filename, `\`, `\\`)
 		escaped = strings.ReplaceAll(escaped, `"`, `\"`)
-		labels = append(labels, fmt.Sprintf(`filename=~".*%s.*"`, escaped))
+		labels = append(labels, fmt.Sprintf(`filename="%s"`, escaped))
 	}
 	query := "{" + strings.Join(labels, ", ") + "}"
 
