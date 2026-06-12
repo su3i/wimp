@@ -88,6 +88,9 @@ func InitializeRouter() *gin.Engine {
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/restart", middleware.AuthMiddleware(), handlers.AppPoolCommand("restart"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/recycle", middleware.AuthMiddleware(), handlers.AppPoolCommand("recycle"))
 
+	// Sites (machine-scoped)
+	router.GET("/projects/:key/machines/:machineId/sites", middleware.AuthMiddleware(), handlers.RetrieveSites)
+
 	// Metrics
 	handlers.MetricsHandler(router)
 
