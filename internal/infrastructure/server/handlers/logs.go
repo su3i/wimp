@@ -60,7 +60,11 @@ func QueryLogs(c *gin.Context) {
 	query := "{" + strings.Join(labels, ", ") + "}"
 
 	cfg := config.Common()
-	lokiURL := fmt.Sprintf("http://%s:%s/loki/api/v1/query_range", cfg.LokiHost, cfg.LokiPort)
+	scheme := "http"
+	if cfg.LokiTlsEnabled {
+		scheme = "https"
+	}
+	lokiURL := fmt.Sprintf("%s://%s:%s/loki/api/v1/query_range", scheme, cfg.LokiHost, cfg.LokiPort)
 
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, lokiURL, nil)
 	if err != nil {
