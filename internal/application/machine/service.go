@@ -34,26 +34,26 @@ func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine
 	return repo.Create(m)
 }
 
-func GetBootstrapToken(id uint, projectKey string, appUrl string, appEnv string, cfg *config.DatabaseConfig) (string, error) {
+func GetBootstrapToken(id uint, projectKey string, appUrl string, appEnv string, cfg *config.DatabaseConfig) (string, string, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
-		return "", errors.New("project not found")
+		return "", "", errors.New("project not found")
 	}
 
 	repo := database.NewMachineRepository(cfg)
 
 	m, err := repo.FindOneByID(id)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if m == nil {
-		return "", errors.New("machine not found")
+		return "", "", errors.New("machine not found")
 	}
 	if m.ProjectID != proj.ID {
-		return "", errors.New("machine not found")
+		return "", "", errors.New("machine not found")
 	}
 	if m.Token == "" {
-		return "", errors.New("no bootstrap token available")
+		return "", "", errors.New("no bootstrap token available")
 	}
 
 	iwrFlags := ""
@@ -61,13 +61,14 @@ func GetBootstrapToken(id uint, projectKey string, appUrl string, appEnv string,
 		iwrFlags = " -Headers @{'ngrok-skip-browser-warning'='1'}"
 	}
 
-	cmd := fmt.Sprintf(
-		"iwr \"%s/bootstrap?token=%s\"%s -OutFile bootstrap.ps1\npowershell -ExecutionPolicy Bypass -File bootstrap.ps1",
+	downloadCmd := fmt.Sprintf(
+		"iwr \"%s/bootstrap?token=%s\"%s -OutFile bootstrap.ps1",
 		appUrl,
 		m.Token,
 		iwrFlags,
 	)
-	return cmd, nil
+	runCmd := "powershell -ExecutionPolicy Bypass -File bootstrap.ps1"
+	return downloadCmd, runCmd, nil
 }
 
 func GetUninstallCommand(id uint, projectKey string, appUrl string, appEnv string, cfg *config.DatabaseConfig) (string, error) {

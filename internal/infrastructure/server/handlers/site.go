@@ -29,7 +29,7 @@ func RetrieveSites(c *gin.Context) {
 		return
 	}
 
-	if _, err := machineService.GetBootstrapToken(uint(machineID), projectKey, "", "", config.Database()); err != nil {
+	if _, _, err := machineService.GetBootstrapToken(uint(machineID), projectKey, "", "", config.Database()); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
 		return
 	}

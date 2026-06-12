@@ -29,7 +29,7 @@ func NewMachine(c *gin.Context) {
 		return
 	}
 
-	cmd, err := machineService.GetBootstrapToken(m.ID, projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
+	downloadCmd, runCmd, err := machineService.GetBootstrapToken(m.ID, projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
 	if err != nil {
 		log.Printf("Error building bootstrap command: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -37,9 +37,10 @@ func NewMachine(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":           "success",
-		"machine":           m,
-		"bootstrap_command": cmd,
+		"message":          "success",
+		"machine":          m,
+		"download_command": downloadCmd,
+		"run_command":      runCmd,
 	})
 }
 
@@ -81,15 +82,17 @@ func GetBootstrapToken(c *gin.Context) {
 		return
 	}
 
-	cmd, err := machineService.GetBootstrapToken(uint(id), projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
+	downloadCmd, runCmd, err := machineService.GetBootstrapToken(uint(id), projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
 	if err != nil {
 		log.Printf("Error getting bootstrap token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.String(http.StatusOK, cmd)
+	c.JSON(http.StatusOK, gin.H{
+		"download_command": downloadCmd,
+		"run_command":      runCmd,
+	})
 }
 
 func GetUninstallCommand(c *gin.Context) {
