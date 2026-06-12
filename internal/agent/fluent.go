@@ -32,7 +32,7 @@ func applyFluentConfig(fbDir string, payload protocol.FluentConfigPayload) error
 			continue
 		}
 		fname := fmt.Sprintf("wimp_pool_%d.conf", cfg.PoolID)
-		content := renderPoolConfig(fbDir, cfg, payload.LokiHost, payload.LokiPort, payload.LokiTlsEnabled, payload.MachineID)
+		content := renderPoolConfig(fbDir, cfg, payload.LokiHost, payload.LokiPort, payload.LokiTlsEnabled, payload.LokiTlsSkipVerify, payload.MachineID)
 		if err := os.WriteFile(filepath.Join(confD, fname), []byte(content), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", fname, err)
 		}
@@ -69,7 +69,7 @@ func ensureInclude(mainConf, confD string) error {
 	return err
 }
 
-func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, lokiPort string, lokiTls bool, machineID uint) string {
+func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, lokiPort string, lokiTls bool, lokiTlsSkipVerify bool, machineID uint) string {
 	tag := fmt.Sprintf("wimp.app.%d.pool.%d", cfg.ApplicationID, cfg.PoolID)
 	dbDir := filepath.Join(fbDir, "db")
 	os.MkdirAll(dbDir, 0755)
@@ -78,6 +78,10 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
 	tls := "off"
 	if lokiTls {
 		tls = "on"
+	}
+	tlsVerify := "on"
+	if lokiTlsSkipVerify {
+		tlsVerify = "off"
 	}
 
 	return fmt.Sprintf(`[INPUT]
@@ -88,14 +92,15 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
     DB        %s
 
 [OUTPUT]
-    Name       loki
-    Match      %s
-    Host       %s
-    Port       %s
-    Tls        %s
-    Labels     job=wimp,application_id=%d,pool_id=%d,machine_id=%d
-    Label_keys $filename
-`, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, cfg.ApplicationID, cfg.PoolID, machineID)
+    Name          loki
+    Match         %s
+    Host          %s
+    Port          %s
+    Tls           %s
+    Tls.verify    %s
+    Labels        job=wimp,application_id=%d,pool_id=%d,machine_id=%d
+    Label_keys    $filename
+`, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, tlsVerify, cfg.ApplicationID, cfg.PoolID, machineID)
 }
 
 func restartFluentBit() error {

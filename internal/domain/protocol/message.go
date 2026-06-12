@@ -85,11 +85,12 @@ type CommandResultPayload struct {
 // It carries the full set of active pool log configs for a machine; the agent reconciles
 // its conf.d directory against this list on every receive.
 type FluentConfigPayload struct {
-	MachineID      uint              `json:"machine_id"`
-	LokiHost       string            `json:"loki_host"`
-	LokiPort       string            `json:"loki_port"`
-	LokiTlsEnabled bool              `json:"loki_tls_enabled"`
-	Configs        []FluentAppConfig `json:"configs"`
+	MachineID         uint              `json:"machine_id"`
+	LokiHost          string            `json:"loki_host"`
+	LokiPort          string            `json:"loki_port"`
+	LokiTlsEnabled    bool              `json:"loki_tls_enabled"`
+	LokiTlsSkipVerify bool              `json:"loki_tls_skip_verify"`
+	Configs           []FluentAppConfig `json:"configs"`
 }
 
 type FluentAppConfig struct {

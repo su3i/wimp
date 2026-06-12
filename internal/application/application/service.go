@@ -293,11 +293,12 @@ func BuildFluentConfig(machineID uint, cfg *config.DatabaseConfig) (*protocol.Fl
 	}
 
 	payload := &protocol.FluentConfigPayload{
-		MachineID:      machineID,
-		LokiHost:       common.LokiHost,
-		LokiPort:       common.LokiPort,
-		LokiTlsEnabled: common.LokiTlsEnabled,
-		Configs:        []protocol.FluentAppConfig{},
+		MachineID:         machineID,
+		LokiHost:          common.LokiHost,
+		LokiPort:          common.LokiPort,
+		LokiTlsEnabled:    common.LokiTlsEnabled,
+		LokiTlsSkipVerify: common.LokiTlsSkipVerify,
+		Configs:           []protocol.FluentAppConfig{},
 	}
 
 	if len(*pools) == 0 {
