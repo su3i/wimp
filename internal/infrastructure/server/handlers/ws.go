@@ -134,6 +134,18 @@ func AgentWebSocket(c *gin.Context) {
 				Output:  result.Output,
 				Error:   result.Error,
 			})
+
+		case protocol.TypeListFilesResult:
+			var result protocol.ListFilesResultPayload
+			if err := json.Unmarshal(msg.Payload, &result); err != nil {
+				continue
+			}
+			filesJSON, _ := json.Marshal(result.Files)
+			hub.ResolveCommand(result.RequestID, hub.CommandResult{
+				Success: result.Error == "",
+				Output:  string(filesJSON),
+				Error:   result.Error,
+			})
 		}
 	}
 }

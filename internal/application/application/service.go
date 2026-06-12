@@ -1,9 +1,14 @@
 package application
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sort"
+	"time"
 
+	"github.com/google/uuid"
 	projectService "github.com/su3i/wimp/internal/application/project"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/apppool"
@@ -193,6 +198,89 @@ func UpdateAppPoolLogPath(applicationID, appPoolID uint, logPath string, project
 
 	_ = PushFluentConfig(pool.MachineID, cfg) // best-effort
 	return nil
+}
+
+func ListApplicationFiles(ctx context.Context, applicationID uint, projectKey string, cfg *config.DatabaseConfig) ([]string, error) {
+	detail, err := GetDetail(applicationID, projectKey, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	type pair struct {
+		machineID uint
+		logPath   string
+	}
+	seen := map[string]bool{}
+	var pairs []pair
+	for _, pool := range detail.AppPools {
+		if pool.LogPath == nil || *pool.LogPath == "" {
+			continue
+		}
+		key := fmt.Sprintf("%d:%s", pool.Machine.ID, *pool.LogPath)
+		if !seen[key] {
+			seen[key] = true
+			pairs = append(pairs, pair{pool.Machine.ID, *pool.LogPath})
+		}
+	}
+
+	if len(pairs) == 0 {
+		return []string{}, nil
+	}
+
+	type result struct{ files []string }
+	results := make(chan result, len(pairs))
+	for _, p := range pairs {
+		go func(machineID uint, path string) {
+			results <- result{queryMachineFiles(ctx, machineID, path)}
+		}(p.machineID, p.logPath)
+	}
+
+	fileSet := map[string]bool{}
+	for range pairs {
+		r := <-results
+		for _, f := range r.files {
+			fileSet[f] = true
+		}
+	}
+
+	all := make([]string, 0, len(fileSet))
+	for f := range fileSet {
+		all = append(all, f)
+	}
+	sort.Strings(all)
+	return all, nil
+}
+
+func queryMachineFiles(ctx context.Context, machineID uint, path string) []string {
+	if !hub.Get().IsOnline(machineID) {
+		return nil
+	}
+
+	reqID := uuid.New().String()
+	ch := hub.RegisterCommand(reqID)
+	defer hub.DeregisterCommand(reqID)
+
+	payload, _ := json.Marshal(protocol.ListFilesPayload{RequestID: reqID, Path: path})
+	msg, _ := json.Marshal(protocol.Message{Type: protocol.TypeListFiles, Payload: json.RawMessage(payload)})
+
+	if err := hub.Get().Send(machineID, msg); err != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	select {
+	case res := <-ch:
+		if !res.Success {
+			return nil
+		}
+		var files []string
+		json.Unmarshal([]byte(res.Output), &files) //nolint:errcheck
+		return files
+	case <-ctx.Done():
+		return nil
+	}
 }
 
 // BuildFluentConfig assembles the full fluent-bit config payload for a machine,

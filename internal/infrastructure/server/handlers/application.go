@@ -122,6 +122,30 @@ func AddAppPoolToApplication(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
+func ListApplicationFiles(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "read")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	files, err := applicationService.ListApplicationFiles(c.Request.Context(), uint(id), projectKey, config.Database())
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success", "files": files})
+}
+
 func UpdateAppPoolInApplication(c *gin.Context) {
 	projectKey := c.Param("key")
 

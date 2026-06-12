@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -175,8 +176,42 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 					a.logger().Errorf("fluent config apply: %v", err)
 				}
 			}(payload)
+
+		case protocol.TypeListFiles:
+			var req protocol.ListFilesPayload
+			if err := json.Unmarshal(msg.Payload, &req); err != nil {
+				continue
+			}
+			go func(r protocol.ListFilesPayload) {
+				files, err := listFiles(r.Path)
+				result := protocol.ListFilesResultPayload{RequestID: r.RequestID, Files: files}
+				if err != nil {
+					result.Error = err.Error()
+				}
+				if result.Files == nil {
+					result.Files = []string{}
+				}
+				wc.writeJSON(protocol.Message{ //nolint:errcheck
+					Type:    protocol.TypeListFilesResult,
+					Payload: mustMarshal(result),
+				})
+			}(req)
 		}
 	}
+}
+
+func listFiles(dirPath string) ([]string, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			files = append(files, filepath.Join(dirPath, e.Name()))
+		}
+	}
+	return files, nil
 }
 
 // safeConn wraps a WebSocket connection with a mutex so the heartbeat goroutine

@@ -4,13 +4,15 @@ import "encoding/json"
 
 // Message types flowing between agent and control plane.
 const (
-	TypeRegister      = "register"
-	TypeRegisterAck   = "register_ack"
-	TypeDiscovery     = "discovery"
-	TypeHeartbeat     = "heartbeat"
-	TypeCommand       = "command"
-	TypeCommandResult = "command_result"
-	TypeFluentConfig  = "fluent_config"
+	TypeRegister       = "register"
+	TypeRegisterAck    = "register_ack"
+	TypeDiscovery      = "discovery"
+	TypeHeartbeat      = "heartbeat"
+	TypeCommand        = "command"
+	TypeCommandResult  = "command_result"
+	TypeFluentConfig   = "fluent_config"
+	TypeListFiles      = "list_files"
+	TypeListFilesResult = "list_files_result"
 )
 
 // Message is the envelope for every WebSocket frame.
@@ -94,4 +96,15 @@ type FluentAppConfig struct {
 	ApplicationID uint   `json:"application_id"`
 	PoolID        uint   `json:"pool_id"`
 	LogPath       string `json:"log_path"`
+}
+
+type ListFilesPayload struct {
+	RequestID string `json:"request_id"`
+	Path      string `json:"path"`
+}
+
+type ListFilesResultPayload struct {
+	RequestID string   `json:"request_id"`
+	Files     []string `json:"files"`
+	Error     string   `json:"error,omitempty"`
 }
