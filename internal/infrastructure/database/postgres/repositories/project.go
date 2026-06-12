@@ -48,7 +48,6 @@ func (r *projectRepository) Create(payload *project.Project) (*project.Project, 
 		Name:           payload.Name,
 		Key:            payload.Key,
 		Status:         payload.Status,
-		BusinessDomain: payload.BusinessDomain,
 		CreatedBy:      payload.CreatedBy,
 	}
 

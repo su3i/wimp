@@ -17,8 +17,6 @@ func NewProject(c *gin.Context) {
 	var req struct {
 		Name           string `json:"name" binding:"required"`
 		Key            string `json:"key" binding:"required"`
-		BusinessDomain string `json:"businessDomain" binding:"required"`
-		OrgKey         string `json:"orgKey"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
@@ -48,13 +46,8 @@ func NewProject(c *gin.Context) {
 		return
 	}
 
-	orgKey := req.OrgKey
-	if orgKey == "" {
-		orgKey = "default"
-	}
-
 	// Create project
-	_project, err := project.NewProject(req.Name, req.Key, req.BusinessDomain, orgKey, *createdByEmail, config.Database())
+	_project, err := project.NewProject(req.Name, req.Key, *createdByEmail, config.Database())
 
 	if err != nil {
 		log.Printf("Error creating project: %v", err)
@@ -150,10 +143,8 @@ func UpdateProject(c *gin.Context) {
 	}
 
     var req struct {
-		Name           *string                         `json:"name,omitempty"`
-		Key            *string                         `json:"key,omitempty"`
-		BusinessDomain *string						   `json:"businessDomain,omitempty"`
-		CreatedByEmail *string                         `json:"createdByEmail,omitempty"`
+		Name *string `json:"name,omitempty"`
+		Key  *string `json:"key,omitempty"`
 	}
 
     if err := c.ShouldBindJSON(&req); err != nil {
@@ -164,8 +155,7 @@ func UpdateProject(c *gin.Context) {
     updatedProject, err := project.UpdateProject(
         key,
         req.Name,
-		req.Key,
-        req.BusinessDomain,
+        req.Key,
         config.Database(),
     )
     if err != nil {

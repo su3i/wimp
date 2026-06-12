@@ -118,6 +118,7 @@ Get-File $AgentExeUrl $agentExe
     base_dir           = $BaseDir
     agent_dir          = $AgentDir
     fluent_bit_dir     = $FBDir
+    tmp_dir            = $TmpDir
 } | ConvertTo-Json | Set-Content "$AgentDir\config.json"
 
 Install-Service "wimp-agent" $agentExe
