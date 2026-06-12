@@ -77,7 +77,8 @@ func QueryLogs(c *gin.Context) {
 	q.Set("direction", direction)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := http.DefaultClient.Do(req)
+	lokiClient := &http.Client{Timeout: 30 * time.Second}
+	resp, err := lokiClient.Do(req)
 	if err != nil {
 		log.Printf("loki query failed: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to query loki"})

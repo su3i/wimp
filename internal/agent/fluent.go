@@ -32,7 +32,7 @@ func applyFluentConfig(fbDir string, payload protocol.FluentConfigPayload) error
 			continue
 		}
 		fname := fmt.Sprintf("wimp_pool_%d.conf", cfg.PoolID)
-		content := renderPoolConfig(fbDir, cfg, payload.LokiHost, payload.LokiPort, payload.MachineID)
+		content := renderPoolConfig(fbDir, cfg, payload.LokiHost, payload.LokiPort, payload.LokiTlsEnabled, payload.MachineID)
 		if err := os.WriteFile(filepath.Join(confD, fname), []byte(content), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", fname, err)
 		}
@@ -69,11 +69,16 @@ func ensureInclude(mainConf, confD string) error {
 	return err
 }
 
-func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, lokiPort string, machineID uint) string {
+func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, lokiPort string, lokiTls bool, machineID uint) string {
 	tag := fmt.Sprintf("wimp.app.%d.pool.%d", cfg.ApplicationID, cfg.PoolID)
 	dbDir := filepath.Join(fbDir, "db")
 	os.MkdirAll(dbDir, 0755)
 	dbPath := filepath.Join(dbDir, fmt.Sprintf("wimp_pool_%d.db", cfg.PoolID))
+
+	tls := "off"
+	if lokiTls {
+		tls = "on"
+	}
 
 	return fmt.Sprintf(`[INPUT]
     Name      tail
@@ -87,9 +92,10 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
     Match      %s
     Host       %s
     Port       %s
+    Tls        %s
     Labels     job=wimp,application_id=%d,pool_id=%d,machine_id=%d
     Label_keys $filename
-`, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, cfg.ApplicationID, cfg.PoolID, machineID)
+`, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, cfg.ApplicationID, cfg.PoolID, machineID)
 }
 
 func restartFluentBit() error {
