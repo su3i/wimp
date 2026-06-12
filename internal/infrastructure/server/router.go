@@ -22,6 +22,9 @@ func InitializeRouter() *gin.Engine {
 	// Agent WebSocket (public — token is the credential)
 	router.GET("/ws/agent", handlers.AgentWebSocket)
 
+	// Frontend WebSocket (JWT via query param)
+	router.GET("/ws", handlers.ClientWebSocket)
+
 	// Bootstrap (public — token is the credential)
 	router.GET("/bootstrap", handlers.Bootstrap)
 	router.GET("/bootstrap/uninstall", handlers.Uninstall)
@@ -91,6 +94,19 @@ func InitializeRouter() *gin.Engine {
 
 	// Sites (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/sites", middleware.AuthMiddleware(), handlers.RetrieveSites)
+
+	// Notifications
+	router.GET("/notifications", middleware.AuthMiddleware(), handlers.ListNotifications)
+	router.GET("/notifications/unread-count", middleware.AuthMiddleware(), handlers.GetUnreadCount)
+	router.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MarkNotificationRead)
+	router.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MarkAllNotificationsRead)
+
+	// Dashboard
+	router.GET("/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
+	router.GET("/dashboard/alerts/active", middleware.AuthMiddleware(), handlers.DashboardActiveAlerts)
+	router.GET("/dashboard/alert-history", middleware.AuthMiddleware(), handlers.DashboardAlertHistory)
+	router.GET("/dashboard/uptime", middleware.AuthMiddleware(), handlers.DashboardUptime)
+	router.GET("/dashboard/machines", middleware.AuthMiddleware(), handlers.DashboardMachines)
 
 	// Metrics
 	handlers.MetricsHandler(router)

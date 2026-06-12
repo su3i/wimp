@@ -14,9 +14,11 @@ import (
 	"github.com/su3i/wimp/internal/domain/application"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
+	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
 	"github.com/su3i/wimp/internal/domain/site"
+	"github.com/su3i/wimp/internal/domain/uptime"
 )
 
 var DB *gorm.DB
@@ -113,5 +115,15 @@ func Migrate() {
 	err = DB.AutoMigrate(&application.ApplicationAppPool{})
 	if err != nil {
 		log.Fatalf("failed to migrate postgres database (application_app_pool): %v", err)
+	}
+
+	err = DB.AutoMigrate(&notification.Notification{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (notification): %v", err)
+	}
+
+	err = DB.AutoMigrate(&uptime.Event{})
+	if err != nil {
+		log.Fatalf("failed to migrate postgres database (uptime_event): %v", err)
 	}
 }

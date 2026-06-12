@@ -1,0 +1,62 @@
+package notification
+
+import (
+	"encoding/json"
+	"log"
+
+	"github.com/su3i/wimp/internal/config"
+	"github.com/su3i/wimp/internal/domain/notification"
+	"github.com/su3i/wimp/internal/hub"
+	"github.com/su3i/wimp/internal/infrastructure/database"
+)
+
+type wsMessage struct {
+	Type    string               `json:"type"`
+	Payload *notification.Notification `json:"payload"`
+}
+
+func Emit(machineID uint, level notification.Level, category notification.Category, title, detail string, cfg *config.DatabaseConfig) {
+	n := &notification.Notification{
+		MachineID: machineID,
+		Level:     level,
+		Category:  category,
+		Title:     title,
+		Detail:    detail,
+	}
+
+	saved, err := database.NewNotificationRepository(cfg).Create(n)
+	if err != nil {
+		log.Printf("notification emit: failed to save: %v", err)
+		return
+	}
+
+	msg, err := json.Marshal(wsMessage{Type: "notification", Payload: saved})
+	if err != nil {
+		return
+	}
+	hub.Clients().Broadcast(msg)
+}
+
+func List(f notification.Filter, cfg *config.DatabaseConfig) ([]notification.Notification, int64, error) {
+	return database.NewNotificationRepository(cfg).FindPaginated(f)
+}
+
+func UnreadCount(cfg *config.DatabaseConfig) (int64, error) {
+	return database.NewNotificationRepository(cfg).UnreadCount()
+}
+
+func MarkRead(id uint, cfg *config.DatabaseConfig) error {
+	return database.NewNotificationRepository(cfg).MarkRead(id)
+}
+
+func MarkAllRead(cfg *config.DatabaseConfig) error {
+	return database.NewNotificationRepository(cfg).MarkAllRead()
+}
+
+func ActiveAlerts(cfg *config.DatabaseConfig) ([]notification.Notification, error) {
+	return database.NewNotificationRepository(cfg).FindActiveAlerts()
+}
+
+func AlertHistory(hours int, cfg *config.DatabaseConfig) ([]notification.HourCount, error) {
+	return database.NewNotificationRepository(cfg).CountByHour(hours)
+}

@@ -8,9 +8,11 @@ import (
 	databaseDomain "github.com/su3i/wimp/internal/domain/database"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
+	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
 	"github.com/su3i/wimp/internal/domain/site"
+	"github.com/su3i/wimp/internal/domain/uptime"
 	"github.com/su3i/wimp/internal/infrastructure/database/postgres"
 	postgresRepository "github.com/su3i/wimp/internal/infrastructure/database/postgres/repositories"
 	"github.com/su3i/wimp/internal/infrastructure/database/sqlite"
@@ -95,4 +97,12 @@ func NewSiteRepository(config *config.DatabaseConfig) site.SiteRepository {
 
 func NewApplicationRepository(config *config.DatabaseConfig) application.ApplicationRepository {
 	return newRepository(config, postgresRepository.NewApplicationRepository, sqliteRepository.NewApplicationRepository)
+}
+
+func NewNotificationRepository(config *config.DatabaseConfig) notification.Repository {
+	return newRepository(config, postgresRepository.NewNotificationRepository, sqliteRepository.NewNotificationRepository)
+}
+
+func NewUptimeRepository(config *config.DatabaseConfig) uptime.Repository {
+	return newRepository(config, postgresRepository.NewUptimeRepository, sqliteRepository.NewUptimeRepository)
 }

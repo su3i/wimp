@@ -8,6 +8,7 @@ type CommonConfig struct {
 	LokiPort             string `required:"true"`
 	LokiTlsEnabled       bool   `required:"false"`
 	LokiTlsSkipVerify    bool   `required:"false"`
+	PrometheusUrl        string `required:"false"`
 	BootstrapToken       string `required:"true"`
 	AgentVersion         string `required:"true"`
 	EnforceMfa           bool   `required:"false"`

@@ -10,10 +10,14 @@ import (
 	"github.com/gorilla/websocket"
 	applicationService "github.com/su3i/wimp/internal/application/application"
 	appPoolService "github.com/su3i/wimp/internal/application/apppool"
+	notificationService "github.com/su3i/wimp/internal/application/notification"
 	siteService "github.com/su3i/wimp/internal/application/site"
+	uptimeService "github.com/su3i/wimp/internal/application/uptime"
 	"github.com/su3i/wimp/internal/config"
 	machineDomain "github.com/su3i/wimp/internal/domain/machine"
+	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/protocol"
+	uptimeDomain "github.com/su3i/wimp/internal/domain/uptime"
 	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
@@ -62,11 +66,19 @@ func AgentWebSocket(c *gin.Context) {
 	hub.Get().Register(m.ID, conn)
 	log.Printf("machine (%d) agent connected", m.ID)
 
+	cfg := config.Database()
+	go uptimeService.Record(m.ID, uptimeDomain.EventOnline, cfg)
+	go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
+		"Machine connected", m.Hostname+" came online", cfg)
+
 	defer func() {
 		hub.Get().Deregister(m.ID)
 		m.Status = machineDomain.Offline
 		repo.Update(m)
 		log.Printf("machine (%d) agent disconnected", m.ID)
+		go uptimeService.Record(m.ID, uptimeDomain.EventOffline, cfg)
+		go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryMachine,
+			"Machine disconnected", m.Hostname+" went offline", cfg)
 	}()
 
 	for {
@@ -104,7 +116,6 @@ func AgentWebSocket(c *gin.Context) {
 				log.Printf("machine (%d) bad discovery payload: %v", m.ID, err)
 				continue
 			}
-			cfg := config.Database()
 			if err := appPoolService.UpsertFromDiscovery(m.ID, disc.AppPools, cfg); err != nil {
 				log.Printf("machine (%d) app pool upsert failed: %v", m.ID, err)
 			}
@@ -120,9 +131,16 @@ func AgentWebSocket(c *gin.Context) {
 			t := time.Now()
 			m.LastSeenAt = &t
 			repo.Update(m)
-			cfg := config.Database()
-			appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
+			stoppedPools, startedPools, _ := appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
 			siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
+			for _, name := range stoppedPools {
+				go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryAppPool,
+					"App pool stopped", name+" stopped on "+m.Hostname, cfg)
+			}
+			for _, name := range startedPools {
+				go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryAppPool,
+					"App pool started", name+" started on "+m.Hostname, cfg)
+			}
 
 		case protocol.TypeCommandResult:
 			var result protocol.CommandResultPayload

@@ -25,7 +25,7 @@ func UpsertFromDiscovery(machineID uint, pools []protocol.AppPoolInfo, cfg *conf
 	return database.NewAppPoolRepository(cfg).SyncFromDiscovery(machineID, records)
 }
 
-func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseConfig) error {
+func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseConfig) (stoppedNames []string, startedNames []string, err error) {
 	return database.NewAppPoolRepository(cfg).SyncStates(machineID, runningNames)
 }
 

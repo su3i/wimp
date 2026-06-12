@@ -71,8 +71,30 @@ func (r *appPoolRepository) SyncFromDiscovery(machineID uint, pools []apppool.Ap
 	})
 }
 
-func (r *appPoolRepository) SyncStates(machineID uint, runningNames []string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+func (r *appPoolRepository) SyncStates(machineID uint, runningNames []string) ([]string, []string, error) {
+	var stopped, started []string
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var existing []apppool.AppPool
+		if err := tx.Where("machine_id = ?", machineID).Find(&existing).Error; err != nil {
+			return err
+		}
+
+		runningSet := make(map[string]bool, len(runningNames))
+		for _, n := range runningNames {
+			runningSet[n] = true
+		}
+
+		for _, p := range existing {
+			wasRunning := p.State == "Started"
+			nowRunning := runningSet[p.Name]
+			if wasRunning && !nowRunning {
+				stopped = append(stopped, p.Name)
+			} else if !wasRunning && nowRunning {
+				started = append(started, p.Name)
+			}
+		}
+
 		if err := tx.Model(&apppool.AppPool{}).Where("machine_id = ?", machineID).Update("state", "Stopped").Error; err != nil {
 			return err
 		}
@@ -83,6 +105,8 @@ func (r *appPoolRepository) SyncStates(machineID uint, runningNames []string) er
 			Where("machine_id = ? AND name IN ?", machineID, runningNames).
 			Update("state", "Started").Error
 	})
+
+	return stopped, started, err
 }
 
 func NewAppPoolRepository(db *gorm.DB) apppool.AppPoolRepository {
