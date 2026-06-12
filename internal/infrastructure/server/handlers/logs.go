@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -81,7 +82,12 @@ func QueryLogs(c *gin.Context) {
 	q.Set("direction", direction)
 	req.URL.RawQuery = q.Encode()
 
-	lokiClient := &http.Client{Timeout: 30 * time.Second}
+	lokiClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: cfg.LokiTlsSkipVerify}, //nolint:gosec
+		},
+	}
 	resp, err := lokiClient.Do(req)
 	if err != nil {
 		log.Printf("loki query failed: %v", err)
