@@ -95,7 +95,7 @@ func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*Applica
 	}, nil
 }
 
-func AddAppPool(applicationID, machineID, appPoolID uint, logPath *string, projectKey string, cfg *config.DatabaseConfig) error {
+func AddAppPools(applicationID, machineID uint, appPoolIDs []uint, projectKey string, cfg *config.DatabaseConfig) error {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return errors.New("project not found")
@@ -107,33 +107,32 @@ func AddAppPool(applicationID, machineID, appPoolID uint, logPath *string, proje
 		return errors.New("application not found")
 	}
 
-	pool, err := database.NewAppPoolRepository(cfg).FindOneByID(appPoolID)
-	if err != nil || pool == nil {
-		return errors.New("app pool not found")
-	}
-	if pool.MachineID != machineID {
-		return errors.New("app pool does not belong to the specified machine")
+	appPoolRepo := database.NewAppPoolRepository(cfg)
+	for _, appPoolID := range appPoolIDs {
+		pool, err := appPoolRepo.FindOneByID(appPoolID)
+		if err != nil || pool == nil {
+			return errors.New("app pool not found")
+		}
+		if pool.MachineID != machineID {
+			return errors.New("app pool does not belong to the specified machine")
+		}
+
+		exists, err := appRepo.HasAppPool(applicationID, appPoolID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+
+		if err := appRepo.AddAppPool(&application.ApplicationAppPool{
+			ApplicationID: applicationID,
+			AppPoolID:     appPoolID,
+		}); err != nil {
+			return err
+		}
 	}
 
-	exists, err := appRepo.HasAppPool(applicationID, appPoolID)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return errors.New("app pool already added to this application")
-	}
-
-	if err := appRepo.AddAppPool(&application.ApplicationAppPool{
-		ApplicationID: applicationID,
-		AppPoolID:     appPoolID,
-		LogPath:       logPath,
-	}); err != nil {
-		return err
-	}
-
-	if logPath != nil && *logPath != "" {
-		_ = PushFluentConfig(machineID, cfg) // best-effort; machine may be offline
-	}
 	return nil
 }
 

@@ -7,10 +7,16 @@ import (
 
 	projectService "github.com/su3i/wimp/internal/application/project"
 	"github.com/su3i/wimp/internal/config"
+	"github.com/su3i/wimp/internal/domain/apppool"
 	"github.com/su3i/wimp/internal/domain/authentication"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
+
+type MachineWithPools struct {
+	machine.Machine
+	AppPools []apppool.AppPool `json:"app_pools"`
+}
 
 func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
@@ -103,12 +109,29 @@ func GetUninstallCommand(id uint, projectKey string, appUrl string, appEnv strin
 	return cmd, nil
 }
 
-func RetrieveMachines(projectKey string, cfg *config.DatabaseConfig) (*[]machine.Machine, error) {
+func RetrieveMachines(projectKey string, cfg *config.DatabaseConfig) ([]MachineWithPools, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return nil, errors.New("project not found")
 	}
 
-	repo := database.NewMachineRepository(cfg)
-	return repo.FindByProjectID(proj.ID)
+	machines, err := database.NewMachineRepository(cfg).FindByProjectID(proj.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	appPoolRepo := database.NewAppPoolRepository(cfg)
+	result := make([]MachineWithPools, len(*machines))
+	for i, m := range *machines {
+		pools, err := appPoolRepo.FindByMachineID(m.ID)
+		if err != nil {
+			return nil, err
+		}
+		if pools == nil {
+			pools = &[]apppool.AppPool{}
+		}
+		result[i] = MachineWithPools{Machine: m, AppPools: *pools}
+	}
+
+	return result, nil
 }
