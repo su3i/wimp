@@ -68,6 +68,10 @@ func (r *applicationRepository) FindAppPoolRelation(applicationID, appPoolID uin
 	return &rel, nil
 }
 
+func (r *applicationRepository) RemoveAppPool(applicationID, appPoolID uint) error {
+	return r.db.Where("application_id = ? AND app_pool_id = ?", applicationID, appPoolID).Delete(&application.ApplicationAppPool{}).Error
+}
+
 func (r *applicationRepository) UpdateAppPoolRelation(rel *application.ApplicationAppPool) error {
 	return r.db.Save(rel).Error
 }

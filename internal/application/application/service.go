@@ -19,6 +19,7 @@ type AppPoolWithDetails struct {
 	apppool.AppPool
 	Machine machine.Machine `json:"machine"`
 	Sites   []site.Site     `json:"sites"`
+	LogPath *string         `json:"log_path"`
 }
 
 type ApplicationDetail struct {
@@ -86,6 +87,7 @@ func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*Applica
 			AppPool: *pool,
 			Machine: *m,
 			Sites:   *sites,
+			LogPath: rel.LogPath,
 		})
 	}
 
@@ -107,29 +109,47 @@ func AddAppPools(applicationID, machineID uint, appPoolIDs []uint, projectKey st
 		return errors.New("application not found")
 	}
 
+	// Validate all incoming pools belong to the specified machine
 	appPoolRepo := database.NewAppPoolRepository(cfg)
-	for _, appPoolID := range appPoolIDs {
-		pool, err := appPoolRepo.FindOneByID(appPoolID)
+	incoming := make(map[uint]bool, len(appPoolIDs))
+	for _, id := range appPoolIDs {
+		pool, err := appPoolRepo.FindOneByID(id)
 		if err != nil || pool == nil {
 			return errors.New("app pool not found")
 		}
 		if pool.MachineID != machineID {
 			return errors.New("app pool does not belong to the specified machine")
 		}
+		incoming[id] = true
+	}
 
-		exists, err := appRepo.HasAppPool(applicationID, appPoolID)
-		if err != nil {
-			return err
-		}
-		if exists {
-			continue
-		}
+	existing, err := appRepo.FindAppPoolRelations(applicationID)
+	if err != nil {
+		return err
+	}
 
-		if err := appRepo.AddAppPool(&application.ApplicationAppPool{
-			ApplicationID: applicationID,
-			AppPoolID:     appPoolID,
-		}); err != nil {
-			return err
+	// Remove pools not in the incoming list
+	for _, rel := range *existing {
+		if !incoming[rel.AppPoolID] {
+			if err := appRepo.RemoveAppPool(applicationID, rel.AppPoolID); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Add pools not already linked
+	existingSet := make(map[uint]bool, len(*existing))
+	for _, rel := range *existing {
+		existingSet[rel.AppPoolID] = true
+	}
+	for id := range incoming {
+		if !existingSet[id] {
+			if err := appRepo.AddAppPool(&application.ApplicationAppPool{
+				ApplicationID: applicationID,
+				AppPoolID:     id,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 
