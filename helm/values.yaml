@@ -2,18 +2,18 @@
 # WIMP control-plane settings
 # ──────────────────────────────────────────────────────────────
 # The control plane public url
-appUrl: "http://172.30.19.122:8080"
+appUrl: "http://0.0.0.0:8080"
 
 image:
   repository: darksueii/wimp
-  tag: "0.0.14"
+  tag: "0.0.15"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
 
 service:
   type: LoadBalancer
-  loadBalancerIP: 172.30.19.122
+  loadBalancerIP: ""
   port: 8080
 
 ingress:
@@ -49,11 +49,11 @@ config:
     # path: /data/app.db
 
     # Postgres (only used when type = postgres)
-    host: "172.30.19.131"
-    port: "32250"
-    name: wimp
-    username: "app"
-    password: "gOuG9nmCiJS6F2JcSOFaV3eQZiUgQSYetCfdo2HmsL4rYvQWUF2qoW0uSo89DfpI"
+    host: ""
+    port: ""
+    name: ""
+    username: ""
+    password: ""
     useSsl: false
 
   # Loki connection - auto-derived from the Loki subchart service when loki.enabled=true.
@@ -77,13 +77,13 @@ loki:
         chunks: loki-chunks
         ruler: loki-ruler
       s3:
-        endpoint: http://admin:QWzIF0RaJ4C7jz29@172.30.19.146:30900
+        endpoint: "" # s3 style endpoint
         s3forcepathstyle: true
         insecure: true
 
     storage_config:
       aws:
-        s3: http://admin:QWzIF0RaJ4C7jz29@172.30.19.146:30900
+        s3: "" # s3 style endpoint
         s3forcepathstyle: true
 
     commonConfig:
