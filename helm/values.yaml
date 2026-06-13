@@ -1,0 +1,201 @@
+# ──────────────────────────────────────────────────────────────
+# WIMP control-plane settings
+# ──────────────────────────────────────────────────────────────
+# The control plane public url
+appUrl: "http://172.30.19.122:8080"
+
+image:
+  repository: darksueii/wimp
+  tag: "0.0.14"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: LoadBalancer
+  loadBalancerIP: 172.30.19.122
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tls:
+    enabled: false
+    secretName: ""
+
+persistence:
+  # SQLite data directory - ignored when database.type is postgres
+  enabled: false
+  storageClass: ""
+  size: 2Gi
+
+config:
+  appEnv: production
+  agentVersion: "0.0.4"
+  enforceMfa: false
+
+  # Leave blank - auto-generated on first install and persisted in a secret.
+  jwtSecret: ""
+  bootstrapToken: ""
+
+  defaultAdminEmail: "admin@wimp.local"
+  defaultAdminPassword: "Admin@1234"
+
+  database:
+    type: postgres # "sqlite" | "postgres"
+
+    # SQLite path (only used when type = sqlite)
+    # path: /data/app.db
+
+    # Postgres (only used when type = postgres)
+    host: "172.30.19.131"
+    port: "32250"
+    name: wimp
+    username: "app"
+    password: "gOuG9nmCiJS6F2JcSOFaV3eQZiUgQSYetCfdo2HmsL4rYvQWUF2qoW0uSo89DfpI"
+    useSsl: false
+
+  # Loki connection - auto-derived from the Loki subchart service when loki.enabled=true.
+  lokiHost: ""
+  lokiPort: "3100"
+  lokiTlsEnabled: false
+  lokiTlsSkipVerify: false
+
+# ──────────────────────────────────────────────────────────────
+# Loki (log aggregation)
+# ──────────────────────────────────────────────────────────────
+loki:
+  enabled: true
+
+  loki:
+    auth_enabled: false
+
+    storage:
+      type: s3
+      bucketNames:
+        chunks: loki-chunks
+        ruler: loki-ruler
+      s3:
+        endpoint: http://admin:QWzIF0RaJ4C7jz29@172.30.19.146:30900
+        s3forcepathstyle: true
+        insecure: true
+
+    storage_config:
+      aws:
+        s3: http://admin:QWzIF0RaJ4C7jz29@172.30.19.146:30900
+        s3forcepathstyle: true
+
+    commonConfig:
+      replication_factor: 1
+    schemaConfig:
+      configs:
+        - from: "2024-04-01"
+          store: tsdb
+          object_store: s3
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+    pattern_ingester:
+      enabled: true
+    limits_config:
+      allow_structured_metadata: true
+      volume_enabled: true
+    ruler:
+      enable_api: true
+
+  minio:
+    enabled: false
+  gateway:
+    enabled: false
+  # lokiCanary:
+  #   enabled: false
+        
+  deploymentMode: Monolithic
+
+  singleBinary:
+    replicas: 1
+    service:
+      type: LoadBalancer
+      loadBalancerIP: ""
+
+  # Zero out all other replica sets
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+  ingester:
+    replicas: 0
+  querier:
+    replicas: 0
+  queryFrontend:
+    replicas: 0
+  queryScheduler:
+    replicas: 0
+  distributor:
+    replicas: 0
+  compactor:
+    replicas: 0
+  indexGateway:
+    replicas: 0
+  bloomPlanner:
+    replicas: 0
+  bloomBuilder:
+    replicas: 0
+  bloomGateway:
+    replicas: 0
+
+# ──────────────────────────────────────────────────────────────
+# Prometheus + Grafana + Alertmanager
+# (via kube-prometheus-stack)
+# ──────────────────────────────────────────────────────────────
+kube-prometheus-stack:
+  enabled: true
+
+  grafana:
+    enabled: true
+    service:
+      type: ClusterIP
+    persistence:
+      enabled: true
+      size: 10Gi
+    adminPassword: "Admin@1234"
+
+  alertmanager:
+    enabled: true
+    alertmanagerSpec:
+      retention: 48h
+
+  prometheus:
+    service:
+      type: LoadBalancer
+      loadBalancerIP: ""
+    prometheusSpec:
+      scrapeInterval: 1m
+      # serviceMonitor / podMonitor / rule selectors - pick up everything in the cluster
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      retention: 15d
+      # Windows-exporter HTTP service discovery via WIMP.
+      # The URL assumes the Helm release is named "wimp".
+      # If you used a different release name, set:
+      #   --set 'kube-prometheus-stack.prometheus.prometheusSpec.additionalScrapeConfigs[0].http_sd_configs[0].url=http://<release-name>:8080/prometheus/targets'
+      additionalScrapeConfigs:
+        - job_name: windows_exporter
+          scrape_interval: 30s
+          http_sd_configs:
+            - url: http://wimp:8080/prometheus/targets
+              refresh_interval: 60s
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: instance
+
+  kube-state-metrics:
+    enabled: true
+
+  nodeExporter:
+    enabled: true

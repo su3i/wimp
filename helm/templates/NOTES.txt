@@ -1,0 +1,36 @@
+WIMP has been installed. 🎉
+
+Control plane:
+{{- if .Values.ingress.enabled }}
+  URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  Run: kubectl get svc {{ include "wimp.fullname" . }} -n {{ .Release.Namespace }}
+  Wait for EXTERNAL-IP, then access at http://<EXTERNAL-IP>:{{ .Values.service.port }}
+{{- else }}
+  Port-forward: kubectl port-forward svc/{{ include "wimp.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  Then open:    http://localhost:8080
+{{- end }}
+
+{{- if index .Values "kube-prometheus-stack" "enabled" }}
+
+Grafana:
+  Port-forward: kubectl port-forward svc/{{ .Release.Name }}-kube-prometheus-stack-grafana 3000:80 -n {{ .Release.Namespace }}
+  Then open:    http://localhost:3000
+  Credentials:  admin / {{ index .Values "kube-prometheus-stack" "grafana" "adminPassword" }}
+{{- end }}
+
+{{- if .Values.loki.enabled }}
+
+Loki is running at: http://{{ .Release.Name }}-loki:3100 (cluster-internal)
+{{- end }}
+
+Default admin login:
+  Email:    {{ .Values.config.defaultAdminEmail }}
+  Password: {{ .Values.config.defaultAdminPassword }}
+
+NOTE: The Prometheus windows_exporter scrape config points to:
+  http://{{ include "wimp.fullname" . }}:8080/prometheus/targets
+{{- if ne (include "wimp.fullname" .) "wimp" }}
+  Your release name differs from "wimp" — update the scrape URL:
+  --set 'kube-prometheus-stack.prometheus.prometheusSpec.additionalScrapeConfigs[0].http_sd_configs[0].url=http://{{ include "wimp.fullname" . }}:{{ .Values.service.port }}/prometheus/targets'
+{{- end }}

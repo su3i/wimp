@@ -1,0 +1,17 @@
+apiVersion: v2
+name: wimp
+description: Windows Infrastructure Management Platform — control plane, Loki, and Prometheus stack
+type: application
+version: 0.0.14
+appVersion: "0.0.14"
+
+dependencies:
+  - name: loki
+    version: ">=6.0.0"
+    repository: "oci://ghcr.io/grafana-community/helm-charts"
+    condition: loki.enabled
+
+  - name: kube-prometheus-stack
+    version: ">=60.0.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: kube-prometheus-stack.enabled

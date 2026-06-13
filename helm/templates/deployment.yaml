@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wimp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wimp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "wimp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wimp.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: wimp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          env:
+            # ── App ──────────────────────────────────────────
+            - name: APPENV
+              value: {{ .Values.config.appEnv | quote }}
+            - name: APPURL
+              value: {{ .Values.appUrl | quote }}
+            - name: APPPORT
+              value: {{ .Values.service.port | toString | quote }}
+            - name: AGENTVERSION
+              value: {{ .Values.config.agentVersion | quote }}
+            - name: ENFORCEMFA
+              value: {{ .Values.config.enforceMfa | toString | quote }}
+
+            # ── Auth ─────────────────────────────────────────
+            - name: JWTSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: jwt-secret
+            - name: BOOTSTRAPTOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: bootstrap-token
+            - name: DEFAULTADMINEMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: admin-email
+            - name: DEFAULTADMINPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: admin-password
+
+            # ── Database ─────────────────────────────────────
+            - name: DATABASETYPE
+              value: {{ .Values.config.database.type | quote }}
+            - name: DATABASEPATH
+              value: {{ .Values.config.database.path | quote }}
+            - name: DATABASEHOST
+              value: {{ .Values.config.database.host | quote }}
+            - name: DATABASEPORT
+              value: {{ .Values.config.database.port | quote }}
+            - name: DATABASENAME
+              value: {{ .Values.config.database.name | quote }}
+            - name: DATABASEUSERNAME
+              value: {{ .Values.config.database.username | quote }}
+            - name: DATABASEPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: db-password
+            - name: DATABASEUSESSL
+              value: {{ .Values.config.database.useSsl | toString | quote }}
+
+            # ── Loki ─────────────────────────────────────────
+            - name: LOKIHOST
+              value: {{ include "wimp.lokiHost" . | quote }}
+            - name: LOKIPORT
+              value: {{ .Values.config.lokiPort | quote }}
+            - name: LOKITLSENABLED
+              value: {{ .Values.config.lokiTlsEnabled | toString | quote }}
+            - name: LOKITLSSKIPVERIFY
+              value: {{ .Values.config.lokiTlsSkipVerify | toString | quote }}
+
+          {{- if and .Values.persistence.enabled (eq .Values.config.database.type "sqlite") }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+
+      {{- if and .Values.persistence.enabled (eq .Values.config.database.type "sqlite") }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "wimp.fullname" . }}-data
+      {{- end }}
