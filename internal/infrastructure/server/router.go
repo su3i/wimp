@@ -95,6 +95,9 @@ func InitializeRouter() *gin.Engine {
 	// Sites (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/sites", middleware.AuthMiddleware(), handlers.RetrieveSites)
 
+	// Dashboard (project-scoped)
+	router.GET("/projects/:key/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
+
 	// Notifications
 	router.GET("/notifications", middleware.AuthMiddleware(), handlers.ListNotifications)
 	router.GET("/notifications/unread-count", middleware.AuthMiddleware(), handlers.GetUnreadCount)
