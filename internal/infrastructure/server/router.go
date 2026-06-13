@@ -101,13 +101,6 @@ func InitializeRouter() *gin.Engine {
 	router.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MarkNotificationRead)
 	router.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MarkAllNotificationsRead)
 
-	// Dashboard
-	router.GET("/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
-	router.GET("/dashboard/alerts/active", middleware.AuthMiddleware(), handlers.DashboardActiveAlerts)
-	router.GET("/dashboard/alert-history", middleware.AuthMiddleware(), handlers.DashboardAlertHistory)
-	router.GET("/dashboard/uptime", middleware.AuthMiddleware(), handlers.DashboardUptime)
-	router.GET("/dashboard/machines", middleware.AuthMiddleware(), handlers.DashboardMachines)
-
 	// Metrics
 	handlers.MetricsHandler(router)
 

@@ -17,7 +17,6 @@ import (
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
 	"github.com/su3i/wimp/internal/domain/site"
-	"github.com/su3i/wimp/internal/domain/uptime"
 )
 
 var DB *gorm.DB
@@ -95,8 +94,4 @@ func Migrate() {
 		log.Fatalf("failed to migrate sqlite database (notification): %v", err)
 	}
 
-	err = DB.AutoMigrate(&uptime.Event{})
-	if err != nil {
-		log.Fatalf("failed to migrate sqlite database (uptime_event): %v", err)
-	}
 }

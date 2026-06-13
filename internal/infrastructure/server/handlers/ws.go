@@ -12,12 +12,10 @@ import (
 	appPoolService "github.com/su3i/wimp/internal/application/apppool"
 	notificationService "github.com/su3i/wimp/internal/application/notification"
 	siteService "github.com/su3i/wimp/internal/application/site"
-	uptimeService "github.com/su3i/wimp/internal/application/uptime"
 	"github.com/su3i/wimp/internal/config"
 	machineDomain "github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/protocol"
-	uptimeDomain "github.com/su3i/wimp/internal/domain/uptime"
 	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
@@ -67,7 +65,6 @@ func AgentWebSocket(c *gin.Context) {
 	log.Printf("machine (%d) agent connected", m.ID)
 
 	cfg := config.Database()
-	go uptimeService.Record(m.ID, uptimeDomain.EventOnline, cfg)
 	go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
 		"Machine connected", m.Hostname+" came online", cfg)
 
@@ -76,7 +73,6 @@ func AgentWebSocket(c *gin.Context) {
 		m.Status = machineDomain.Offline
 		repo.Update(m)
 		log.Printf("machine (%d) agent disconnected", m.ID)
-		go uptimeService.Record(m.ID, uptimeDomain.EventOffline, cfg)
 		go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryMachine,
 			"Machine disconnected", m.Hostname+" went offline", cfg)
 	}()
