@@ -12,7 +12,7 @@ type appPoolRepository struct {
 
 func (r *appPoolRepository) FindByMachineID(machineID uint) (*[]apppool.AppPool, error) {
 	var pools []apppool.AppPool
-	if err := r.db.Where("machine_id = ?", machineID).Find(&pools).Error; err != nil {
+	if err := r.db.Where("machine_id = ?", machineID).Order("created_at DESC").Find(&pools).Error; err != nil {
 		return nil, err
 	}
 	return &pools, nil

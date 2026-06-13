@@ -15,7 +15,7 @@ type projectRepository struct {
 func (r *projectRepository) Find() (*[]project.Project, error) {
 	var _projects []project.Project
 
-	if err := r.db.Unscoped().Find(&_projects).Error; err != nil {
+	if err := r.db.Unscoped().Order("created_at DESC").Find(&_projects).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}

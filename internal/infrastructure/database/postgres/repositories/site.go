@@ -12,7 +12,7 @@ type siteRepository struct {
 
 func (r *siteRepository) FindByMachineAndAppPool(machineID uint, appPoolName string) (*[]site.Site, error) {
 	var sites []site.Site
-	if err := r.db.Where("machine_id = ? AND app_pool_name = ?", machineID, appPoolName).Find(&sites).Error; err != nil {
+	if err := r.db.Where("machine_id = ? AND app_pool_name = ?", machineID, appPoolName).Order("created_at DESC").Find(&sites).Error; err != nil {
 		return nil, err
 	}
 	return &sites, nil
@@ -20,7 +20,7 @@ func (r *siteRepository) FindByMachineAndAppPool(machineID uint, appPoolName str
 
 func (r *siteRepository) FindByMachineID(machineID uint) (*[]site.Site, error) {
 	var sites []site.Site
-	if err := r.db.Where("machine_id = ?", machineID).Find(&sites).Error; err != nil {
+	if err := r.db.Where("machine_id = ?", machineID).Order("created_at DESC").Find(&sites).Error; err != nil {
 		return nil, err
 	}
 	return &sites, nil

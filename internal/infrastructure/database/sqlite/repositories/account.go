@@ -15,7 +15,7 @@ type accountRepository struct {
 func (r *accountRepository) Find() (*[]account.Account, error) {
 	var _accounts []account.Account
 
-	if err := r.db.Unscoped().Find(&_accounts).Error; err != nil {
+	if err := r.db.Unscoped().Order("created_at DESC").Find(&_accounts).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}

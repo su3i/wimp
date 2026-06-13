@@ -14,7 +14,7 @@ type machineRepository struct {
 
 func (r *machineRepository) FindAll() (*[]machine.Machine, error) {
 	var machines []machine.Machine
-	if err := r.db.Find(&machines).Error; err != nil {
+	if err := r.db.Order("created_at DESC").Find(&machines).Error; err != nil {
 		return nil, err
 	}
 	return &machines, nil
@@ -23,7 +23,7 @@ func (r *machineRepository) FindAll() (*[]machine.Machine, error) {
 func (r *machineRepository) FindByProjectID(projectID uint) (*[]machine.Machine, error) {
 	var machines []machine.Machine
 
-	if err := r.db.Where("project_id = ?", projectID).Find(&machines).Error; err != nil {
+	if err := r.db.Where("project_id = ?", projectID).Order("created_at DESC").Find(&machines).Error; err != nil {
 		return nil, err
 	}
 

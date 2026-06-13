@@ -2,7 +2,7 @@
 # WIMP control-plane settings
 # ──────────────────────────────────────────────────────────────
 # The control plane public url
-appUrl: "http://0.0.0.0:8080"
+appUrl: "http://172.30.19.131:30000"
 
 image:
   repository: darksueii/wimp
@@ -12,8 +12,9 @@ image:
 replicaCount: 1
 
 service:
-  type: LoadBalancer
-  loadBalancerIP: ""
+  type: NodePort
+  nodePort: 30000
+  # loadBalancerIP: ""
   port: 8080
 
 ingress:
@@ -25,8 +26,7 @@ ingress:
     secretName: ""
 
 persistence:
-  # SQLite data directory - ignored when database.type is postgres
-  enabled: false
+  enabled: false # SQLite data directory - not needed when database.type is postgres
   storageClass: ""
   size: 2Gi
 
@@ -35,30 +35,29 @@ config:
   agentVersion: "0.0.4"
   enforceMfa: false
 
-  # Leave blank - auto-generated on first install and persisted in a secret.
-  jwtSecret: ""
-  bootstrapToken: ""
+  jwtSecret: "3VtLzktI7qzemGrY"
+  bootstrapToken: "3VtLzktI7qzemGrY"
 
-  defaultAdminEmail: "admin@wimp.local"
+  defaultAdminEmail: "folarinraphael06@gmail.com"
   defaultAdminPassword: "Admin@1234"
 
   database:
     type: postgres # "sqlite" | "postgres"
 
-    # SQLite path (only used when type = sqlite)
-    # path: /data/app.db
+    # Sqlite path (only used when type = sqlite)
+    # path: /data/app.db 
 
     # Postgres (only used when type = postgres)
-    host: ""
-    port: ""
-    name: ""
-    username: ""
-    password: ""
+    host: "172.30.19.131"
+    port: "32250"
+    name: wimp
+    username: "app"
+    password: "gOuG9nmCiJS6F2JcSOFaV3eQZiUgQSYetCfdo2HmsL4rYvQWUF2qoW0uSo89DfpI"
     useSsl: false
 
   # Loki connection - auto-derived from the Loki subchart service when loki.enabled=true.
-  lokiHost: ""
-  lokiPort: "3100"
+  lokiHost: "172.30.19.131"
+  lokiPort: "32192"
   lokiTlsEnabled: false
   lokiTlsSkipVerify: false
 
@@ -66,7 +65,7 @@ config:
 # Loki (log aggregation)
 # ──────────────────────────────────────────────────────────────
 loki:
-  enabled: true
+  enabled: false
 
   loki:
     auth_enabled: false
@@ -153,7 +152,7 @@ loki:
 # (via kube-prometheus-stack)
 # ──────────────────────────────────────────────────────────────
 kube-prometheus-stack:
-  enabled: true
+  enabled: false
 
   grafana:
     enabled: true
