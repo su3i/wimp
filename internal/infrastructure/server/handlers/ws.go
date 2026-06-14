@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 	applicationService "github.com/su3i/wimp/internal/application/application"
 	appPoolService "github.com/su3i/wimp/internal/application/apppool"
+	machineService "github.com/su3i/wimp/internal/application/machine"
 	notificationService "github.com/su3i/wimp/internal/application/notification"
 	siteService "github.com/su3i/wimp/internal/application/site"
 	"github.com/su3i/wimp/internal/config"
@@ -70,6 +71,12 @@ func AgentWebSocket(c *gin.Context) {
 
 	defer func() {
 		hub.Get().Deregister(m.ID)
+		if m.Status == machineDomain.Deleting {
+			if err := machineService.HardDelete(m.ID, cfg); err != nil {
+				log.Printf("machine (%d) hard delete failed: %v", m.ID, err)
+			}
+			return
+		}
 		m.Status = machineDomain.Offline
 		repo.Update(m)
 		log.Printf("machine (%d) agent disconnected", m.ID)

@@ -35,6 +35,6 @@ func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseCo
 	return database.NewSiteRepository(cfg).SyncStates(machineID, runningNames)
 }
 
-func RetrieveByMachineID(machineID uint, cfg *config.DatabaseConfig) (*[]siteDomain.Site, error) {
-	return database.NewSiteRepository(cfg).FindByMachineID(machineID)
+func RetrieveByMachineID(machineID uint, page, perPage int, state string, cfg *config.DatabaseConfig) (*[]siteDomain.Site, int64, error) {
+	return database.NewSiteRepository(cfg).FindByMachineIDFiltered(machineID, page, perPage, state)
 }

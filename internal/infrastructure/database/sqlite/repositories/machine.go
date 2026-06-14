@@ -30,6 +30,24 @@ func (r *machineRepository) FindByProjectID(projectID uint) (*[]machine.Machine,
 	return &machines, nil
 }
 
+func (r *machineRepository) FindByProjectIDFiltered(projectID uint, page, perPage int, status string) (*[]machine.Machine, int64, error) {
+	var machines []machine.Machine
+	var total int64
+
+	q := r.db.Model(&machine.Machine{}).Where("project_id = ?", projectID)
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * perPage
+	if err := q.Order("created_at DESC").Offset(offset).Limit(perPage).Find(&machines).Error; err != nil {
+		return nil, 0, err
+	}
+	return &machines, total, nil
+}
+
 func (r *machineRepository) FindOneByID(id uint) (*machine.Machine, error) {
 	var m machine.Machine
 

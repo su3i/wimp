@@ -26,6 +26,21 @@ func (r *applicationRepository) FindByProjectID(projectID uint) (*[]application.
 	return &apps, nil
 }
 
+func (r *applicationRepository) FindByProjectIDPaginated(projectID uint, page, perPage int) (*[]application.Application, int64, error) {
+	var apps []application.Application
+	var total int64
+
+	q := r.db.Model(&application.Application{}).Where("project_id = ?", projectID)
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * perPage
+	if err := q.Order("created_at DESC").Offset(offset).Limit(perPage).Find(&apps).Error; err != nil {
+		return nil, 0, err
+	}
+	return &apps, total, nil
+}
+
 func (r *applicationRepository) FindOneByID(id uint) (*application.Application, error) {
 	var app application.Application
 	if err := r.db.First(&app, id).Error; err != nil {
@@ -35,6 +50,26 @@ func (r *applicationRepository) FindOneByID(id uint) (*application.Application, 
 		return nil, err
 	}
 	return &app, nil
+}
+
+func (r *applicationRepository) FindAppPoolRelationsPaginated(applicationID uint, page, perPage int, state string) (*[]application.ApplicationAppPool, int64, error) {
+	var relations []application.ApplicationAppPool
+	var total int64
+
+	q := r.db.Model(&application.ApplicationAppPool{}).
+		Joins("JOIN app_pools ON app_pools.id = application_app_pools.app_pool_id AND app_pools.deleted_at IS NULL").
+		Where("application_app_pools.application_id = ?", applicationID)
+	if state != "" {
+		q = q.Where("app_pools.state = ?", state)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * perPage
+	if err := q.Order("application_app_pools.created_at DESC").Offset(offset).Limit(perPage).Find(&relations).Error; err != nil {
+		return nil, 0, err
+	}
+	return &relations, total, nil
 }
 
 func (r *applicationRepository) AddAppPool(rel *application.ApplicationAppPool) error {

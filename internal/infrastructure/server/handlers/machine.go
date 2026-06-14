@@ -53,7 +53,9 @@ func RetrieveMachines(c *gin.Context) {
 		return
 	}
 
-	machines, err := machineService.RetrieveMachines(projectKey, config.Database())
+	page, perPage, status := utils.ParsePageQuery(c)
+
+	machines, total, err := machineService.RetrieveMachines(projectKey, page, perPage, status, config.Database())
 	if err != nil {
 		log.Printf("Error retrieving machines: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -63,6 +65,9 @@ func RetrieveMachines(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "success",
 		"machines": machines,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
 	})
 }
 
@@ -93,6 +98,31 @@ func GetBootstrapToken(c *gin.Context) {
 		"download_command": downloadCmd,
 		"run_command":      runCmd,
 	})
+}
+
+func DeleteMachine(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("machineId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid machine id"})
+		return
+	}
+
+	cmd, err := machineService.RequestDeletion(uint(id), projectKey, config.Common().AppUrl, config.Common().AppEnv, config.Database())
+	if err != nil {
+		log.Printf("Error requesting machine deletion: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success", "uninstall_command": cmd})
 }
 
 func GetUninstallCommand(c *gin.Context) {

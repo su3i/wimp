@@ -109,6 +109,28 @@ func (r *appPoolRepository) SyncStates(machineID uint, runningNames []string) ([
 	return stopped, started, err
 }
 
+func (r *appPoolRepository) FindByMachineIDFiltered(machineID uint, page, perPage int, state string) (*[]apppool.AppPool, int64, error) {
+	var pools []apppool.AppPool
+	var total int64
+
+	q := r.db.Model(&apppool.AppPool{}).Where("machine_id = ?", machineID)
+	if state != "" {
+		q = q.Where("state = ?", state)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * perPage
+	if err := q.Order("created_at DESC").Offset(offset).Limit(perPage).Find(&pools).Error; err != nil {
+		return nil, 0, err
+	}
+	return &pools, total, nil
+}
+
+func (r *appPoolRepository) DeleteByMachineID(machineID uint) error {
+	return r.db.Unscoped().Where("machine_id = ?", machineID).Delete(&apppool.AppPool{}).Error
+}
+
 func NewAppPoolRepository(db *gorm.DB) apppool.AppPoolRepository {
 	return &appPoolRepository{db: db}
 }

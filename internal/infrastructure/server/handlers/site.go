@@ -34,12 +34,19 @@ func RetrieveSites(c *gin.Context) {
 		return
 	}
 
-	sites, err := siteService.RetrieveByMachineID(uint(machineID), config.Database())
+	page, perPage, status := utils.ParsePageQuery(c)
+	sites, total, err := siteService.RetrieveByMachineID(uint(machineID), page, perPage, status, config.Database())
 	if err != nil {
 		log.Printf("Error retrieving sites: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "success", "sites": sites})
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "success",
+		"sites":    sites,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
+	})
 }

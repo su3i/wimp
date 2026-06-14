@@ -29,8 +29,8 @@ func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseCo
 	return database.NewAppPoolRepository(cfg).SyncStates(machineID, runningNames)
 }
 
-func RetrieveByMachineID(machineID uint, cfg *config.DatabaseConfig) (*[]apppool.AppPool, error) {
-	return database.NewAppPoolRepository(cfg).FindByMachineID(machineID)
+func RetrieveByMachineID(machineID uint, page, perPage int, state string, cfg *config.DatabaseConfig) (*[]apppool.AppPool, int64, error) {
+	return database.NewAppPoolRepository(cfg).FindByMachineIDFiltered(machineID, page, perPage, state)
 }
 
 func FindOneByID(id uint, cfg *config.DatabaseConfig) (*apppool.AppPool, error) {

@@ -75,15 +75,18 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/machines", middleware.AuthMiddleware(), handlers.RetrieveMachines)
 	router.GET("/projects/:key/machines/:machineId/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
 	router.GET("/projects/:key/machines/:machineId/uninstall", middleware.AuthMiddleware(), handlers.GetUninstallCommand)
+	router.DELETE("/projects/:key/machines/:machineId", middleware.AuthMiddleware(), handlers.DeleteMachine)
 
 	// Applications (project-scoped)
 	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)
 	router.GET("/projects/:key/applications", middleware.AuthMiddleware(), handlers.RetrieveApplications)
 	router.GET("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.RetrieveApplication)
+	router.GET("/projects/:key/applications/:appId/app-pools", middleware.AuthMiddleware(), handlers.ListApplicationAppPools)
 	router.POST("/projects/:key/applications/:appId/app-pools", middleware.AuthMiddleware(), handlers.AddAppPoolToApplication)
 	router.PUT("/projects/:key/applications/:appId/app-pools/:poolId", middleware.AuthMiddleware(), handlers.UpdateAppPoolInApplication)
 	router.GET("/projects/:key/applications/:appId/files", middleware.AuthMiddleware(), handlers.ListApplicationFiles)
 	router.GET("/projects/:key/applications/:appId/logs", middleware.AuthMiddleware(), handlers.QueryLogs)
+	router.DELETE("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.DeleteApplication)
 
 	// App Pools (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/app-pools", middleware.AuthMiddleware(), handlers.RetrieveAppPools)

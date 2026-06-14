@@ -52,14 +52,21 @@ func RetrieveApplications(c *gin.Context) {
 		return
 	}
 
-	apps, err := applicationService.RetrieveAll(projectKey, config.Database())
+	page, perPage, _ := utils.ParsePageQuery(c)
+	apps, total, err := applicationService.RetrieveAll(projectKey, page, perPage, config.Database())
 	if err != nil {
 		log.Printf("Error retrieving applications: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "success", "applications": apps})
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "success",
+		"applications": apps,
+		"total":        total,
+		"page":         page,
+		"per_page":     perPage,
+	})
 }
 
 func RetrieveApplication(c *gin.Context) {
@@ -146,6 +153,30 @@ func ListApplicationFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success", "files": files})
 }
 
+func DeleteApplication(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	if err := applicationService.Delete(uint(id), projectKey, config.Database()); err != nil {
+		log.Printf("Error deleting application: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
 func UpdateAppPoolInApplication(c *gin.Context) {
 	projectKey := c.Param("key")
 
@@ -185,4 +216,36 @@ func UpdateAppPoolInApplication(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+func ListApplicationAppPools(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "read")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	appId, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	page, perPage, status := utils.ParsePageQuery(c)
+	pools, total, err := applicationService.ListAppPools(uint(appId), projectKey, page, perPage, status, config.Database())
+	if err != nil {
+		log.Printf("Error listing application app pools: %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "success",
+		"app_pools": pools,
+		"total":     total,
+		"page":      page,
+		"per_page":  perPage,
+	})
 }

@@ -42,14 +42,21 @@ func RetrieveAppPools(c *gin.Context) {
 		return
 	}
 
-	pools, err := appPoolService.RetrieveByMachineID(uint(machineID), config.Database())
+	page, perPage, status := utils.ParsePageQuery(c)
+	pools, total, err := appPoolService.RetrieveByMachineID(uint(machineID), page, perPage, status, config.Database())
 	if err != nil {
 		log.Printf("Error retrieving app pools: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "success", "app_pools": pools})
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "success",
+		"app_pools": pools,
+		"total":     total,
+		"page":      page,
+		"per_page":  perPage,
+	})
 }
 
 func AppPoolCommand(action string) gin.HandlerFunc {

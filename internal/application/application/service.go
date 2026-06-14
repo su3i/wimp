@@ -45,12 +45,58 @@ func Create(name, projectKey string, cfg *config.DatabaseConfig) (*application.A
 	return database.NewApplicationRepository(cfg).Create(app)
 }
 
-func RetrieveAll(projectKey string, cfg *config.DatabaseConfig) (*[]application.Application, error) {
+func RetrieveAll(projectKey string, page, perPage int, cfg *config.DatabaseConfig) (*[]application.Application, int64, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
-		return nil, errors.New("project not found")
+		return nil, 0, errors.New("project not found")
 	}
-	return database.NewApplicationRepository(cfg).FindByProjectID(proj.ID)
+	return database.NewApplicationRepository(cfg).FindByProjectIDPaginated(proj.ID, page, perPage)
+}
+
+func ListAppPools(id uint, projectKey string, page, perPage int, state string, cfg *config.DatabaseConfig) ([]AppPoolWithDetails, int64, error) {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return nil, 0, errors.New("project not found")
+	}
+
+	appRepo := database.NewApplicationRepository(cfg)
+	app, err := appRepo.FindOneByID(id)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return nil, 0, errors.New("application not found")
+	}
+
+	relations, total, err := appRepo.FindAppPoolRelationsPaginated(id, page, perPage, state)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	appPoolRepo := database.NewAppPoolRepository(cfg)
+	machineRepo := database.NewMachineRepository(cfg)
+	siteRepo := database.NewSiteRepository(cfg)
+
+	poolDetails := make([]AppPoolWithDetails, 0, len(*relations))
+	for _, rel := range *relations {
+		pool, err := appPoolRepo.FindOneByID(rel.AppPoolID)
+		if err != nil || pool == nil {
+			continue
+		}
+		m, err := machineRepo.FindOneByID(pool.MachineID)
+		if err != nil || m == nil {
+			continue
+		}
+		sites, err := siteRepo.FindByMachineAndAppPool(pool.MachineID, pool.Name)
+		if err != nil || sites == nil {
+			sites = &[]site.Site{}
+		}
+		poolDetails = append(poolDetails, AppPoolWithDetails{
+			AppPool: *pool,
+			Machine: *m,
+			Sites:   *sites,
+			LogPath: rel.LogPath,
+		})
+	}
+
+	return poolDetails, total, nil
 }
 
 func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*ApplicationDetail, error) {
@@ -100,6 +146,19 @@ func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*Applica
 		Application: *app,
 		AppPools:    poolDetails,
 	}, nil
+}
+
+func Delete(id uint, projectKey string, cfg *config.DatabaseConfig) error {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return errors.New("project not found")
+	}
+	appRepo := database.NewApplicationRepository(cfg)
+	app, err := appRepo.FindOneByID(id)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return errors.New("application not found")
+	}
+	return appRepo.Delete(id)
 }
 
 func AddAppPools(applicationID, machineID uint, appPoolIDs []uint, projectKey string, cfg *config.DatabaseConfig) error {

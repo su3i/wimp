@@ -26,6 +26,24 @@ func (r *siteRepository) FindByMachineID(machineID uint) (*[]site.Site, error) {
 	return &sites, nil
 }
 
+func (r *siteRepository) FindByMachineIDFiltered(machineID uint, page, perPage int, state string) (*[]site.Site, int64, error) {
+	var sites []site.Site
+	var total int64
+
+	q := r.db.Model(&site.Site{}).Where("machine_id = ?", machineID)
+	if state != "" {
+		q = q.Where("state = ?", state)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * perPage
+	if err := q.Order("created_at DESC").Offset(offset).Limit(perPage).Find(&sites).Error; err != nil {
+		return nil, 0, err
+	}
+	return &sites, total, nil
+}
+
 func (r *siteRepository) FindOneByID(id uint) (*site.Site, error) {
 	var s site.Site
 	if err := r.db.First(&s, id).Error; err != nil {

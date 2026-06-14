@@ -109,15 +109,15 @@ func GetUninstallCommand(id uint, projectKey string, appUrl string, appEnv strin
 	return cmd, nil
 }
 
-func RetrieveMachines(projectKey string, cfg *config.DatabaseConfig) ([]MachineWithPools, error) {
+func RetrieveMachines(projectKey string, page, perPage int, status string, cfg *config.DatabaseConfig) ([]MachineWithPools, int64, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
-		return nil, errors.New("project not found")
+		return nil, 0, errors.New("project not found")
 	}
 
-	machines, err := database.NewMachineRepository(cfg).FindByProjectID(proj.ID)
+	machines, total, err := database.NewMachineRepository(cfg).FindByProjectIDFiltered(proj.ID, page, perPage, status)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	appPoolRepo := database.NewAppPoolRepository(cfg)
@@ -125,7 +125,7 @@ func RetrieveMachines(projectKey string, cfg *config.DatabaseConfig) ([]MachineW
 	for i, m := range *machines {
 		pools, err := appPoolRepo.FindByMachineID(m.ID)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if pools == nil {
 			pools = &[]apppool.AppPool{}
@@ -133,5 +133,35 @@ func RetrieveMachines(projectKey string, cfg *config.DatabaseConfig) ([]MachineW
 		result[i] = MachineWithPools{Machine: m, AppPools: *pools}
 	}
 
-	return result, nil
+	return result, total, nil
+}
+
+// RequestDeletion marks the machine as deleting and returns the uninstall command.
+// The machine is hard-deleted in ws.go when it disconnects while in this state.
+func RequestDeletion(id uint, projectKey string, appUrl string, appEnv string, cfg *config.DatabaseConfig) (string, error) {
+	downloadCmd, err := GetUninstallCommand(id, projectKey, appUrl, appEnv, cfg)
+	if err != nil {
+		return "", err
+	}
+
+	repo := database.NewMachineRepository(cfg)
+	m, err := repo.FindOneByID(id)
+	if err != nil || m == nil {
+		return "", errors.New("machine not found")
+	}
+
+	m.Status = machine.Deleting
+	if err := repo.Update(m); err != nil {
+		return "", err
+	}
+
+	return downloadCmd, nil
+}
+
+// HardDelete permanently removes a machine and all its app pools.
+func HardDelete(id uint, cfg *config.DatabaseConfig) error {
+	if err := database.NewAppPoolRepository(cfg).DeleteByMachineID(id); err != nil {
+		return err
+	}
+	return database.NewMachineRepository(cfg).Delete(id)
 }
