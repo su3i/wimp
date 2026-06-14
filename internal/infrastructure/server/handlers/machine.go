@@ -10,6 +10,7 @@ import (
 	machineService "github.com/su3i/wimp/internal/application/machine"
 	"github.com/su3i/wimp/internal/config"
 	authorizationDomain "github.com/su3i/wimp/internal/domain/authorization"
+	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
 )
 
@@ -119,6 +120,18 @@ func DeleteMachine(c *gin.Context) {
 	if err != nil {
 		log.Printf("Error requesting machine deletion: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// If the machine is not currently connected there is no disconnect event to
+	// trigger the hard delete, so do it now.
+	if !hub.Get().IsOnline(uint(id)) {
+		if err := machineService.HardDelete(uint(id), config.Database()); err != nil {
+			log.Printf("Error hard deleting offline machine: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "success", "uninstall_command": cmd})
 		return
 	}
 
