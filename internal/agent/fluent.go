@@ -100,6 +100,7 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
     Tls.verify    %s
     Labels        job=wimp,application_id=%d,pool_id=%d,machine_id=%d
     Label_keys    $filename
+    Workers       1
 `, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, tlsVerify, cfg.ApplicationID, cfg.PoolID, machineID)
 }
 

@@ -83,19 +83,28 @@ $fbConf = @"
     Name         winlog
     Channels     Application,System
     Interval_Sec 1
+    Tag          winlog.*
+
+[FILTER]
+    Name      throttle
+    Match     winlog.*
+    Rate      3000
+    Window    5
+    Interval  1s
 
 [FILTER]
     Name    record_modifier
-    Match   *
+    Match   winlog.*
     Record  machine_id $MachineId
     Record  hostname   $env:COMPUTERNAME
 
 [OUTPUT]
-    Name    loki
-    Match   *
-    Host    $LokiHost
-    Port    $LokiPort
-    Labels  job=wimp,machine_id=$MachineId
+    Name     loki
+    Match    winlog.*
+    Host     $LokiHost
+    Port     $LokiPort
+    Labels   job=wimp,machine_id=$MachineId
+    Workers  1
 "@
 Set-Content "$FBDir\fluent-bit.conf" $fbConf
 
