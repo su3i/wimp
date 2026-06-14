@@ -207,6 +207,19 @@ func AddAppPools(applicationID uint, appPoolIDs []uint, projectKey string, cfg *
 	return nil
 }
 
+func RemovePool(applicationID, poolID uint, projectKey string, cfg *config.DatabaseConfig) error {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return errors.New("project not found")
+	}
+	appRepo := database.NewApplicationRepository(cfg)
+	app, err := appRepo.FindOneByID(applicationID)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return errors.New("application not found")
+	}
+	return appRepo.RemoveAppPool(applicationID, poolID)
+}
+
 func UpdateAppPoolLogPath(applicationID, appPoolID uint, logPath string, projectKey string, cfg *config.DatabaseConfig) error {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {

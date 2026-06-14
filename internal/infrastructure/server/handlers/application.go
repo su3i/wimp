@@ -176,6 +176,36 @@ func DeleteApplication(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
+func RemoveAppPoolFromApplication(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	appId, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	poolId, err := strconv.ParseUint(c.Param("poolId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pool id"})
+		return
+	}
+
+	if err := applicationService.RemovePool(uint(appId), uint(poolId), projectKey, config.Database()); err != nil {
+		log.Printf("Error removing app pool from application: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
 func UpdateAppPoolInApplication(c *gin.Context) {
 	projectKey := c.Param("key")
 
