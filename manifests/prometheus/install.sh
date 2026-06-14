@@ -23,6 +23,8 @@ helm upgrade --install $RELEASE prometheus-community/kube-prometheus-stack \
   --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
   --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
   --set prometheus.prometheusSpec.ruleSelectorNilUsesHelmValues=false \
+  --set prometheus.service.type=NodePort \
+  --set prometheus.service.nodePort=30001
   \
   --set grafana.service.type=LoadBalancer \
   --set grafana.persistence.enabled=true \

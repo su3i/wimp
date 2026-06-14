@@ -68,6 +68,7 @@ func InitializeRouter() *gin.Engine {
 	router.POST("/project", middleware.AuthMiddleware(), handlers.NewProject)
 	router.GET("/project/:key", middleware.AuthMiddleware(), handlers.RetrieveProject)
 	router.PUT("/project/:key", middleware.AuthMiddleware(), handlers.UpdateProject)
+	router.DELETE("/project/:key", middleware.AuthMiddleware(), handlers.DeleteProject)
 	router.GET("/projects", middleware.AuthMiddleware(), handlers.RetrieveProjects)
 
 	// Machine (project-scoped)

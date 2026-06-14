@@ -165,3 +165,20 @@ func UpdateProject(c *gin.Context) {
 
     c.JSON(http.StatusOK, updatedProject)
 }
+
+func DeleteProject(c *gin.Context) {
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	key := c.Param("key")
+	if err := project.DeleteProject(key, config.Database()); err != nil {
+		log.Printf("Error deleting project: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}

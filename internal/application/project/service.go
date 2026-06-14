@@ -62,6 +62,18 @@ func RetrieveProjects(cfg *config.DatabaseConfig) (*[]project.Project, error) {
 	return _projectRepository.Find()
 }
 
+func DeleteProject(key string, cfg *config.DatabaseConfig) error {
+	repo := database.NewProjectRepository(cfg)
+	p, err := repo.FindOneByKey(key)
+	if err != nil {
+		return err
+	}
+	if p == nil {
+		return errors.New("project not found")
+	}
+	return repo.Delete(p.ID)
+}
+
 func UpdateProject(
     key string,
     name *string,

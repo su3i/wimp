@@ -5,7 +5,7 @@ prometheus:
       - job_name: "windows_exporter"
         scrape_interval: 30s
         http_sd_configs:
-          - url: https://wimp.suei.io/prometheus/targets
+          - url: http://172.30.19.131:30000/prometheus/targets
             refresh_interval: 60s
         relabel_configs:
           - source_labels: [__address__]

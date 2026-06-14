@@ -5,4 +5,5 @@ type ProjectRepository interface {
 	FindOneByKey(key string) (*Project, error)
 	Create(payload *Project) (*Project, error)
 	Update(payload *Project) error
+	Delete(id uint) error
 }

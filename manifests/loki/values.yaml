@@ -48,7 +48,7 @@ singleBinary:
   replicas: 1
   service:
     type: NodePort
-
+    nodePort: 30002
 
 # Zero out replica counts of other deployment modes
 backend:
