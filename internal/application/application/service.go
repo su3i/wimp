@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	projectService "github.com/su3i/wimp/internal/application/project"
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/apppool"
 	"github.com/su3i/wimp/internal/domain/application"
@@ -74,11 +75,20 @@ func ListAppPools(id uint, projectKey string, page, perPage int, state string, c
 	machineRepo := database.NewMachineRepository(cfg)
 	siteRepo := database.NewSiteRepository(cfg)
 
+	poolIDs := make([]uint, 0, len(*relations))
+	for _, rel := range *relations {
+		poolIDs = append(poolIDs, rel.AppPoolID)
+	}
+	pendingStates := cache.GetPoolPendingStates(poolIDs)
+
 	poolDetails := make([]AppPoolWithDetails, 0, len(*relations))
 	for _, rel := range *relations {
 		pool, err := appPoolRepo.FindOneByID(rel.AppPoolID)
 		if err != nil || pool == nil {
 			continue
+		}
+		if s, ok := pendingStates[pool.ID]; ok {
+			pool.State = s
 		}
 		m, err := machineRepo.FindOneByID(pool.MachineID)
 		if err != nil || m == nil {
@@ -120,11 +130,20 @@ func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*Applica
 	machineRepo := database.NewMachineRepository(cfg)
 	siteRepo := database.NewSiteRepository(cfg)
 
+	poolIDs := make([]uint, 0, len(*relations))
+	for _, rel := range *relations {
+		poolIDs = append(poolIDs, rel.AppPoolID)
+	}
+	pendingStates := cache.GetPoolPendingStates(poolIDs)
+
 	poolDetails := make([]AppPoolWithDetails, 0, len(*relations))
 	for _, rel := range *relations {
 		pool, err := appPoolRepo.FindOneByID(rel.AppPoolID)
 		if err != nil || pool == nil {
 			continue
+		}
+		if s, ok := pendingStates[pool.ID]; ok {
+			pool.State = s
 		}
 		m, err := machineRepo.FindOneByID(pool.MachineID)
 		if err != nil || m == nil {

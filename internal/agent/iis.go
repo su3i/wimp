@@ -101,7 +101,7 @@ func discoverSites() []protocol.SiteInfo {
 	if !iisAvailable() {
 		return nil
 	}
-	out, err := exec.Command(appcmdPath(), "list", "site", "/xml").Output()
+	out, err := exec.Command(appcmdPath(), "list", "site", "/config", "/xml").Output()
 	if err != nil {
 		return nil
 	}

@@ -13,12 +13,20 @@ import (
 	appPoolService "github.com/su3i/wimp/internal/application/apppool"
 	authorizationService "github.com/su3i/wimp/internal/application/authorization"
 	machineService "github.com/su3i/wimp/internal/application/machine"
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	authorizationDomain "github.com/su3i/wimp/internal/domain/authorization"
 	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
 )
+
+var actionPendingState = map[string]string{
+	"start":   "Starting",
+	"stop":    "Stopping",
+	"restart": "Restarting",
+	"recycle": "Recycling",
+}
 
 const commandTimeout = 30 * time.Second
 
@@ -117,6 +125,10 @@ func AppPoolCommand(action string) gin.HandlerFunc {
 			return
 		}
 
+		if pendingState, ok := actionPendingState[action]; ok {
+			cache.SetPoolPending(uint(poolID), uint(machineID), pendingState)
+		}
+
 		ctx, cancel := context.WithTimeout(c.Request.Context(), commandTimeout)
 		defer cancel()
 
@@ -125,9 +137,11 @@ func AppPoolCommand(action string) gin.HandlerFunc {
 			if result.Success {
 				c.JSON(http.StatusOK, gin.H{"message": "success", "output": result.Output})
 			} else {
+				cache.InvalidatePool(uint(poolID))
 				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": result.Error, "output": result.Output})
 			}
 		case <-ctx.Done():
+			cache.InvalidatePool(uint(poolID))
 			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "command timed out"})
 		}
 	}

@@ -13,6 +13,7 @@ import (
 	machineService "github.com/su3i/wimp/internal/application/machine"
 	notificationService "github.com/su3i/wimp/internal/application/notification"
 	siteService "github.com/su3i/wimp/internal/application/site"
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	machineDomain "github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/notification"
@@ -135,6 +136,7 @@ func AgentWebSocket(c *gin.Context) {
 			m.LastSeenAt = &t
 			repo.Update(m)
 			stoppedPools, startedPools, _ := appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
+			cache.InvalidatePoolsByMachine(m.ID)
 			siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
 			for _, name := range stoppedPools {
 				go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryAppPool,

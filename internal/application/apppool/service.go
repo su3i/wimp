@@ -3,6 +3,7 @@ package apppool
 import (
 	"errors"
 
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/apppool"
 	"github.com/su3i/wimp/internal/domain/protocol"
@@ -30,7 +31,21 @@ func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseCo
 }
 
 func RetrieveByMachineID(machineID uint, page, perPage int, state string, cfg *config.DatabaseConfig) (*[]apppool.AppPool, int64, error) {
-	return database.NewAppPoolRepository(cfg).FindByMachineIDFiltered(machineID, page, perPage, state)
+	pools, total, err := database.NewAppPoolRepository(cfg).FindByMachineIDFiltered(machineID, page, perPage, state)
+	if err != nil || pools == nil {
+		return pools, total, err
+	}
+	poolIDs := make([]uint, len(*pools))
+	for i, p := range *pools {
+		poolIDs[i] = p.ID
+	}
+	overrides := cache.GetPoolPendingStates(poolIDs)
+	for i := range *pools {
+		if s, ok := overrides[(*pools)[i].ID]; ok {
+			(*pools)[i].State = s
+		}
+	}
+	return pools, total, nil
 }
 
 func FindOneByID(id uint, cfg *config.DatabaseConfig) (*apppool.AppPool, error) {
