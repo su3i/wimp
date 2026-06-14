@@ -14,4 +14,6 @@ type CommonConfig struct {
 	JWTSecret            string `required:"true"`
 	DefaultAdminEmail    string `required:"true"`
 	DefaultAdminPassword string `required:"true"`
+	TelegramBotToken     string `required:"false"`
+	TelegramChatID       string `required:"false"`
 }

@@ -2,19 +2,19 @@
 # WIMP control-plane settings
 # ──────────────────────────────────────────────────────────────
 # The control plane public url
-appUrl: "http://172.30.19.131:30000"
+appUrl: "http://localhost:30000"
 
 image:
   repository: darksueii/wimp
-  tag: "0.0.25"
+  tag: "0.0.26"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
 
 service:
-  type: NodePort
-  nodePort: 30000
+  type: LoadBalancer
   # loadBalancerIP: ""
+  # nodePort: 
   port: 8080
 
 ingress:
@@ -32,14 +32,18 @@ persistence:
 
 config:
   appEnv: production
-  agentVersion: "0.0.4"
+  agentVersion: "0.0.5"
   enforceMfa: false
 
-  jwtSecret: "3VtLzktI7qzemGrY"
-  bootstrapToken: "3VtLzktI7qzemGrY"
+  jwtSecret: "test"
+  bootstrapToken: "test"
 
-  defaultAdminEmail: "folarinraphael06@gmail.com"
-  defaultAdminPassword: "Admin@1234"
+  defaultAdminEmail: "admin@admin.com"
+  defaultAdminPassword: "admin"
+
+  telegram:
+    botToken: ""
+    chatID: ""
 
   database:
     type: postgres # "sqlite" | "postgres"
@@ -48,16 +52,16 @@ config:
     # path: /data/app.db 
 
     # Postgres (only used when type = postgres)
-    host: "172.30.19.131"
-    port: "32250"
-    name: wimp
-    username: "app"
-    password: "gOuG9nmCiJS6F2JcSOFaV3eQZiUgQSYetCfdo2HmsL4rYvQWUF2qoW0uSo89DfpI"
+    host: ""
+    port: ""
+    name: ""
+    username: ""
+    password: ""
     useSsl: false
 
   # Loki connection - auto-derived from the Loki subchart service when loki.enabled=true.
-  lokiHost: "172.30.19.131"
-  lokiPort: "32192"
+  lokiHost: ""
+  lokiPort: ""
   lokiTlsEnabled: false
   lokiTlsSkipVerify: false
 

@@ -91,6 +91,18 @@ spec:
             - name: DATABASEUSESSL
               value: {{ .Values.config.database.useSsl | toString | quote }}
 
+            # ── Telegram ─────────────────────────────────────
+            - name: TELEGRAMBOTTOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: telegram-bot-token
+            - name: TELEGRAMCHATID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: telegram-chat-id
+
             # ── Loki ─────────────────────────────────────────
             - name: LOKIHOST
               value: {{ include "wimp.lokiHost" . | quote }}

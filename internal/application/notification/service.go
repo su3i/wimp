@@ -2,8 +2,11 @@ package notification
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
+	"github.com/su3i/wimp/internal/application/telegram"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/hub"
@@ -35,6 +38,21 @@ func Emit(machineID uint, level notification.Level, category notification.Catego
 		return
 	}
 	hub.Clients().Broadcast(msg)
+
+	if level == notification.LevelCritical {
+		common := config.Common()
+		text := fmt.Sprintf(
+			"‼️ <b>%s</b>\n%s\n<i>%s</i>",
+			title,
+			detail,
+			time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+		)
+		go func() {
+			if err := telegram.Send(common.TelegramBotToken, common.TelegramChatID, text); err != nil {
+				log.Printf("telegram alert: %v", err)
+			}
+		}()
+	}
 }
 
 func List(f notification.Filter, cfg *config.DatabaseConfig) ([]notification.Notification, int64, error) {
