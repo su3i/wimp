@@ -6,7 +6,7 @@ appUrl: "http://172.30.19.131:30000"
 
 image:
   repository: darksueii/wimp
-  tag: "0.0.18"
+  tag: "0.0.21"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
