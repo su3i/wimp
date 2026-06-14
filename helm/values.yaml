@@ -41,9 +41,7 @@ config:
   defaultAdminEmail: "admin@admin.com"
   defaultAdminPassword: "admin"
 
-  telegram:
-    botToken: ""
-    chatID: ""
+  alertmanagerUrl: ""  # e.g. http://prometheus-operator-alertmanager.prometheus:9093
 
   database:
     type: postgres # "sqlite" | "postgres"

@@ -91,17 +91,9 @@ spec:
             - name: DATABASEUSESSL
               value: {{ .Values.config.database.useSsl | toString | quote }}
 
-            # ── Telegram ─────────────────────────────────────
-            - name: TELEGRAMBOTTOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "wimp.fullname" . }}
-                  key: telegram-bot-token
-            - name: TELEGRAMCHATID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "wimp.fullname" . }}
-                  key: telegram-chat-id
+            # ── Alertmanager ─────────────────────────────────
+            - name: ALERTMANAGERURL
+              value: {{ .Values.config.alertmanagerUrl | default "" | quote }}
 
             # ── Loki ─────────────────────────────────────────
             - name: LOKIHOST
