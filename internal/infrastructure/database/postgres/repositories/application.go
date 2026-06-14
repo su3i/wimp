@@ -88,6 +88,15 @@ func (r *applicationRepository) FindAppPoolRelationsByPoolIDs(poolIDs []uint) (*
 	return &relations, nil
 }
 
+func (r *applicationRepository) Delete(id uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Unscoped().Where("application_id = ?", id).Delete(&application.ApplicationAppPool{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&application.Application{}, id).Error
+	})
+}
+
 func NewApplicationRepository(db *gorm.DB) application.ApplicationRepository {
 	return &applicationRepository{db: db}
 }

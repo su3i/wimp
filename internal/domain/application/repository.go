@@ -11,4 +11,5 @@ type ApplicationRepository interface {
 	FindAppPoolRelation(applicationID, appPoolID uint) (*ApplicationAppPool, error)
 	UpdateAppPoolRelation(rel *ApplicationAppPool) error
 	FindAppPoolRelationsByPoolIDs(poolIDs []uint) (*[]ApplicationAppPool, error)
+	Delete(id uint) error
 }

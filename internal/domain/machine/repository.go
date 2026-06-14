@@ -8,4 +8,5 @@ type MachineRepository interface {
 	FindOneByToken(token string) (*Machine, error)
 	Create(payload *Machine) (*Machine, error)
 	Update(payload *Machine) error
+	Delete(id uint) error
 }

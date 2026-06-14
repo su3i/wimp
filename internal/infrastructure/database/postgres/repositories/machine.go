@@ -93,6 +93,10 @@ func (r *machineRepository) Update(payload *machine.Machine) error {
 	return nil
 }
 
+func (r *machineRepository) Delete(id uint) error {
+	return r.db.Unscoped().Delete(&machine.Machine{}, id).Error
+}
+
 func NewMachineRepository(db *gorm.DB) machine.MachineRepository {
 	return &machineRepository{db: db}
 }
