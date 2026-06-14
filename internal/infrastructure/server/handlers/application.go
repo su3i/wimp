@@ -109,8 +109,7 @@ func AddAppPoolToApplication(c *gin.Context) {
 	}
 
 	var req struct {
-		MachineID  uint   `json:"machine_id" binding:"required"`
-		AppPoolIDs []uint `json:"app_pool_ids" binding:"required,min=1"`
+		AppPoolIDs []uint `json:"app_pool_ids"`
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -120,7 +119,7 @@ func AddAppPoolToApplication(c *gin.Context) {
 		return
 	}
 
-	if err := applicationService.AddAppPools(uint(appId), req.MachineID, req.AppPoolIDs, projectKey, config.Database()); err != nil {
+	if err := applicationService.AddAppPools(uint(appId), req.AppPoolIDs, projectKey, config.Database()); err != nil {
 		log.Printf("Error adding app pools to application: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
