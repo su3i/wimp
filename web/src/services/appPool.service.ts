@@ -11,7 +11,7 @@ interface ListParams {
 
 export const appPoolService = {
   list: (projectKey: string, machineId: number, params?: ListParams) =>
-    api.get<{ message: string; app_pools: AppPool[] }>(
+    api.get<{ message: string; app_pools: AppPool[]; total: number }>(
       `/projects/${projectKey}/machines/${machineId}/app-pools`,
       { params },
     ),
@@ -20,7 +20,7 @@ export const appPoolService = {
     api.post(`/projects/${projectKey}/machines/${machineId}/app-pools/${poolId}/${cmd}`),
 
   listSites: (projectKey: string, machineId: number, params?: ListParams) =>
-    api.get<{ message: string; sites: Site[] }>(
+    api.get<{ message: string; sites: Site[]; total: number }>(
       `/projects/${projectKey}/machines/${machineId}/sites`,
       { params },
     ),

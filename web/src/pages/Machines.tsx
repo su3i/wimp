@@ -12,7 +12,7 @@ import { useProjectStore } from "@/store/project";
 import { machineService } from "@/services/machine.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
-import type { Machine, MachineStatus } from "@/types";
+import type { Machine } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
