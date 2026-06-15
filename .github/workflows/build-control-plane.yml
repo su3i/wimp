@@ -1,4 +1,4 @@
-name: Build Docker Image
+name: Build Control Plane
 
 on:
   push:
@@ -27,4 +27,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/wimp:0.0.29
+          tags: ${{ secrets.DOCKER_USERNAME }}/wimp:0.0.30

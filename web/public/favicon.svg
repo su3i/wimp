@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img">
+  <title>su3i/wimp icon</title>
+  <desc>Planet with orbital ring and sparkle stars</desc>
+  <defs>
+    <path id="sp" d="M0 -1 L0.18 -0.18 L1 0 L0.18 0.18 L0 1 L-0.18 0.18 L-1 0 L-0.18 -0.18Z"/>
+    <clipPath id="pc"><circle cx="100" cy="96" r="50"/></clipPath>
+    <clipPath id="rb"><rect x="0" y="0" width="200" height="96"/></clipPath>
+    <clipPath id="rf"><rect x="0" y="96" width="200" height="104"/></clipPath>
+  </defs>
+
+  <rect width="200" height="200" fill="#000000" rx="40"/>
+
+  <circle cx="34" cy="26" r="1" fill="#fff" opacity="0.4"/>
+  <circle cx="172" cy="22" r="0.8" fill="#fff" opacity="0.45"/>
+  <circle cx="22" cy="138" r="0.9" fill="#fff" opacity="0.3"/>
+  <circle cx="180" cy="158" r="1" fill="#fff" opacity="0.35"/>
+  <circle cx="165" cy="62" r="0.7" fill="#fff" opacity="0.4"/>
+  <circle cx="42" cy="172" r="0.9" fill="#fff" opacity="0.3"/>
+  <circle cx="148" cy="175" r="0.8" fill="#fff" opacity="0.3"/>
+  <circle cx="16" cy="82" r="0.7" fill="#fff" opacity="0.3"/>
+  <circle cx="188" cy="110" r="0.8" fill="#fff" opacity="0.35"/>
+
+  <ellipse cx="100" cy="110" rx="82" ry="21"
+    fill="none" stroke="#ffffff" stroke-width="1.2"
+    clip-path="url(#rb)"
+    transform="rotate(-7 100 110)"
+    opacity="0.25"/>
+
+  <circle cx="100" cy="96" r="50" fill="#ffffff"/>
+
+  <circle cx="118" cy="113" r="50" fill="#000000" clip-path="url(#pc)" opacity="0.88"/>
+
+  <circle cx="100" cy="96" r="50" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.15"/>
+
+  <ellipse cx="100" cy="110" rx="82" ry="21"
+    fill="none" stroke="#ffffff" stroke-width="2"
+    clip-path="url(#rf)"
+    transform="rotate(-7 100 110)"
+    opacity="1"/>
+
+  <use href="#sp" transform="translate(162,38) scale(7)" fill="#ffffff" opacity="0.95"/>
+  <use href="#sp" transform="translate(40,148) scale(5)" fill="#ffffff" opacity="0.88"/>
+  <use href="#sp" transform="translate(56,46) scale(3.5)" fill="#ffffff" opacity="0.9"/>
+  <use href="#sp" transform="translate(162,150) scale(2.8)" fill="#ffffff" opacity="0.7"/>
+  <use href="#sp" transform="translate(24,100) scale(2)" fill="#ffffff" opacity="0.55"/>
+</svg>

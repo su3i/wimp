@@ -1,4 +1,4 @@
-name: Release Agent
+name: Build Agent
 
 on:
   workflow_dispatch:

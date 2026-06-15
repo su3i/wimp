@@ -26,11 +26,11 @@ alertmanager:
       - name: telegram
         telegram_configs:
           - bot_token: "8714366412:AAHbiQ56xy623UimVI2jBv5byIAthGYD63Q"
-            chat_id: -5446201979
+            chat_id: -1004494999410
             parse_mode: HTML
             message: |
-              ‼️ <b>{{ .GroupLabels.alertname }}</b>
+              ‼️ <b>{{ .GroupLabels.alertname }}</b> ‼️
               {{ range .Alerts }}
-              <b>Instance:</b> {{ .Labels.instance }}
-              <b>Summary:</b> {{ .Annotations.summary }}
+              <b>Instance:</b> {{ or .Labels.instance "Unknown" }}
+              <b>Summary:</b> {{ or .Annotations.summary "No summary provided" }}
               {{ end }}
