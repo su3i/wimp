@@ -204,9 +204,9 @@ kube-prometheus-stack:
       global:
         resolve_timeout: 5m
       route:
-        group_by: ["..."]  # "..." = every unique alert is its own group (no batching)
-        group_wait: 0s
-        group_interval: 0s
+        group_by: ["..."]
+        group_wait: 5s
+        group_interval: 5s
         repeat_interval: 1h
         receiver: "null"  # default - silences all k8s/prometheus alerts
         routes:

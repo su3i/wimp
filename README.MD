@@ -1,210 +1,135 @@
-# wimp
+### Windows Infrastructure Management Platform
 
-**Windows Infrastructure Management Platform — MVP**
-
----
-
-## What It Is
-
-wimp is an internal platform for managing pools of Windows/IIS application instances across multiple machines. It replaces the need to RDP into individual servers for routine operational tasks, and provides a unified view of application health, metrics, and logs across a horizontally scaled fleet.
-
-It is not a deployment tool. It is not a cloud orchestration platform. It does one thing: give operators full operational visibility and control over legacy IIS workloads running on Windows servers, from a single browser tab.
+WIMP is a self-hosted platform for full operational visibility and control over windows server fleets running IIS workloads.
 
 ---
 
-## Problem It Solves
+### The Problem
 
-Managing 10–100+ Windows servers today means:
+Something goes wrong in production. A sysadmin needs to know what happened, on which machine, and why, in seconds. Today that means opening an RDP session to check logs, opening another to check the process, and a third to restart the app pool. Multiply that across 10, 50, or 100 servers and the problem is obvious.
 
-- RDP sessions into individual machines for every operational task
-- No unified view of which apps are healthy across which machines
-- No central log access — each machine has its own log files
-- No metrics aggregation — you find out something is wrong when users complain
-- Restarting an app pool across 20 machines is a manual, error-prone process
-
-wimp eliminates all of this.
+WIMP puts everything in one place. Live metrics per machine, log streams queryable in the browser, critical alerts routed to wherever the team lives, and full IIS control without touching a terminal. Start an app pool, stop a site, recycle across every instance of an application at once. All from a single tab.
 
 ---
 
-## Architecture
+### Architecture
+
+Agents run on each Windows machine and dial out to the control plane over WebSocket. No inbound firewall rules required on managed machines. The control plane runs in Kubernetes or Docker and the browser communicates only with the control plane.
 
 ```
-Browser (React)
-      │
-Control Plane (Go + PostgreSQL)
-      │
-      │  WebSocket (agent dials OUT)
-      │
-┌─────┴────┬──────────┬──────────┐
-Agent     Agent     Agent     Agent
-WEB01     WEB02     WEB03     WEB04
-  │
-  ├── windows_exporter → Prometheus → Grafana
-  └── Fluent Bit → Loki
+                        ┌──────────────────────────────────────────────┐
+                        │              Web App  (React SPA)            │
+                        └─────────────────────────┬────────────────────┘
+                                                  │  HTTP
+                                                  ▼
+  ┌──────────┐     ┌────────────────────────────────────────────────────────────────┐
+  │ Postgres │◄────│                     Control Plane  (Go)                        │
+  └──────────┘     │                                                                │
+                   │   Machine Registry  ·  WebSocket Hub  ·  Alert Engine          ├──► Alertmanager
+  ┌──────────┐     │                                                                │
+  │   Loki   │◄────┤  log queries                                                   │
+  └─────▲────┘     └─────────────────────────────────────────────────┬──────────────┘
+        │                                                            │  WebSocket
+        │  log ingestion                                             │  (agents dial out)
+        │                                                            ▼
+        │                                     ┌──────────────────────────────────────────┐
+        │                                     │          Windows Machines  (× N)         │
+        │                                     │                                          │
+        └────────── Fluent Bit ───────────────┤  WIMP Agent ──────────────────────► IIS  │
+                                              │  Fluent Bit                              │
+  Prometheus ──────── scrape ────────────────►│  windows_exporter                        │
+       ▲                                      └──────────────────────────────────────────┘
+       │  HTTP SD  /prometheus/targets
+  Control Plane
 ```
 
-**No inbound firewall rules required on machines. Agents dial out.**
+---
+
+### Components
+
+**Control Plane:** Go HTTP API. Manages the machine registry, holds WebSocket connections to all agents, routes commands, stores the project/application/machine hierarchy in Postgres, and proxies Loki queries to the frontend.
+
+**Agent:** Single Go binary installed as a Windows service. Dials out to the control plane on startup, sends a heartbeat every 30 seconds, auto-discovers IIS sites and app pools, and executes commands received from the control plane.
+
+**Bootstrap Script:** One PowerShell command per machine. Downloads and installs windows_exporter, Fluent Bit, and the WIMP agent as Windows services. The machine appears in the dashboard within 60 seconds.
+
+**Web:** React SPA.
 
 ---
 
-## Components
+### Features
 
-### Agent (Go — Windows Service)
+**Machine Management**
 
-Installed on every managed machine. Single self-contained `.exe`, no runtime dependencies. Responsibilities:
+- Add machines by IP or hostname and generate per-machine bootstrap tokens.
+- Online, offline, and deleting status tracked via heartbeat.
+- Two-phase deletion: returns the uninstall command and hard deletes on agent disconnect.
+- Auto-discovery of IIS sites, app pools, bindings, and physical paths on connect.
 
-- Dials out to control plane via authenticated WebSocket on startup
-- Sends heartbeat every 30 seconds
-- Auto-discovers IIS sites and app pools via PowerShell on first connect
-- Executes IIS control commands received from control plane
-- Reports current IIS state on demand
+**IIS Control**
 
-### Control Plane (Go)
+- Start, stop, restart, and recycle per app pool or site.
+- Rolling operations across all instances of an application: restart all, stop all, start all.
+- Pending state cache: command status persists across browser refreshes while the action completes.
 
-Central API server. Responsibilities:
+**Observability**
 
-- Machine registry (add machine → generate token → agent connects → machine appears)
-- Maintains WebSocket connections to all agents
-- Routes commands from UI to the correct agent(s)
-- Stores project/application/machine hierarchy in PostgreSQL
-- Proxies Loki log queries to the frontend
-- Serves the React frontend
+- Per-machine and per-application metrics via windows_exporter and Prometheus, surfaced directly in the UI.
+- Log streams per machine via Fluent Bit and Loki, queryable in the browser.
+- Critical alerts routed through Alertmanager to Telegram or any configured receiver.
+- HTTP service discovery endpoint for Prometheus at `/prometheus/targets`.
 
-### Bootstrap Script (PowerShell)
+**Auth**
 
-One command run on each machine:
+- JWT session tokens with optional MFA enforcement.
+- Default admin credentials set at deploy time.
 
-```powershell
-iex (iwr "https://wimp-host/bootstrap?token=abc123").Content
+---
+
+### Todo
+
+- Multi-user support and RBAC.
+- Deployment and release management.
+- Scheduled actions and approval workflows.
+- Shell and terminal access.
+- File browser.
+- Blue/green and canary deployment strategies.
+- Email and Slack notifications.
+
+---
+
+### Deployment
+
+**Kubernetes (Helm)**
+
+```sh
+helm upgrade --install wimp ./helm -n wimp --create-namespace -f your-values.yaml
 ```
 
-Installs and starts three Windows Services:
+Bundles Loki, Prometheus, and Alertmanager as optional subcharts.
 
-1. `windows_exporter` (metrics)
-2. `Fluent Bit` (log shipping → Loki)
-3. `wimp-agent` (control plane connection)
+**Docker (Compose)**
 
-Machine appears in dashboard within 60 seconds of running this command.
-
-### Frontend (React + Tailwind)
-
-Single-page application. Three primary views: Projects, Application, Instance.
-
----
-
-## Data Model
-
-```
-Project
-  └── Application
-        └── Instance → Machine
+```sh
+cp .env.example .env
+docker compose up -d
+docker compose --profile observability up -d
 ```
 
-One machine can host multiple applications. One application spans multiple machines (instances). A project groups related applications.
+Core only by default. The observability profile adds Loki, Prometheus, Alertmanager, and Grafana.
 
 ---
 
-## Features (MVP)
+### Stack
 
-### Machine Management
-
-- Add machine by IP or hostname
-- Generate per-machine bootstrap token
-- Online/offline status via heartbeat
-- Auto-discovery of IIS sites and app pools on agent connect
-- Map discovered apps to project applications
-
-### Hot Actions
-
-Per instance:
-
-- Start / Stop IIS Site
-- Start / Stop / Recycle App Pool
-
-Per application (rolling across all instances):
-
-- Restart All
-- Stop All
-- Start All
-- Recycle All
-
-### Observability
-
-- Grafana dashboard embedded per machine and per application (metrics via windows_exporter + Prometheus)
-- Live log tail per instance via Loki query (Fluent Bit ships logs with machine/app labels)
-- Health status aggregated per application: N/M Healthy
-
-### Auth
-
-- Single admin user
-- Username and password generated at deployment time
-- JWT session tokens
-- No onboarding flow — credentials printed to stdout on first boot
-
----
-
-## Dependencies
-
-| Component        | Technology                              |
-| ---------------- | --------------------------------------- |
-| Control Plane    | Go                                      |
-| Agent            | Go (Windows Service)                    |
-| Database         | PostgreSQL                              |
-| Migrations       | golang-migrate                          |
-| Frontend         | React + Tailwind CSS                    |
-| Metrics pipeline | windows_exporter + Prometheus + Grafana |
-| Log pipeline     | Fluent Bit + Loki                       |
-| Agent transport  | WebSocket over HTTPS                    |
-
----
-
-## What Is Explicitly Out of Scope (MVP)
-
-- Deployment / release management
-- File browser
-- Shell / terminal access
-- Rollbacks
-- Approval workflows
-- Multi-tenancy / RBAC
-- Notifications (Slack, email, etc.)
-- Scheduled actions
-- Blue/green or canary strategies
-
----
-
-## Bootstrap
-
-Minimal control plane: one endpoint only — GET /bootstrap?token=abc123
-Token generation (just a random string stored in postgres against a machine record)
-Bootstrap script that the endpoint serves:
-
-Downloads and installs windows_exporter as a Windows Service
-Downloads and installs Fluent Bit + writes config pointing at Loki
-Downloads and installs the agent binary + writes config.json with token + control plane URL
-Starts all three services
-
-The agent binary at this point is a stub — it starts, reads config, does nothing else. Just proves the install works.
-At the end of day 1 you can run one PowerShell command on a Windows machine and three services appear.
-
-## Agent
-
-Now flesh out the agent fully with the working install pipeline already in place
-WebSocket dial-out + registration handshake
-Heartbeat
-IIS discovery
-Action command dispatch
-Reconnection logic
-Every change you make you can test by just restarting the Windows Service on your test machine
-
-## Control plane (full)
-
-Machine registry
-WebSocket agent connection manager
-Command routing to agents
-Application/project/instance data model
-All action endpoints the frontend will call
-
-## Frontend
-
-Everything the control plane exposes is real and testable
-No mocking needed
+|               |                               |
+| ------------- | ----------------------------- |
+| Control Plane | Go                            |
+| Agent         | Go (Windows Service)          |
+| Database      | Postgres / SQLite             |
+| Frontend      | React + Tailwind              |
+| Metrics       | windows_exporter + Prometheus |
+| Logs          | Fluent Bit + Loki             |
+| Alerts        | Alertmanager                  |
+| Transport     | WebSocket over HTTPS          |
+| Kubernetes    | Helm                          |
