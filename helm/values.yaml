@@ -1,21 +1,24 @@
 # ──────────────────────────────────────────────────────────────
-# WIMP control-plane settings
+# WIMP control-plane
 # ──────────────────────────────────────────────────────────────
-# The control plane public url
-appUrl: "http://localhost:30000"
+
+# Public URL of the control plane - used by agents to connect back and by the web frontend.
+# Set this after deploy once you have the LoadBalancer EXTERNAL-IP:
+#   kubectl get svc wimp-control-plane -n <namespace>
+# e.g. http://1.2.3.4:80
+appUrl: ""
 
 image:
   repository: darksueii/wimp
-  tag: "0.0.26"
+  tag: "0.0.30"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
 
 service:
-  type: LoadBalancer
-  # loadBalancerIP: ""
-  # nodePort: 
-  port: 8080
+  type: LoadBalancer  # LoadBalancer | NodePort | ClusterIP
+  port: 80
+  # nodePort: 30000   # only when type: NodePort
 
 ingress:
   enabled: false
@@ -26,7 +29,7 @@ ingress:
     secretName: ""
 
 persistence:
-  enabled: false # SQLite data directory - not needed when database.type is postgres
+  enabled: false  # SQLite data directory - not needed when database.type is postgres
   storageClass: ""
   size: 2Gi
 
@@ -35,39 +38,79 @@ config:
   agentVersion: "0.0.5"
   enforceMfa: false
 
-  jwtSecret: "test"
-  bootstrapToken: "test"
+  # REQUIRED - generate strong random values before deploying
+  jwtSecret: ""       # e.g. openssl rand -hex 32
+  bootstrapToken: ""  # e.g. openssl rand -hex 16
 
-  defaultAdminEmail: "admin@admin.com"
-  defaultAdminPassword: "admin"
+  defaultAdminEmail: "admin@example.com"
+  defaultAdminPassword: ""  # REQUIRED
 
-  alertmanagerUrl: ""  # e.g. http://prometheus-operator-alertmanager.prometheus:9093
+  # Alertmanager webhook URL - leave empty to disable external alerting.
+  # When kube-prometheus-stack.enabled=true (below), use:
+  #   http://<release>-kube-prometheus-stack-alertmanager.<namespace>.svc:9093
+  alertmanagerUrl: ""
 
   database:
-    type: postgres # "sqlite" | "postgres"
+    type: postgres  # "sqlite" | "postgres"
 
-    # Sqlite path (only used when type = sqlite)
-    # path: /data/app.db 
+    # SQLite - only when type: sqlite
+    path: /data/app.db
 
-    # Postgres (only used when type = postgres)
+    # Postgres - only when type: postgres (REQUIRED when using postgres)
     host: ""
-    port: ""
+    port: "5432"
     name: ""
     username: ""
     password: ""
     useSsl: false
 
-  # Loki connection - auto-derived from the Loki subchart service when loki.enabled=true.
+  # Loki connection - leave empty to disable log shipping.
+  # When loki.enabled=true (below), use: <release>-loki (cluster-internal, same namespace)
   lokiHost: ""
-  lokiPort: ""
+  lokiPort: "3100"
   lokiTlsEnabled: false
   lokiTlsSkipVerify: false
 
 # ──────────────────────────────────────────────────────────────
+# WIMP web (frontend)
+# ──────────────────────────────────────────────────────────────
+web:
+  image:
+    repository: darksueii/wimp-web
+    tag: "0.0.30"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: LoadBalancer  # LoadBalancer | NodePort | ClusterIP
+    port: 80
+    # nodePort: 30001  # only when type: NodePort
+
+  ingress:
+    enabled: false
+    className: ""
+    host: ""
+    tls:
+      enabled: false
+      secretName: ""
+
+  # REQUIRED - public URL of the control plane reachable from the user's browser.
+  # Same value as appUrl above (or wherever the control plane is exposed).
+  apiUrl: ""
+  # Optional - public URL of Prometheus reachable from the user's browser.
+  # Enables the metrics page in the UI.
+  # When kube-prometheus-stack.enabled=true, expose the prometheus service and set its URL here.
+  prometheusUrl: ""
+
+# ──────────────────────────────────────────────────────────────
 # Loki (log aggregation)
+# Set enabled: true for an all-in-one install.
+# Set enabled: false and point config.lokiHost to your own Loki.
 # ──────────────────────────────────────────────────────────────
 loki:
-  enabled: false
+  enabled: true
+  ignoreMinioDeprecation: true
 
   loki:
     auth_enabled: false
@@ -78,14 +121,10 @@ loki:
         chunks: loki-chunks
         ruler: loki-ruler
       s3:
-        endpoint: "" # s3 style endpoint
+        # Only set this if using your own S3/minio (and set loki.minio.enabled: false).
+        # endpoint: ""
         s3forcepathstyle: true
         insecure: true
-
-    storage_config:
-      aws:
-        s3: "" # s3 style endpoint
-        s3forcepathstyle: true
 
     commonConfig:
       replication_factor: 1
@@ -107,19 +146,16 @@ loki:
       enable_api: true
 
   minio:
-    enabled: false
+    enabled: true
   gateway:
     enabled: false
-  # lokiCanary:
-  #   enabled: false
-        
+
   deploymentMode: Monolithic
 
   singleBinary:
     replicas: 1
     service:
-      type: LoadBalancer
-      loadBalancerIP: ""
+      type: ClusterIP
 
   # Zero out all other replica sets
   backend:
@@ -150,53 +186,73 @@ loki:
     replicas: 0
 
 # ──────────────────────────────────────────────────────────────
-# Prometheus + Grafana + Alertmanager
-# (via kube-prometheus-stack)
+# Prometheus + Grafana + Alertmanager - optional bundled install
+# Set enabled: true for an all-in-one install.
+# Set enabled: false and point config.alertmanagerUrl, web.prometheusUrl to your own alert_manager.
 # ──────────────────────────────────────────────────────────────
 kube-prometheus-stack:
-  enabled: false
+  enabled: true
 
   grafana:
-    enabled: true
-    service:
-      type: ClusterIP
-    persistence:
-      enabled: true
-      size: 10Gi
-    adminPassword: "Admin@1234"
+    enabled: false
 
   alertmanager:
     enabled: true
     alertmanagerSpec:
-      retention: 48h
+      retention: 1h
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ["..."]  # "..." = every unique alert is its own group (no batching)
+        group_wait: 0s
+        group_interval: 0s
+        repeat_interval: 1h
+        receiver: "null"  # default - silences all k8s/prometheus alerts
+        routes:
+          # Only WIMP alerts carry source="wimp" - route them to your receiver
+          - matchers:
+              - source = "wimp"
+            receiver: "null"  # replace "null" with your receiver name, e.g. "telegram"
+      receivers:
+        - name: "null"
+        # ── Add your receivers below for external alerting ─────────
+        # Example:
+        # - name: telegram
+        #   telegram_configs:
+        #     - bot_token: "YOUR_BOT_TOKEN"
+        #       chat_id: YOUR_CHAT_ID  # supergroup ID (negative, prefixed with -100)
+        #       parse_mode: HTML
+        #       message: |
+        #         ‼️ <b>{{ .GroupLabels.alertname }}</b> ‼️
+        #         {{ range .Alerts }}
+        #         <b>Summary:</b> {{ or .Annotations.summary "No summary" }}
+        #         {{ end }}
 
   prometheus:
     service:
-      type: LoadBalancer
-      loadBalancerIP: ""
+      type: ClusterIP
     prometheusSpec:
-      scrapeInterval: 1m
-      # serviceMonitor / podMonitor / rule selectors - pick up everything in the cluster
+      scrapeInterval: 30s
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
       ruleSelectorNilUsesHelmValues: false
-      retention: 15d
-      # Windows-exporter HTTP service discovery via WIMP.
-      # The URL assumes the Helm release is named "wimp".
-      # If you used a different release name, set:
-      #   --set 'kube-prometheus-stack.prometheus.prometheusSpec.additionalScrapeConfigs[0].http_sd_configs[0].url=http://<release-name>:8080/prometheus/targets'
+      retention: 7d
+      # Windows-exporter HTTP service discovery via WIMP control plane.
+      # Assumes release name "wimp" in the same namespace.
+      # Override with --set if your release name differs.
       additionalScrapeConfigs:
         - job_name: windows_exporter
           scrape_interval: 30s
           http_sd_configs:
-            - url: http://wimp:8080/prometheus/targets
+            - url: http://wimp-control-plane/prometheus/targets
               refresh_interval: 60s
           relabel_configs:
             - source_labels: [__address__]
               target_label: instance
 
   kube-state-metrics:
-    enabled: true
+    enabled: false
 
   nodeExporter:
-    enabled: true
+    enabled: false

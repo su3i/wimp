@@ -1,36 +1,31 @@
-WIMP has been installed. 🎉
+WIMP has been installed.
 
-Control plane:
+Control plane ({{ include "wimp.cpFullname" . }}):
 {{- if .Values.ingress.enabled }}
   URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
 {{- else if eq .Values.service.type "LoadBalancer" }}
-  Run: kubectl get svc {{ include "wimp.fullname" . }} -n {{ .Release.Namespace }}
+  Run: kubectl get svc {{ include "wimp.cpFullname" . }} -n {{ .Release.Namespace }}
   Wait for EXTERNAL-IP, then access at http://<EXTERNAL-IP>:{{ .Values.service.port }}
+{{- else if eq .Values.service.type "NodePort" }}
+  http://<NODE-IP>:{{ .Values.service.nodePort }}
 {{- else }}
-  Port-forward: kubectl port-forward svc/{{ include "wimp.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  Port-forward: kubectl port-forward svc/{{ include "wimp.cpFullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
   Then open:    http://localhost:8080
 {{- end }}
 
-{{- if index .Values "kube-prometheus-stack" "enabled" }}
-
-Grafana:
-  Port-forward: kubectl port-forward svc/{{ .Release.Name }}-kube-prometheus-stack-grafana 3000:80 -n {{ .Release.Namespace }}
-  Then open:    http://localhost:3000
-  Credentials:  admin / {{ index .Values "kube-prometheus-stack" "grafana" "adminPassword" }}
-{{- end }}
-
-{{- if .Values.loki.enabled }}
-
-Loki is running at: http://{{ .Release.Name }}-loki:3100 (cluster-internal)
+Web UI ({{ include "wimp.webFullname" . }}):
+{{- if .Values.web.ingress.enabled }}
+  URL: http{{ if .Values.web.ingress.tls.enabled }}s{{ end }}://{{ .Values.web.ingress.host }}
+{{- else if eq .Values.web.service.type "LoadBalancer" }}
+  Run: kubectl get svc {{ include "wimp.webFullname" . }} -n {{ .Release.Namespace }}
+  Wait for EXTERNAL-IP, then access at http://<EXTERNAL-IP>:{{ .Values.web.service.port }}
+{{- else if eq .Values.web.service.type "NodePort" }}
+  http://<NODE-IP>:{{ .Values.web.service.nodePort }}
+{{- else }}
+  Port-forward: kubectl port-forward svc/{{ include "wimp.webFullname" . }} 8080:80 -n {{ .Release.Namespace }}
+  Then open:    http://localhost:8080
 {{- end }}
 
 Default admin login:
   Email:    {{ .Values.config.defaultAdminEmail }}
   Password: {{ .Values.config.defaultAdminPassword }}
-
-NOTE: The Prometheus windows_exporter scrape config points to:
-  http://{{ include "wimp.fullname" . }}:8080/prometheus/targets
-{{- if ne (include "wimp.fullname" .) "wimp" }}
-  Your release name differs from "wimp" — update the scrape URL:
-  --set 'kube-prometheus-stack.prometheus.prometheusSpec.additionalScrapeConfigs[0].http_sd_configs[0].url=http://{{ include "wimp.fullname" . }}:{{ .Values.service.port }}/prometheus/targets'
-{{- end }}

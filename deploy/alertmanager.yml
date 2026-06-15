@@ -1,0 +1,29 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "instance"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "null"
+  routes:
+    - matchers:
+        - alertname =~ "InfoInhibitor|Watchdog"
+      receiver: "null"
+
+receivers:
+  - name: "null"
+
+  # Uncomment to enable Telegram alerts:
+  # - name: telegram
+  #   telegram_configs:
+  #     - bot_token: "YOUR_BOT_TOKEN"
+  #       chat_id: YOUR_CHAT_ID  # use supergroup ID (negative, prefixed with -100)
+  #       parse_mode: HTML
+  #       message: |
+  #         ‼️ <b>{{ .GroupLabels.alertname }}</b>
+  #         {{ range .Alerts }}
+  #         <b>Instance:</b> {{ or .Labels.instance "Unknown" }}
+  #         <b>Summary:</b> {{ or .Annotations.summary "No summary" }}
+  #         {{ end }}

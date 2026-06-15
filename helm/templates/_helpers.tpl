@@ -7,7 +7,6 @@ Expand the name of the chart.
 
 {{/*
 Create a default fully qualified app name.
-If release name already contains the chart name, use it as-is.
 */}}
 {{- define "wimp.fullname" -}}
 {{- if .Values.fullnameOverride }}
@@ -22,6 +21,16 @@ If release name already contains the chart name, use it as-is.
 {{- end }}
 {{- end }}
 
+{{/* Control-plane resource name */}}
+{{- define "wimp.cpFullname" -}}
+{{- printf "%s-control-plane" (include "wimp.fullname" .) }}
+{{- end }}
+
+{{/* Web resource name */}}
+{{- define "wimp.webFullname" -}}
+{{- printf "%s-web" (include "wimp.fullname" .) }}
+{{- end }}
+
 {{/*
 Common labels
 */}}
@@ -32,21 +41,28 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels
+Base selector labels (no component — used in labels block only)
 */}}
 {{- define "wimp.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "wimp.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/* Control-plane pod selector */}}
+{{- define "wimp.cpSelectorLabels" -}}
+{{ include "wimp.selectorLabels" . }}
+app.kubernetes.io/component: control-plane
+{{- end }}
+
+{{/* Web pod selector */}}
+{{- define "wimp.webSelectorLabels" -}}
+{{ include "wimp.selectorLabels" . }}
+app.kubernetes.io/component: web
+{{- end }}
+
 {{/*
-Loki host — uses the subchart service name when loki is enabled.
-Override via config.lokiHost.
+Loki host — override via config.lokiHost, otherwise point to an external host.
 */}}
 {{- define "wimp.lokiHost" -}}
-{{- if .Values.config.lokiHost }}
 {{- .Values.config.lokiHost }}
-{{- else }}
-{{- printf "%s-loki" .Release.Name }}
-{{- end }}
 {{- end }}

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "wimp.fullname" . }}
+  name: {{ include "wimp.cpFullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "wimp.labels" . | nindent 4 }}
@@ -9,14 +9,14 @@ spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "wimp.selectorLabels" . | nindent 6 }}
+      {{- include "wimp.cpSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "wimp.selectorLabels" . | nindent 8 }}
+        {{- include "wimp.cpSelectorLabels" . | nindent 8 }}
     spec:
       containers:
-        - name: wimp
+        - name: wimp-control-plane
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -74,15 +74,15 @@ spec:
             - name: DATABASETYPE
               value: {{ .Values.config.database.type | quote }}
             - name: DATABASEPATH
-              value: {{ .Values.config.database.path | quote }}
+              value: {{ .Values.config.database.path | default "" | quote }}
             - name: DATABASEHOST
-              value: {{ .Values.config.database.host | quote }}
+              value: {{ .Values.config.database.host | default "" | quote }}
             - name: DATABASEPORT
-              value: {{ .Values.config.database.port | quote }}
+              value: {{ .Values.config.database.port | default "" | quote }}
             - name: DATABASENAME
-              value: {{ .Values.config.database.name | quote }}
+              value: {{ .Values.config.database.name | default "" | quote }}
             - name: DATABASEUSERNAME
-              value: {{ .Values.config.database.username | quote }}
+              value: {{ .Values.config.database.username | default "" | quote }}
             - name: DATABASEPASSWORD
               valueFrom:
                 secretKeyRef:
@@ -99,7 +99,7 @@ spec:
             - name: LOKIHOST
               value: {{ include "wimp.lokiHost" . | quote }}
             - name: LOKIPORT
-              value: {{ .Values.config.lokiPort | quote }}
+              value: {{ .Values.config.lokiPort | default "" | quote }}
             - name: LOKITLSENABLED
               value: {{ .Values.config.lokiTlsEnabled | toString | quote }}
             - name: LOKITLSSKIPVERIFY
@@ -115,5 +115,5 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: {{ include "wimp.fullname" . }}-data
+            claimName: {{ include "wimp.cpFullname" . }}-data
       {{- end }}

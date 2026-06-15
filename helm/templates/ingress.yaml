@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "wimp.fullname" . }}
+  name: {{ include "wimp.cpFullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "wimp.labels" . | nindent 4 }}
@@ -18,7 +18,7 @@ spec:
   tls:
     - hosts:
         - {{ .Values.ingress.host | quote }}
-      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "wimp.fullname" .)) | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "wimp.cpFullname" .)) | quote }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.host | quote }}
@@ -28,7 +28,42 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "wimp.fullname" . }}
+                name: {{ include "wimp.cpFullname" . }}
+                port:
+                  name: http
+{{- end }}
+{{- if .Values.web.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "wimp.webFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wimp.labels" . | nindent 4 }}
+  {{- with .Values.web.ingress.className }}
+  annotations:
+    kubernetes.io/ingress.class: {{ . | quote }}
+  {{- end }}
+spec:
+  {{- with .Values.web.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.web.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.web.ingress.host | quote }}
+      secretName: {{ .Values.web.ingress.tls.secretName | default (printf "%s-tls" (include "wimp.webFullname" .)) | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.web.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wimp.webFullname" . }}
                 port:
                   name: http
 {{- end }}

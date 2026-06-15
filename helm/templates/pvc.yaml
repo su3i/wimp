@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "wimp.fullname" . }}-data
+  name: {{ include "wimp.cpFullname" . }}-data
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "wimp.labels" . | nindent 4 }}
