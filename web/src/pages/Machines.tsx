@@ -14,6 +14,17 @@ import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import type { Machine } from "@/types";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const FIREWALL_COMMAND =
+  `New-NetFirewallRule \`\n` +
+  `  -DisplayName "Windows Exporter 9182" \`\n` +
+  `  -Direction Inbound \`\n` +
+  `  -Protocol TCP \`\n` +
+  `  -LocalPort 9182 \`\n` +
+  `  -Action Allow \`\n` +
+  `  -Profile Any`;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function filterIPv4(ips: string[]) {
@@ -84,7 +95,7 @@ function IpCell({ ips }: { ips: string[] }) {
                   </p>
                 ))}
               </div>,
-              document.body
+              document.body,
             )}
         </>
       )}
@@ -183,20 +194,15 @@ export function Machines() {
   const {
     data: machines,
     isLoading,
-    isFetching,
     isError,
   } = useQuery({
     queryKey: ["machines", activeProject?.Key],
     enabled: !!activeProject,
-    refetchOnMount: 'always',
     queryFn: async () => {
       const { data } = await machineService.list(activeProject!.Key);
       return data.machines ?? [];
     },
   });
-
-  // Show skeleton while fetching AND we have no confirmed data to display yet
-  const showSkeleton = isLoading || (isFetching && machines === undefined);
 
   async function handleConfirmAdd() {
     setCreating(true);
@@ -253,7 +259,7 @@ export function Machines() {
       </div>
 
       {/* Content */}
-      {showSkeleton ? (
+      {isLoading ? (
         <TableSkeleton />
       ) : isError ? (
         <div className='flex items-center gap-2.5 rounded-lg border border-danger/20 bg-danger/5 px-4 py-3 text-xs text-danger'>
@@ -356,7 +362,7 @@ export function Machines() {
         <div className='space-y-4'>
           {/* Download */}
           <div className='space-y-1.5'>
-            <p className='text-xs text-ink-dim'>Step 1 - Download the bootstrap script.</p>
+            <p className='text-xs text-ink-dim'>Step 1: Download the bootstrap script.</p>
             <div className='relative rounded-md border border-rim bg-canvas'>
               <pre className='font-mono text-xs text-ink-dim leading-relaxed px-4 py-3.5 pr-10 overflow-x-auto whitespace-pre'>
                 {downloadCommand}
@@ -378,7 +384,7 @@ export function Machines() {
           {/* Run */}
           <div className='space-y-1.5'>
             <p className='text-xs text-ink-dim'>
-              Step 2 - Execute the script to install and connect the agent.
+              Step 2: Execute the script to install and connect the agent.
             </p>
             <div className='relative rounded-md border border-rim bg-canvas'>
               <pre className='font-mono text-xs text-ink-dim leading-relaxed px-4 py-3.5 pr-10 overflow-x-auto whitespace-pre'>
@@ -390,6 +396,29 @@ export function Machines() {
                 className='cursor-pointer absolute top-2.5 right-2.5 text-ink-faint hover:text-ink transition-colors'
               >
                 {copied === "run" ? (
+                  <Check className='size-3.5 text-success' />
+                ) : (
+                  <Copy className='size-3.5' />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Firewall rule */}
+          <div className='space-y-1.5'>
+            <p className='text-xs text-ink-dim'>
+              Step 3 (Optional): Allow Prometheus to scrape metrics from this host on port 9182.
+            </p>
+            <div className='relative rounded-md border border-rim bg-canvas'>
+              <pre className='font-mono text-xs text-ink-dim leading-relaxed px-4 py-3.5 pr-10 overflow-x-auto whitespace-pre'>
+                {FIREWALL_COMMAND}
+              </pre>
+              <button
+                onClick={() => handleCopy("firewall", FIREWALL_COMMAND)}
+                title='Copy'
+                className='cursor-pointer absolute top-2.5 right-2.5 text-ink-faint hover:text-ink transition-colors'
+              >
+                {copied === "firewall" ? (
                   <Check className='size-3.5 text-success' />
                 ) : (
                   <Copy className='size-3.5' />

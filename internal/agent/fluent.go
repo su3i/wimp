@@ -105,7 +105,7 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
 }
 
 func restartFluentBit() error {
-	// Ignore stop failure — service may already be stopped.
+	// Ignore stop failure - service may already be stopped.
 	exec.Command("sc.exe", "stop", "fluent-bit").Run()
 	if out, err := exec.Command("sc.exe", "start", "fluent-bit").CombinedOutput(); err != nil {
 		return fmt.Errorf("start fluent-bit: %s", strings.TrimSpace(string(out)))

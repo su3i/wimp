@@ -38,7 +38,7 @@ func (a *Agent) connect(ctx context.Context) {
 			if time.Since(connectedAt) >= stableConnDuration {
 				backoff = initialBackoff
 			}
-			a.logger().Errorf("connection lost: %v — reconnecting in %v", err, backoff)
+			a.logger().Errorf("connection lost: %v - reconnecting in %v", err, backoff)
 		}
 
 		select {

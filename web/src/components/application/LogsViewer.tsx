@@ -111,7 +111,7 @@ export function LogsViewer({
   pools: Pool[];
 }) {
   const [machineId, setMachineId] = useState<string>(() =>
-    machines.length > 0 ? String(machines[0].id) : ""
+    machines.length > 0 ? String(machines[0].id) : "",
   );
   const [poolId, setPoolId] = useState<string>(() => {
     if (machines.length === 0) return "";
@@ -145,7 +145,7 @@ export function LogsViewer({
       { label: "Host…", value: "" },
       ...machines.map((m) => ({ label: m.hostname, value: String(m.id) })),
     ],
-    [machines]
+    [machines],
   );
 
   // Fetch available log files
@@ -160,7 +160,7 @@ export function LogsViewer({
 
   const fileOptions = useMemo(
     () => (filesData ?? []).map((f) => ({ label: basename(f), value: f })),
-    [filesData]
+    [filesData],
   );
 
   // Auto-select first file on initial load
@@ -224,18 +224,13 @@ export function LogsViewer({
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
   }
 
-  function jumpToBottom() {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      setAtBottom(true);
-    }
-  }
-
   return (
-    <div className={cn(
-      'flex flex-col rounded-lg border border-rim overflow-hidden',
-      expanded ? 'fixed left-14 inset-y-0 right-0 z-[9999]' : 'h-[50vh]',
-    )}>
+    <div
+      className={cn(
+        "flex flex-col rounded-lg border border-rim overflow-hidden",
+        expanded ? "fixed left-14 inset-y-0 right-0 z-[9999]" : "h-[50vh]",
+      )}
+    >
       {/* Filter bar */}
       <div className='flex items-center gap-2 px-4 py-2.5 border-b border-rim bg-surface-alt shrink-0 flex-wrap'>
         <Terminal className='size-3.5 text-ink-faint shrink-0' />
@@ -262,8 +257,8 @@ export function LogsViewer({
             filesLoading
               ? [{ label: "Loading files…", value: "" }]
               : !fileOptions.length
-              ? [{ label: "No files configured", value: "" }]
-              : fileOptions
+                ? [{ label: "No files configured", value: "" }]
+                : fileOptions
           }
         />
 
@@ -290,9 +285,9 @@ export function LogsViewer({
           </button>
           <button
             type='button'
-            onClick={() => setExpanded(v => !v)}
+            onClick={() => setExpanded((v) => !v)}
             className='flex items-center justify-center h-7 w-7 rounded-md border border-rim bg-surface text-ink-faint hover:text-ink transition-colors cursor-pointer'
-            title={expanded ? 'Collapse' : 'Expand'}
+            title={expanded ? "Collapse" : "Expand"}
           >
             {expanded ? <Minimize2 className='size-3.5' /> : <Maximize2 className='size-3.5' />}
           </button>
@@ -331,17 +326,6 @@ export function LogsViewer({
               </div>
             ))}
           </div>
-        )}
-
-        {!atBottom && entries.length > 0 && (
-          <button
-            type='button'
-            onClick={jumpToBottom}
-            className='absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-surface border border-rim text-xs text-ink-faint hover:text-ink shadow-lg transition-colors'
-          >
-            <ChevronDown className='size-3' />
-            Latest
-          </button>
         )}
       </div>
     </div>

@@ -19,13 +19,13 @@ func InitializeRouter() *gin.Engine {
 		AllowCredentials: false,
 	}))
 
-	// Agent WebSocket (public — token is the credential)
+	// Agent WebSocket (public - token is the credential)
 	router.GET("/ws/agent", handlers.AgentWebSocket)
 
 	// Frontend WebSocket (JWT via query param)
 	router.GET("/ws", handlers.ClientWebSocket)
 
-	// Bootstrap (public — token is the credential)
+	// Bootstrap (public - token is the credential)
 	router.GET("/bootstrap", handlers.Bootstrap)
 	router.GET("/bootstrap/uninstall", handlers.Uninstall)
 

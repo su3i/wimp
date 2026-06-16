@@ -41,7 +41,7 @@ func Emit(machineID uint, level notification.Level, category notification.Catego
 		common := config.Common()
 		go func() {
 			if common.AlertmanagerUrl == "" {
-				log.Printf("alertmanager: skipped (ALERTMANAGERURL not set) — alert: %s", title)
+				log.Printf("alertmanager: skipped (ALERTMANAGERURL not set) - alert: %s", title)
 				return
 			}
 			if err := alertmanager.Fire(common.AlertmanagerUrl, title, "critical", "", detail); err != nil {

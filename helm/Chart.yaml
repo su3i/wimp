@@ -1,6 +1,6 @@
 apiVersion: v2
 name: wimp
-description: Windows Infrastructure Management Platform — control plane, web frontend, and optional observability stack
+description: Windows Infrastructure Management Platform - control plane, web frontend, and optional observability stack
 type: application
 version: 0.0.15
 appVersion: "0.0.30"

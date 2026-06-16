@@ -407,7 +407,7 @@ func BuildFluentConfig(machineID uint, cfg *config.DatabaseConfig) (*protocol.Fl
 }
 
 // PushFluentConfig sends the current fluent-bit config for a machine over the WebSocket.
-// Silently no-ops if the machine is offline — it will receive the config on reconnect.
+// Silently no-ops if the machine is offline - it will receive the config on reconnect.
 func PushFluentConfig(machineID uint, cfg *config.DatabaseConfig) error {
 	payload, err := BuildFluentConfig(machineID, cfg)
 	if err != nil {

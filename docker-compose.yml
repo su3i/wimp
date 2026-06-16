@@ -1,5 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# WIMP — Docker Compose
+# WIMP - Docker Compose
 #
 # Core services (always started):
 #   wimp-control-plane, wimp-web, postgres
@@ -12,7 +12,6 @@
 # ──────────────────────────────────────────────────────────────
 
 services:
-
   # ── Database ────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
@@ -74,7 +73,7 @@ services:
     ports:
       - "${WIMP_WEB_PORT:-80}:80"
     environment:
-      # Public URLs — must be reachable from the user's browser, not internal hostnames
+      # Public URLs - must be reachable from the user's browser, not internal hostnames
       VITE_API_BASE_URL: ${APPURL:-http://localhost:8080}
       VITE_PROMETHEUS_URL: ${PROMETHEUS_URL:-}
     networks:

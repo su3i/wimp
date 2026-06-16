@@ -41,7 +41,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Base selector labels (no component — used in labels block only)
+Base selector labels (no component - used in labels block only)
 */}}
 {{- define "wimp.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "wimp.name" . }}
@@ -61,7 +61,7 @@ app.kubernetes.io/component: web
 {{- end }}
 
 {{/*
-Loki host — override via config.lokiHost, otherwise point to an external host.
+Loki host - override via config.lokiHost, otherwise point to an external host.
 */}}
 {{- define "wimp.lokiHost" -}}
 {{- .Values.config.lokiHost }}

@@ -8,7 +8,7 @@ RUN npm ci
 
 COPY . .
 
-# Build with fixed placeholders — replaced at runtime by docker-entrypoint.sh
+# Build with fixed placeholders - replaced at runtime by docker-entrypoint.sh
 ENV VITE_API_BASE_URL=__WIMP_API_URL__
 ENV VITE_PROMETHEUS_URL=__WIMP_PROMETHEUS_URL__
 RUN npm run build
