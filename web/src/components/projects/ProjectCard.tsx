@@ -40,7 +40,7 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
           <h3 className="text-sm font-semibold text-ink truncate group-hover:text-primary transition-colors">
             {project.Name}
           </h3>
-          <code className="text-[11px] font-mono text-ink-faint">{project.Key}</code>
+          <code className="text-[0.6875rem] font-mono text-ink-faint">{project.Key}</code>
         </div>
         <Badge variant={statusVariant(project.Status)}>{project.Status}</Badge>
       </div>
@@ -52,7 +52,7 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
       </div>
 
       {/* Footer: created by + date */}
-      <div className="flex items-center justify-between text-[11px] text-ink-faint border-t border-rim pt-3">
+      <div className="flex items-center justify-between text-[0.6875rem] text-ink-faint border-t border-rim pt-3">
         <span className="truncate max-w-[55%]" title={creatorEmail}>
           {creatorEmail}
         </span>

@@ -87,7 +87,7 @@ export function MachineDetail() {
               </div>
               <div className="min-w-0">
                 <h1 className="font-mono text-sm font-semibold text-ink truncate">{machine.Hostname?.toLowerCase() || 'Awaiting connection...'}</h1>
-                <div className="flex items-center gap-3 mt-0.5 text-[11px] text-ink-faint">
+                <div className="flex items-center gap-3 mt-0.5 text-[0.6875rem] text-ink-faint">
                   {ipv4s.length > 0 && <span className="font-mono">{ipv4s.join(' / ')}</span>}
                   {ipv4s.length > 0 && <span>·</span>}
                   <span className="flex items-center gap-1">

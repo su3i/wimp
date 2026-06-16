@@ -57,7 +57,7 @@ $msi = "$TmpDir\windows_exporter.msi"
 Get-File "https://github.com/prometheus-community/windows_exporter/releases/download/v$WinExpVersion/windows_exporter-$WinExpVersion-amd64.msi" $msi
 Start-Process msiexec.exe -Wait -ArgumentList @(
     "/i", $msi, "/quiet",
-    "ENABLED_COLLECTORS=cpu,logical_disk,net,os,service,system,tcp,iis",
+    "ENABLED_COLLECTORS=cpu,cs,logical_disk,memory,net,os,service,system,tcp,iis",
     "ADD_FIREWALL_EXCEPTION=yes"
 )
 Write-Host "  Done."

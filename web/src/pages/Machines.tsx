@@ -79,7 +79,7 @@ function IpCell({ ips }: { ips: string[] }) {
             ref={pillRef}
             onMouseEnter={onEnter}
             onMouseLeave={() => setShow(false)}
-            className='inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-surface-high text-ink-faint border border-rim cursor-pointer select-none'
+            className='inline-flex items-center rounded px-1.5 py-0.5 text-[0.625rem] font-medium bg-surface-high text-ink-faint border border-rim cursor-pointer select-none'
           >
             +{rest.length}
           </span>
@@ -173,7 +173,7 @@ function NoProjectSelected() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const TH = "px-5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-ink-faint";
+const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
 export function Machines() {
   usePageTitle("Hosts");

@@ -71,7 +71,7 @@ export function Sidebar() {
       <div className="shrink-0 border-t border-rim px-2 py-3 space-y-0.5">
         {/* User avatar */}
         <div className="relative group flex items-center justify-center h-8 w-full">
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-semibold text-primary uppercase select-none">
+          <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none">
             {user?.email?.[0] ?? '?'}
           </div>
           <span className={cn(hoverLabel, 'text-xs font-normal')}>

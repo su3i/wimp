@@ -9,7 +9,7 @@ type StatusFilter = 'All' | 'Started' | 'Stopped'
 
 const PER_PAGE = 25
 
-const TH = 'px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-ink-faint'
+const TH = 'px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'
 
 const siteStatusCfg: Record<string, { dot: string; text: string }> = {
   Started: { dot: 'bg-success', text: 'text-success' },
@@ -157,13 +157,13 @@ export function SitesTab({
 
                 <div className="px-4 py-3.5 space-y-0.5">
                   {bindings.length ? bindings.map((b, i) => (
-                    <p key={i} className="font-mono text-[11px] text-ink-dim">{b}</p>
+                    <p key={i} className="font-mono text-[0.6875rem] text-ink-dim">{b}</p>
                   )) : <span className="text-xs text-ink-faint">N/A</span>}
                 </div>
 
                 <div className="flex items-center gap-2 px-4 py-3.5">
                   <FolderOpen className="size-3 text-ink-faint shrink-0" />
-                  <span className="font-mono text-[11px] text-ink-dim truncate">{site.PhysicalPath || 'N/A'}</span>
+                  <span className="font-mono text-[0.6875rem] text-ink-dim truncate">{site.PhysicalPath || 'N/A'}</span>
                 </div>
 
                 <div className="px-4 py-3.5">

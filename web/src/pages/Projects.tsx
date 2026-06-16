@@ -89,7 +89,7 @@ function formatDate(iso: string) {
   })
 }
 
-const TH = 'px-5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-ink-faint'
+const TH = 'px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'
 
 export function Projects() {
   const navigate = useNavigate()
@@ -161,7 +161,7 @@ export function Projects() {
                   <p className="text-sm font-medium text-ink group-hover:text-primary transition-colors truncate">
                     {project.Name}
                   </p>
-                  <code className="text-[10px] font-mono text-ink-faint">{project.Key}</code>
+                  <code className="text-[0.625rem] font-mono text-ink-faint">{project.Key}</code>
                 </div>
 
                 {/* Domain */}
@@ -177,7 +177,7 @@ export function Projects() {
                 {/* Date + creator */}
                 <div className="px-5 py-3.5">
                   <p className="text-xs text-ink-dim">{formatDate(project.CreatedAt)}</p>
-                  <p className="text-[10px] text-ink-faint truncate max-w-[10rem]" title={creator}>
+                  <p className="text-[0.625rem] text-ink-faint truncate max-w-[10rem]" title={creator}>
                     {creator}
                   </p>
                 </div>

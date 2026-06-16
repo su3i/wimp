@@ -40,7 +40,7 @@ const PQ = {
   // Rejected requests as % of total - proxy for error rate until log tailing
   errorRate: (ids: number[]) =>
     `sum(rate(windows_iis_requests_rejected_total{${mids(
-      ids
+      ids,
     )}}[5m])) / sum(rate(windows_iis_requests_total{${mids(ids)}}[5m])) * 100`,
 
   // Average CPU % across all project hosts
@@ -49,8 +49,8 @@ const PQ = {
 
   // Average memory used % across all project hosts
   memAvg: (ids: number[]) =>
-    `avg(100 - (windows_os_physical_memory_free_bytes{${mids(ids)}} / windows_os_visible_memory_bytes{${mids(
-      ids
+    `avg(100 - (windows_memory_physical_free_bytes{${mids(ids)}} / windows_memory_physical_total_bytes{${mids(
+      ids,
     )}} * 100))`,
 
   // Total IIS request queue depth across all hosts
@@ -150,18 +150,18 @@ function MetricCard({
 }) {
   return (
     <div className='rounded-lg border border-rim bg-surface px-5 py-5 flex flex-col gap-3'>
-      <span className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         {label}
       </span>
       <span
         className={cn(
           "text-3xl font-semibold font-mono leading-none",
-          loading ? "text-ink-faint" : "text-ink"
+          loading ? "text-ink-faint" : "text-ink",
         )}
       >
-        {loading ? "-" : value ?? "N/A"}
+        {loading ? "-" : (value ?? "N/A")}
       </span>
-      {sub && <span className='text-[10px] text-ink-faint'>{sub}</span>}
+      {sub && <span className='text-[0.625rem] text-ink-faint'>{sub}</span>}
     </div>
   );
 }
@@ -202,7 +202,7 @@ function RadialGauge({ label, value, loading }: { label: string; value: number |
           </span>
         </div>
       </div>
-      <span className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint'>{label}</span>
+      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>{label}</span>
     </div>
   );
 }
@@ -311,7 +311,7 @@ function NotifRow({ notif }: { notif: DashboardNotification }) {
       <Icon className='size-3.5 text-ink-faint shrink-0' />
       <div className='flex-1 min-w-0'>
         <p className='text-xs text-ink truncate'>{notif.Title ?? ""}</p>
-        {notif.Detail ? <p className='text-[11px] text-ink-faint truncate'>{notif.Detail}</p> : null}
+        {notif.Detail ? <p className='text-[0.6875rem] text-ink-faint truncate'>{notif.Detail}</p> : null}
       </div>
       <span className='text-xs text-ink-faint shrink-0 w-14 text-right'>{timeAgo(notif.CreatedAt)}</span>
     </div>
@@ -445,7 +445,7 @@ export function Dashboard() {
               const n = msg.payload as DashboardNotification;
               queryClient.setQueryData(
                 ["dashboard-notifications"],
-                (old: DashboardNotification[] | undefined) => [n, ...(old ?? [])].slice(0, 10)
+                (old: DashboardNotification[] | undefined) => [n, ...(old ?? [])].slice(0, 10),
               );
               break;
             }
@@ -509,7 +509,7 @@ export function Dashboard() {
 
       {/* Greeting */}
       <div className='mb-6'>
-        <p className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint mb-2'>
+        <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-2'>
           {activeProject?.Name ?? "Dashboard"}
         </p>
         <h1 className='text-2xl font-semibold text-ink tracking-tight'>{greeting}</h1>
@@ -548,7 +548,7 @@ export function Dashboard() {
         <div className='grid grid-cols-5 gap-4'>
           {/* Capacity Overview */}
           <div className='col-span-2 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-4'>
-            <p className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint'>
+            <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Capacity Overview
             </p>
             <div className='grid grid-cols-2 gap-2 flex-1'>
@@ -559,7 +559,7 @@ export function Dashboard() {
 
           {/* Host Performance - per-host CPU sorted worst → best */}
           <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-3'>
-            <p className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint'>
+            <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Host Performance CPU %
             </p>
             <HostPerfChart data={hostPerfData} loading={pl(lCpuHost)} />
@@ -569,7 +569,7 @@ export function Dashboard() {
         {/* ── Row 3: Recent Activity ───────────────────────────────────── */}
         <div className='rounded-lg border border-rim bg-surface px-4 pt-4 pb-2'>
           <div className='flex items-center justify-between mb-3 pr-1'>
-            <p className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint'>
+            <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Recent Activity
             </p>
             <Link

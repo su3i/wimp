@@ -45,17 +45,15 @@ const Q = {
     `100 - (avg by (hostname) (rate(windows_cpu_time_total{${mid(id)},mode="idle"}[5m])) * 100)`,
   cpuPerCore: (id: number) => `100 - (rate(windows_cpu_time_total{${mid(id)},mode="idle"}[5m]) * 100)`,
   memUsedPct: (id: number) =>
-    `100 - (windows_os_physical_memory_free_bytes{${mid(id)}} / windows_os_visible_memory_bytes{${mid(
-      id
-    )}} * 100)`,
-  memAvail: (id: number) => `windows_os_physical_memory_free_bytes{${mid(id)}}`,
+    `100 - (windows_memory_physical_free_bytes{${mid(id)}} / windows_memory_physical_total_bytes{${mid(id)}} * 100)`,
+  memAvail: (id: number) => `windows_memory_physical_free_bytes{${mid(id)}}`,
   diskRead: (id: number) =>
     `rate(windows_logical_disk_read_bytes_total{${mid(id)},volume!~"HarddiskVolume.*"}[5m])`,
   diskWrite: (id: number) =>
     `rate(windows_logical_disk_write_bytes_total{${mid(id)},volume!~"HarddiskVolume.*"}[5m])`,
   diskSpace: (id: number) =>
     `100 - (windows_logical_disk_free_bytes{${mid(
-      id
+      id,
     )},volume=~"[A-Z]:.*"} / windows_logical_disk_size_bytes{${mid(id)},volume=~"[A-Z]:.*"} * 100)`,
   netIn: (id: number) => `rate(windows_net_bytes_received_total{${mid(id)},nic!~".*isatap.*"}[5m])`,
   netOut: (id: number) => `rate(windows_net_bytes_sent_total{${mid(id)},nic!~".*isatap.*"}[5m])`,
@@ -156,7 +154,7 @@ function ChartCard({
 }) {
   return (
     <div className='rounded-lg border border-rim bg-surface p-4'>
-      <p className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint mb-4'>{title}</p>
+      <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-4'>{title}</p>
       {loading ? (
         <div className='h-40 flex items-center justify-center'>
           <span className='size-4 rounded-full border-2 border-primary border-t-transparent animate-spin' />
@@ -175,9 +173,9 @@ function ChartCard({
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className='rounded-lg border border-rim bg-surface px-4 py-3.5'>
-      <p className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>{label}</p>
+      <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>{label}</p>
       <p className='text-lg font-semibold text-ink font-mono leading-none'>{value}</p>
-      {sub && <p className='text-[10px] text-ink-faint mt-1'>{sub}</p>}
+      {sub && <p className='text-[0.625rem] text-ink-faint mt-1'>{sub}</p>}
     </div>
   );
 }

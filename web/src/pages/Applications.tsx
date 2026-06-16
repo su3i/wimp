@@ -112,7 +112,7 @@ function NoProjectSelected() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const TH = "px-5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-ink-faint";
+const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
 type ActionState = Record<number, "restarting" | "recycling">;
 

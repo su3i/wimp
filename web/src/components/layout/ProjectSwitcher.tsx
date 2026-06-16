@@ -158,7 +158,7 @@ export function ProjectSwitcher() {
           className='z-[9999] w-64 rounded-md border border-rim bg-surface-highest shadow-[0_8px_24px_rgba(1,4,9,0.7)] overflow-hidden'
         >
           <div className='flex items-center justify-between border-b border-rim px-3.5 py-2.5'>
-            <span className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint'>
+            <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Projects
             </span>
             <button
@@ -202,7 +202,7 @@ export function ProjectSwitcher() {
                         {project.Name}
                       </span>
                       {isActive && (
-                        <span className='text-[9px] rounded px-1.5 py-0.5 bg-primary/10 text-primary font-semibold uppercase tracking-wide shrink-0'>
+                        <span className='text-[0.5625rem] rounded px-1.5 py-0.5 bg-primary/10 text-primary font-semibold uppercase tracking-wide shrink-0'>
                           active
                         </span>
                       )}

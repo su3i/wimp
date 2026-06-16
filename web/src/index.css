@@ -40,7 +40,7 @@
 }
 
 html {
-  font-size: 16px; /* GitHub's base scale - denser, more information-rich */
+  font-size: 18px; /* scaled up ~12.5% so 100% zoom feels like 112-115% */
 }
 
 body {

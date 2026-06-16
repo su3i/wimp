@@ -36,7 +36,7 @@ import type { AppPoolWithDetails, MachineWithPools } from "@/types";
 
 // ── Shared helpers (mirror AppPoolsTab) ───────────────────────────────────────
 
-const TH = "px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-ink-faint";
+const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
 const poolStatusCfg: Record<string, { dot: string; text: string }> = {
   Started: { dot: "bg-success", text: "text-success" },
@@ -144,7 +144,7 @@ function EditLogPathModal({
 
         {/* Editable field */}
         <div className='space-y-1.5'>
-          <label className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint'>
+          <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
             Log Path
           </label>
           <input
@@ -155,7 +155,7 @@ function EditLogPathModal({
             autoFocus
             className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-accent'
           />
-          <p className='text-[10px] text-ink-faint'>
+          <p className='text-[0.625rem] text-ink-faint'>
             Windows path to the IIS log directory for this app pool.
           </p>
         </div>
@@ -428,7 +428,7 @@ function AddAppPoolModal({
                     <span className='font-mono text-xs text-ink flex-1'>
                       {machine.Hostname?.toLowerCase() ?? "N/A"}
                     </span>
-                    <span className='text-[10px] text-ink-faint'>
+                    <span className='text-[0.625rem] text-ink-faint'>
                       {availableCount > 0 ? `${availableCount} available` : "all added"}
                     </span>
                   </button>
@@ -464,7 +464,7 @@ function AddAppPoolModal({
                               {(isAssigned || isChecked) && <Check className='size-2.5 text-white' />}
                             </span>
                             <span className='font-mono text-xs text-ink flex-1'>{pool.Name}</span>
-                            {isAssigned && <span className='text-[10px] text-ink-faint'>Added</span>}
+                            {isAssigned && <span className='text-[0.625rem] text-ink-faint'>Added</span>}
                           </button>
                         );
                       })}

@@ -234,7 +234,7 @@ export function LogsViewer({
       {/* Filter bar */}
       <div className='flex items-center gap-2 px-4 py-2.5 border-b border-rim bg-surface-alt shrink-0 flex-wrap'>
         <Terminal className='size-3.5 text-ink-faint shrink-0' />
-        <span className='text-[10px] font-semibold uppercase tracking-widest text-ink-faint mr-1'>Logs</span>
+        <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mr-1'>Logs</span>
 
         <FilterSelect
           value={machineId}

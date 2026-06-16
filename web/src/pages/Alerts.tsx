@@ -48,7 +48,7 @@ function NotifRow({ notif }: { notif: DashboardNotification }) {
       <Icon className='size-3.5 text-ink-faint shrink-0' />
       <div className='flex-1 min-w-0'>
         <p className='text-xs text-ink truncate'>{notif.Title ?? ""}</p>
-        {notif.Detail ? <p className='text-[11px] text-ink-faint truncate'>{notif.Detail}</p> : null}
+        {notif.Detail ? <p className='text-[0.6875rem] text-ink-faint truncate'>{notif.Detail}</p> : null}
       </div>
       <span className='text-xs text-ink-faint shrink-0 w-14 text-right'>{timeAgo(notif.CreatedAt)}</span>
     </div>
@@ -133,7 +133,7 @@ export function Alerts() {
         <p className='text-xs text-ink-dim leading-relaxed'>
           Want critical alerts delivered to Slack, PagerDuty, email, or Telegram? Configure an{" "}
           <span className='font-medium text-ink'>Alertmanager receiver</span> in your{" "}
-          <span className='font-mono text-[11px] text-ink'>values.yaml</span>.{" "}
+          <span className='font-mono text-[0.6875rem] text-ink'>values.yaml</span>.{" "}
           <a
             href='https://prometheus.io/docs/alerting/latest/configuration/#receiver'
             target='_blank'

@@ -13,7 +13,7 @@ type StatusFilter = "All" | "Started" | "Stopped";
 
 const PER_PAGE = 25;
 
-const TH = "px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-ink-faint";
+const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
 const poolStatusCfg: Record<string, { dot: string; text: string }> = {
   Started: { dot: "bg-success", text: "text-success" },
