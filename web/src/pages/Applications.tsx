@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { RowMenu } from "@/components/ui/RowMenu";
+import { Pagination } from "@/components/ui/Pagination";
 import { useProjectStore } from "@/store/project";
 import { applicationService } from "@/services/application.service";
 import { cn } from "@/utils/cn";
@@ -113,6 +114,7 @@ function NoProjectSelected() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
+const PAGE_SIZE = 20;
 
 type ActionState = Record<number, "restarting" | "recycling">;
 
@@ -121,6 +123,7 @@ export function Applications() {
   const { activeProject } = useProjectStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [page, setPage] = useState(1);
   const [acting, setActing] = useState<ActionState>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [appName, setAppName] = useState("");
@@ -204,6 +207,10 @@ export function Applications() {
 
   if (!activeProject) return <NoProjectSelected />;
 
+  const appTotal = apps?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(appTotal / PAGE_SIZE));
+  const paginated = apps?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? [];
+
   return (
     <div className='space-y-5'>
       {/* Header */}
@@ -239,7 +246,7 @@ export function Applications() {
           </div>
 
           {/* Rows */}
-          {apps.map((app) => {
+          {paginated.map((app) => {
             const { healthy, total } = poolHealth(app);
             const busy = acting[app.ID];
             return (
@@ -300,6 +307,14 @@ export function Applications() {
           })}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={appTotal}
+        onPageChange={setPage}
+        itemLabel='application'
+      />
 
       <ConfirmModal
         open={!!deleteTarget}

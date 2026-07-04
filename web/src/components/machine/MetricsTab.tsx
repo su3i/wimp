@@ -172,10 +172,10 @@ function ChartCard({
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className='rounded-lg border border-rim bg-surface px-4 py-3.5'>
-      <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>{label}</p>
-      <p className='text-lg font-semibold text-ink font-mono leading-none'>{value}</p>
-      {sub && <p className='text-[0.625rem] text-ink-faint mt-1'>{sub}</p>}
+    <div className='rounded-lg border border-rim bg-surface px-5 py-5'>
+      <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-2.5'>{label}</p>
+      <p className='text-2xl font-semibold text-ink font-mono leading-none'>{value}</p>
+      {sub && <p className='text-[0.625rem] text-ink-faint mt-1.5'>{sub}</p>}
     </div>
   );
 }
@@ -313,7 +313,7 @@ export function MetricsTab({ machineId }: { machineId: number }) {
   return (
     <div className='space-y-4'>
       {/* Stat row */}
-      <div className='grid grid-cols-4 gap-3'>
+      <div className='grid grid-cols-3 gap-3'>
         <StatCard label='CPU Usage' value={cpuPct != null ? pctFmt(cpuPct) : "N/A"} />
         <StatCard
           label='Memory Used'
@@ -321,7 +321,6 @@ export function MetricsTab({ machineId }: { machineId: number }) {
           sub={memAvailB != null ? `${fmtBytes(memAvailB)} available` : undefined}
         />
         <StatCard label='Uptime' value={uptimeSecs != null ? fmtUptime(uptimeSecs) : "N/A"} />
-        <StatCard label='Refresh' value='30s' sub='auto-refreshing' />
       </div>
 
       {/* 2-column chart grid */}

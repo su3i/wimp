@@ -30,6 +30,9 @@ func (r *notificationRepository) FindPaginated(f notification.Filter) ([]notific
 	if f.MachineID != nil {
 		q = q.Where("machine_id = ?", *f.MachineID)
 	}
+	if f.ProjectKey != nil {
+		q = q.Where("machine_id IN (SELECT m.id FROM machines m JOIN projects p ON p.id = m.project_id WHERE p.key = ? AND m.deleted_at IS NULL)", *f.ProjectKey)
+	}
 	if f.UnreadOnly {
 		q = q.Where("read_at IS NULL")
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/su3i/wimp/internal/application/authorization"
+	monitorService "github.com/su3i/wimp/internal/application/monitor"
 	"github.com/su3i/wimp/internal/application/metadata"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
@@ -60,6 +61,9 @@ func main() {
 
 	// Initialize authorization module
 	authorization.Initialize(config.Casbin())
+
+	// Start monitor alert checker
+	monitorService.StartChecker(config.Database(), config.Common().PrometheusUrl)
 
 	// Initialize router
 	router := server.InitializeRouter()

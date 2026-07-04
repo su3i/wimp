@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Server, Clock } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { ArrowLeft, Server, Clock, Power, RotateCw } from 'lucide-react'
 import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
 import { SitesTab } from '@/components/machine/SitesTab'
 import { MetricsTab } from '@/components/machine/MetricsTab'
+import { Button } from '@/components/ui/Button'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { cn } from '@/utils/cn'
 import { usePageTitle } from '@/utils/usePageTitle'
 import type { MachineStatus } from '@/types'
@@ -48,13 +51,17 @@ export function MachineDetail() {
   const { machineId } = useParams<{ machineId: string }>()
   const navigate = useNavigate()
   const { activeProject } = useProjectStore()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('metrics')
+  const [confirmAction, setConfirmAction] = useState<'shutdown' | 'restart' | null>(null)
+  const [actingOnMachine, setActingOnMachine] = useState(false)
 
   const numericId = Number(machineId)
 
   const { data: machines } = useQuery({
     queryKey: ['machines', activeProject?.Key],
     enabled: !!activeProject,
+    refetchInterval: 5_000,
     queryFn: async () => {
       const { data } = await machineService.list(activeProject!.Key)
       return data.machines ?? []
@@ -65,6 +72,23 @@ export function MachineDetail() {
   usePageTitle(machine?.Hostname?.toLowerCase() ?? undefined)
   const machineCfg = machine ? machineStatusCfg[machine.Status] : null
   const ipv4s = machine ? filterIPv4(machine.IPs) : []
+
+  async function handleMachineCommand() {
+    if (!confirmAction || !activeProject) return
+    setActingOnMachine(true)
+    try {
+      await machineService.command(activeProject.Key, numericId, confirmAction)
+      queryClient.invalidateQueries({ queryKey: ['machines', activeProject.Key] })
+      setConfirmAction(null)
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Command failed. Please try again.'
+      toast.error(msg)
+    } finally {
+      setActingOnMachine(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -97,12 +121,34 @@ export function MachineDetail() {
                 </div>
               </div>
             </div>
-            {machineCfg && (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={cn('size-2 rounded-full', machineCfg.dot)} />
-                <span className={cn('text-xs font-medium', machineCfg.text)}>{machineCfg.label}</span>
+            <div className="flex items-center gap-4 shrink-0">
+              {machineCfg && (
+                <div className="flex items-center gap-2">
+                  <span className={cn('size-2 rounded-full', machineCfg.dot)} />
+                  <span className={cn('text-xs font-medium', machineCfg.text)}>{machineCfg.label}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actingOnMachine}
+                  onClick={() => setConfirmAction('restart')}
+                >
+                  <RotateCw className="size-3" />
+                  Restart
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  disabled={actingOnMachine}
+                  onClick={() => setConfirmAction('shutdown')}
+                >
+                  <Power className="size-3" />
+                  Shutdown
+                </Button>
               </div>
-            )}
+            </div>
           </div>
         ) : (
           <div className="flex items-center gap-3.5 animate-pulse">
@@ -143,6 +189,20 @@ export function MachineDetail() {
       {activeTab === 'sites' && activeProject && (
         <SitesTab projectKey={activeProject.Key} machineId={numericId} />
       )}
+
+      <ConfirmModal
+        open={!!confirmAction}
+        title={confirmAction === 'shutdown' ? 'Shutdown Host' : 'Restart Host'}
+        description={
+          confirmAction === 'shutdown'
+            ? `Are you sure you want to shut down "${machine?.Hostname || 'this host'}"? It will go offline until someone powers it back on.`
+            : `Are you sure you want to restart "${machine?.Hostname || 'this host'}"? It will be briefly unreachable.`
+        }
+        confirmLabel={confirmAction === 'shutdown' ? 'Shutdown' : 'Restart'}
+        loading={actingOnMachine}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => void handleMachineCommand()}
+      />
     </div>
   )
 }

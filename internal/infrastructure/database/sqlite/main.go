@@ -13,6 +13,7 @@ import (
 	"github.com/su3i/wimp/internal/domain/application"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
+	"github.com/su3i/wimp/internal/domain/monitor"
 	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
@@ -92,6 +93,11 @@ func Migrate() {
 	err = DB.AutoMigrate(&notification.Notification{})
 	if err != nil {
 		log.Fatalf("failed to migrate sqlite database (notification): %v", err)
+	}
+
+	err = DB.AutoMigrate(&monitor.Monitor{})
+	if err != nil {
+		log.Fatalf("failed to migrate sqlite database (monitor): %v", err)
 	}
 
 }

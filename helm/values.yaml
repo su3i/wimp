@@ -50,6 +50,11 @@ config:
   #   http://<release>-kube-prometheus-stack-alertmanager.<namespace>.svc:9093
   alertmanagerUrl: ""
 
+  # Prometheus URL used by the monitor uptime checker - leave empty to disable.
+  # When kube-prometheus-stack.enabled=true (below), use the cluster-internal address:
+  #   http://<release>-kube-prometheus-stack-prometheus.<namespace>.svc:9090
+  prometheusUrl: ""
+
   database:
     type: postgres  # "sqlite" | "postgres"
 

@@ -68,9 +68,9 @@ type HeartbeatPayload struct {
 // CommandPayload is sent by the control plane to trigger an IIS action.
 type CommandPayload struct {
 	CommandID  string `json:"command_id"`
-	Action     string `json:"action"`      // start, stop, restart, recycle
-	TargetType string `json:"target_type"` // app_pool
-	Target     string `json:"target"`      // name of the target
+	Action     string `json:"action"`      // start, stop, restart, recycle, shutdown
+	TargetType string `json:"target_type"` // app_pool, site, machine
+	Target     string `json:"target"`      // name of the target (unused for machine)
 }
 
 // CommandResultPayload is sent by the agent after executing a command.

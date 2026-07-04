@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Globe, FolderOpen, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { toast } from 'sonner'
+import { Globe, FolderOpen, AlertCircle, Play, Square, RotateCw } from 'lucide-react'
+import { RowMenu } from '@/components/ui/RowMenu'
+import type { RowMenuItem } from '@/components/ui/RowMenu'
+import { Pagination } from '@/components/ui/Pagination'
 import { appPoolService } from '@/services/appPool.service'
 import { cn } from '@/utils/cn'
 import type { Binding, Site } from '@/types'
@@ -12,8 +16,10 @@ const PER_PAGE = 25
 const TH = 'px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'
 
 const siteStatusCfg: Record<string, { dot: string; text: string }> = {
-  Started: { dot: 'bg-success', text: 'text-success' },
-  Stopped: { dot: 'bg-danger',  text: 'text-danger'  },
+  Started:  { dot: 'bg-success', text: 'text-success' },
+  Stopped:  { dot: 'bg-danger',  text: 'text-danger'  },
+  Starting: { dot: 'bg-warning', text: 'text-warning' },
+  Stopping: { dot: 'bg-warning', text: 'text-warning' },
 }
 
 function formatBinding(b: Binding) {
@@ -57,6 +63,7 @@ export function SitesTab({
   projectKey: string
   machineId: number
 }) {
+  const [acting, setActing] = useState<Record<number, string>>({})
   const [status, setStatus] = useState<StatusFilter>('Started')
   const [page, setPage] = useState(1)
 
@@ -65,6 +72,7 @@ export function SitesTab({
   const { data, isLoading, isError } = useQuery({
     queryKey: ['sites', projectKey, machineId, apiStatus, page, PER_PAGE],
     enabled: !!projectKey && !!machineId,
+    refetchInterval: 5_000,
     queryFn: async () => {
       const { data } = await appPoolService.listSites(projectKey, machineId, {
         ...(apiStatus ? { status: apiStatus } : {}),
@@ -81,6 +89,24 @@ export function SitesTab({
   function handleStatusChange(s: StatusFilter) {
     setStatus(s)
     setPage(1)
+  }
+
+  async function runCmd(site: Site, cmd: 'start' | 'stop' | 'restart') {
+    setActing((prev) => ({ ...prev, [site.ID]: cmd }))
+    try {
+      await appPoolService.siteCommand(projectKey, machineId, site.ID, cmd)
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Command failed. Please try again.'
+      toast.error(msg, { description: `${site.Name} - ${cmd}` })
+    } finally {
+      setActing((prev) => {
+        const n = { ...prev }
+        delete n[site.ID]
+        return n
+      })
+    }
   }
 
   if (isLoading) return <Skeleton />
@@ -125,21 +151,30 @@ export function SitesTab({
         </div>
       ) : (
         <div className="rounded-lg border border-rim overflow-hidden">
-          <div className="grid grid-cols-[2fr_1fr_2fr_2fr_1.5fr] border-b border-rim bg-surface-alt">
+          <div className="grid grid-cols-[2fr_1fr_2fr_2fr_1.5fr_auto] border-b border-rim bg-surface-alt">
             <div className={TH}>Site Name</div>
             <div className={TH}>Status</div>
             <div className={TH}>Bindings</div>
             <div className={TH}>Physical Path</div>
             <div className={TH}>App Pool</div>
+            <div className='px-4 py-2.5' />
           </div>
 
           {(paginated as Site[]).map(site => {
             const statusCfg = siteStatusCfg[site.State] ?? { dot: 'bg-ink-faint', text: 'text-ink-faint' }
             const bindings = (site.Bindings ?? []).map(formatBinding)
+            const busy = acting[site.ID]
+            const started = site.State === 'Started'
+            const menuItems: RowMenuItem[] = started
+              ? [
+                  { icon: Square, label: 'Stop', variant: 'danger', onClick: () => runCmd(site, 'stop') },
+                  { icon: RotateCw, label: 'Restart', onClick: () => runCmd(site, 'restart') },
+                ]
+              : [{ icon: Play, label: 'Start', onClick: () => runCmd(site, 'start') }]
             return (
               <div
                 key={site.ID}
-                className="grid grid-cols-[2fr_1fr_2fr_2fr_1.5fr] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100"
+                className="grid grid-cols-[2fr_1fr_2fr_2fr_1.5fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100"
               >
                 <div className="flex items-center gap-3 px-4 py-3.5">
                   <div className="flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high">
@@ -169,37 +204,24 @@ export function SitesTab({
                 <div className="px-4 py-3.5">
                   <span className="text-xs text-ink-dim">{site.AppPoolName || 'N/A'}</span>
                 </div>
+
+                <div className="flex items-center justify-center px-2 py-3">
+                  <RowMenu items={menuItems} disabled={!!busy} />
+                </div>
               </div>
             )
           })}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-rim bg-surface-alt text-xs text-ink-faint">
-              <span>{data?.total ?? 0} site{(data?.total ?? 0) !== 1 ? 's' : ''}</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setPage(p => p - 1)}
-                  disabled={page === 1}
-                  className="flex items-center justify-center size-6 rounded hover:bg-surface-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                >
-                  <ChevronLeft className="size-3.5" />
-                </button>
-                <span className="px-2">Page {page} of {totalPages}</span>
-                <button
-                  type="button"
-                  onClick={() => setPage(p => p + 1)}
-                  disabled={page === totalPages}
-                  className="flex items-center justify-center size-6 rounded hover:bg-surface-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                >
-                  <ChevronRight className="size-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={data?.total}
+        onPageChange={setPage}
+        itemLabel='site'
+      />
     </div>
   )
 }

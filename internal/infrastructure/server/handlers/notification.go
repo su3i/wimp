@@ -13,7 +13,7 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
 )
 
-func ListNotifications(c *gin.Context) {
+func listNotificationsWithFilter(c *gin.Context, projectKey *string) {
 	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "read")
 	if err != nil || !allow {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
@@ -27,6 +27,7 @@ func ListNotifications(c *gin.Context) {
 		Level:      c.Query("level"),
 		Category:   c.Query("category"),
 		UnreadOnly: c.Query("unread_only") == "true",
+		ProjectKey: projectKey,
 		Page:       page,
 		Limit:      limit,
 	}
@@ -51,6 +52,15 @@ func ListNotifications(c *gin.Context) {
 		"page":          page,
 		"limit":         limit,
 	})
+}
+
+func ListNotifications(c *gin.Context) {
+	listNotificationsWithFilter(c, nil)
+}
+
+func ListProjectNotifications(c *gin.Context) {
+	key := c.Param("key")
+	listNotificationsWithFilter(c, &key)
 }
 
 func GetUnreadCount(c *gin.Context) {

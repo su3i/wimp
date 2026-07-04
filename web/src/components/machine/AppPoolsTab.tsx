@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Cpu, Play, Square, RotateCw, RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Cpu, Play, Square, RotateCw, RefreshCw, AlertCircle } from "lucide-react";
 import { RowMenu } from "@/components/ui/RowMenu";
 import type { RowMenuItem } from "@/components/ui/RowMenu";
+import { Pagination } from "@/components/ui/Pagination";
 import { appPoolService } from "@/services/appPool.service";
 import { cn } from "@/utils/cn";
 
@@ -208,37 +209,16 @@ export function AppPoolsTab({ projectKey, machineId }: { projectKey: string; mac
             );
           })}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className='flex items-center justify-between px-4 py-2.5 border-t border-rim bg-surface-alt text-xs text-ink-faint'>
-              <span>
-                {data?.total ?? 0} pool{(data?.total ?? 0) !== 1 ? "s" : ""}
-              </span>
-              <div className='flex items-center gap-1'>
-                <button
-                  type='button'
-                  onClick={() => setPage((p) => p - 1)}
-                  disabled={page === 1}
-                  className='flex items-center justify-center size-6 rounded hover:bg-surface-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors'
-                >
-                  <ChevronLeft className='size-3.5' />
-                </button>
-                <span className='px-2'>
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  type='button'
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={page === totalPages}
-                  className='flex items-center justify-center size-6 rounded hover:bg-surface-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors'
-                >
-                  <ChevronRight className='size-3.5' />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={data?.total}
+        onPageChange={setPage}
+        itemLabel='pool'
+      />
     </div>
   );
 }

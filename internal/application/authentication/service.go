@@ -37,15 +37,16 @@ func Login(email string, password string, commonCfg *config.CommonConfig, databa
 	}
 
 	refreshToken, refreshTokenHash, err := authentication.GenerateRefreshToken()
-
-	err = cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), email, 7*24*time.Hour)
-
 	if err != nil {
-		return nil, errors.New("Failed to rotate refresh token")
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), email, 7*24*time.Hour); err != nil {
+		return nil, errors.New("Failed to store refresh token")
 	}
 
 	return &authentication.LoginDTO{
-		AccessToken: accessToken,
+		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
 }
@@ -76,15 +77,16 @@ func LoginWithoutPassword(email string, commonCfg *config.CommonConfig, database
 	}
 
 	refreshToken, refreshTokenHash, err := authentication.GenerateRefreshToken()
-
-	err = cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), email, 7*24*time.Hour)
-
 	if err != nil {
-		return nil, errors.New("Failed to rotate refresh token")
+		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
-	
+
+	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), email, 7*24*time.Hour); err != nil {
+		return nil, errors.New("Failed to store refresh token")
+	}
+
 	return &authentication.LoginDTO{
-		AccessToken: accessToken,
+		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
 }
@@ -121,7 +123,10 @@ func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *con
 	})
 
 	// 4. Rotate refresh token
-	newRaw, newHash, _ := authentication.GenerateRefreshToken()
+	newRaw, newHash, err := authentication.GenerateRefreshToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
 
 	err = cache.GetCache().Delete(oldRefreshTokenKey)
 

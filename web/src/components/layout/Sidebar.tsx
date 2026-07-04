@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Boxes, HardDrive, Bell, LogOut } from 'lucide-react'
+import { LayoutDashboard, Boxes, HardDrive, Bell, Activity, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/auth'
 import { authService } from '@/services/auth.service'
@@ -10,10 +11,11 @@ const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/applications', icon: Boxes, label: 'Applications' },
   { to: '/machines', icon: HardDrive, label: 'Hosts' },
+  { to: '/monitors', icon: Activity, label: 'Uptime Monitor' },
   { to: '/alerts', icon: Bell, label: 'Alerts' },
 ]
 
-const hoverLabel = cn(
+const tooltip = cn(
   'absolute left-full ml-3 px-2.5 py-1.5 rounded-md z-50',
   'bg-surface border border-rim shadow-lg',
   'text-sm font-medium text-ink whitespace-nowrap pointer-events-none',
@@ -25,6 +27,12 @@ export function Sidebar() {
   const { user, refreshToken, clearAuth } = useAuthStore()
   const navigate = useNavigate()
 
+  const [expanded, setExpanded] = useState(() => localStorage.getItem('wimp_sidebar_expanded') === 'true')
+
+  useEffect(() => {
+    localStorage.setItem('wimp_sidebar_expanded', String(expanded))
+  }, [expanded])
+
   async function handleLogout() {
     if (refreshToken) {
       try { await authService.logout(refreshToken) } catch { /* best-effort */ }
@@ -34,59 +42,102 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex shrink-0 flex-col w-14 border-r border-rim bg-surface h-screen sticky top-0">
-      {/* Brand */}
-      <div className="flex h-16 items-center justify-center border-b border-rim shrink-0">
-        <img src={iconSrc} alt="wimp" className="size-8 rounded-lg" />
+    <aside className={cn(
+      'flex shrink-0 flex-col border-r border-rim bg-surface h-screen sticky top-0 transition-[width] duration-200 overflow-hidden',
+      expanded ? 'w-52' : 'w-14',
+    )}>
+      {/* Brand - icon only, always centered */}
+      <div className='flex h-14 items-center justify-center border-b border-rim shrink-0'>
+        <img src={iconSrc} alt='wimp' className='size-8 rounded-lg' />
       </div>
 
       {/* Project switcher */}
-      <div className="border-b border-rim px-2 py-2">
-        <ProjectSwitcher />
+      <div className='border-b border-rim px-2 py-2'>
+        <ProjectSwitcher expanded={expanded} />
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5">
+      <nav className='flex-1 py-3 px-2 space-y-0.5 overflow-hidden'>
         {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
-            className={({ isActive }) =>
-              cn(
-                'relative group cursor-pointer flex items-center justify-center h-8 w-full rounded-md transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-ink-dim hover:bg-surface-high hover:text-ink',
-              )
-            }
+            className={({ isActive }) => cn(
+              'relative group cursor-pointer flex items-center h-8 w-full rounded-md transition-colors',
+              expanded ? 'gap-2.5 px-3' : 'justify-center',
+              isActive ? 'bg-primary/10 text-primary' : 'text-ink-dim hover:bg-surface-high hover:text-ink',
+            )}
           >
-            <Icon className="size-4 shrink-0" />
-            <span className={hoverLabel}>{label}</span>
+            <Icon className='size-4 shrink-0' />
+            {expanded
+              ? <span className='text-sm font-medium truncate'>{label}</span>
+              : <span className={tooltip}>{label}</span>
+            }
           </NavLink>
         ))}
       </nav>
 
       {/* Bottom */}
-      <div className="shrink-0 border-t border-rim px-2 py-3 space-y-0.5">
-        {/* User avatar */}
-        <div className="relative group flex items-center justify-center h-8 w-full">
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none">
-            {user?.email?.[0] ?? '?'}
-          </div>
-          <span className={cn(hoverLabel, 'text-xs font-normal')}>
-            {user?.email ?? 'Unknown'}
-          </span>
-        </div>
+      <div className='shrink-0 border-t border-rim px-2 py-3'>
+        {expanded ? (
+          <>
+            {/* Email row */}
+            <div className='flex items-center gap-2.5 px-3 h-8 mb-2'>
+              <div className='flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none'>
+                {user?.email?.[0] ?? '?'}
+              </div>
+              <span className='text-xs text-ink-faint truncate flex-1'>{user?.email ?? 'Unknown'}</span>
+            </div>
 
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="relative group cursor-pointer flex h-8 w-full items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-danger transition-colors"
-        >
-          <LogOut className="size-4" />
-          <span className={cn(hoverLabel, 'text-danger group-hover:text-danger')}>Sign Out</span>
-        </button>
+            {/* Expand + Logout as a paired icon row */}
+            <div className='flex items-center gap-1.5'>
+              <button
+                onClick={() => setExpanded(false)}
+                title='Collapse sidebar'
+                className='flex-1 h-9 flex items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-ink transition-colors cursor-pointer'
+              >
+                <PanelLeftClose className='size-4' />
+              </button>
+              <div className='w-px h-5 bg-rim shrink-0' />
+              <button
+                onClick={handleLogout}
+                title='Sign out'
+                className='flex-1 h-9 flex items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-danger transition-colors cursor-pointer'
+              >
+                <LogOut className='size-4' />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className='space-y-0.5'>
+            {/* User avatar */}
+            <div className='relative group flex items-center justify-center h-8 w-full'>
+              <div className='flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none'>
+                {user?.email?.[0] ?? '?'}
+              </div>
+              <span className={cn(tooltip, 'text-xs font-normal')}>{user?.email ?? 'Unknown'}</span>
+            </div>
+
+            {/* Expand */}
+            <button
+              onClick={() => setExpanded(true)}
+              className='relative group cursor-pointer flex h-8 w-full items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-ink transition-colors'
+            >
+              <PanelLeftOpen className='size-4' />
+              <span className={tooltip}>Expand sidebar</span>
+            </button>
+
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              className='relative group cursor-pointer flex h-8 w-full items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-danger transition-colors'
+            >
+              <LogOut className='size-4' />
+              <span className={cn(tooltip, 'text-danger group-hover:text-danger')}>Sign Out</span>
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )

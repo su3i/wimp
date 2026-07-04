@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	monitorService "github.com/su3i/wimp/internal/application/monitor"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
@@ -54,4 +56,32 @@ func firstIPv4(ips []string) string {
 		}
 	}
 	return ""
+}
+
+// PrometheusMonitorTargets returns blackbox_exporter HTTP SD targets for all
+// configured monitors. Prometheus polls this to discover what URLs to probe.
+func PrometheusMonitorTargets(c *gin.Context) {
+	monitors, err := monitorService.AllForSD(config.Database())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	targets := make([]prometheusTarget, 0, len(monitors))
+	for _, m := range monitors {
+		if !m.Enabled {
+			continue
+		}
+		targets = append(targets, prometheusTarget{
+			Targets: []string{m.URL},
+			Labels: map[string]string{
+				"monitor_id":            strconv.Itoa(int(m.ID)),
+				"monitor_name":          m.Name,
+				"__scrape_interval__":   fmt.Sprintf("%ds", m.IntervalSeconds),
+				"__scrape_timeout__":    "10s",
+			},
+		})
+	}
+
+	c.JSON(http.StatusOK, targets)
 }

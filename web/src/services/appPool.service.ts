@@ -2,6 +2,7 @@ import { api } from '@/lib/axios'
 import type { AppPool, Site } from '@/types'
 
 type PoolCommand = 'start' | 'stop' | 'restart' | 'recycle'
+type SiteCommand = 'start' | 'stop' | 'restart'
 
 interface ListParams {
   status?: 'Started' | 'Stopped'
@@ -24,4 +25,7 @@ export const appPoolService = {
       `/projects/${projectKey}/machines/${machineId}/sites`,
       { params },
     ),
+
+  siteCommand: (projectKey: string, machineId: number, siteId: number, cmd: SiteCommand) =>
+    api.post(`/projects/${projectKey}/machines/${machineId}/sites/${siteId}/${cmd}`),
 }

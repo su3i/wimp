@@ -34,6 +34,7 @@ func InitializeRouter() *gin.Engine {
 
 	// Prometheus HTTP service discovery
 	router.GET("/prometheus/targets", handlers.PrometheusTargets)
+	router.GET("/prometheus/monitors", handlers.PrometheusMonitorTargets)
 
 	// Config
 	router.GET("/config", handlers.RetrieveConfig)
@@ -77,6 +78,8 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/machines/:machineId/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
 	router.GET("/projects/:key/machines/:machineId/uninstall", middleware.AuthMiddleware(), handlers.GetUninstallCommand)
 	router.DELETE("/projects/:key/machines/:machineId", middleware.AuthMiddleware(), handlers.DeleteMachine)
+	router.POST("/projects/:key/machines/:machineId/shutdown", middleware.AuthMiddleware(), handlers.MachineCommand("shutdown"))
+	router.POST("/projects/:key/machines/:machineId/restart", middleware.AuthMiddleware(), handlers.MachineCommand("restart"))
 
 	// Applications (project-scoped)
 	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)
@@ -99,6 +102,9 @@ func InitializeRouter() *gin.Engine {
 
 	// Sites (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/sites", middleware.AuthMiddleware(), handlers.RetrieveSites)
+	router.POST("/projects/:key/machines/:machineId/sites/:siteId/start", middleware.AuthMiddleware(), handlers.SiteCommand("start"))
+	router.POST("/projects/:key/machines/:machineId/sites/:siteId/stop", middleware.AuthMiddleware(), handlers.SiteCommand("stop"))
+	router.POST("/projects/:key/machines/:machineId/sites/:siteId/restart", middleware.AuthMiddleware(), handlers.SiteCommand("restart"))
 
 	// Dashboard (project-scoped)
 	router.GET("/projects/:key/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
@@ -108,6 +114,13 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/notifications/unread-count", middleware.AuthMiddleware(), handlers.GetUnreadCount)
 	router.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MarkNotificationRead)
 	router.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MarkAllNotificationsRead)
+	router.GET("/projects/:key/notifications", middleware.AuthMiddleware(), handlers.ListProjectNotifications)
+
+	// Monitors (project-scoped)
+	router.GET("/projects/:key/monitors", middleware.AuthMiddleware(), handlers.ListMonitors)
+	router.POST("/projects/:key/monitors", middleware.AuthMiddleware(), handlers.CreateMonitor)
+	router.PUT("/projects/:key/monitors/:id", middleware.AuthMiddleware(), handlers.UpdateMonitor)
+	router.DELETE("/projects/:key/monitors/:id", middleware.AuthMiddleware(), handlers.DeleteMonitor)
 
 	// Metrics
 	handlers.MetricsHandler(router)

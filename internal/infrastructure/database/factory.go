@@ -8,6 +8,7 @@ import (
 	databaseDomain "github.com/su3i/wimp/internal/domain/database"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/metadata"
+	"github.com/su3i/wimp/internal/domain/monitor"
 	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
@@ -100,4 +101,8 @@ func NewApplicationRepository(config *config.DatabaseConfig) application.Applica
 
 func NewNotificationRepository(config *config.DatabaseConfig) notification.Repository {
 	return newRepository(config, postgresRepository.NewNotificationRepository, sqliteRepository.NewNotificationRepository)
+}
+
+func NewMonitorRepository(config *config.DatabaseConfig) monitor.Repository {
+	return newRepository(config, postgresRepository.NewMonitorRepository, sqliteRepository.NewMonitorRepository)
 }

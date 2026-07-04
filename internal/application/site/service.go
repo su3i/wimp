@@ -1,6 +1,9 @@
 package site
 
 import (
+	"errors"
+
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/protocol"
 	siteDomain "github.com/su3i/wimp/internal/domain/site"
@@ -36,5 +39,30 @@ func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseCo
 }
 
 func RetrieveByMachineID(machineID uint, page, perPage int, state string, cfg *config.DatabaseConfig) (*[]siteDomain.Site, int64, error) {
-	return database.NewSiteRepository(cfg).FindByMachineIDFiltered(machineID, page, perPage, state)
+	sites, total, err := database.NewSiteRepository(cfg).FindByMachineIDFiltered(machineID, page, perPage, state)
+	if err != nil || sites == nil {
+		return sites, total, err
+	}
+	siteIDs := make([]uint, len(*sites))
+	for i, s := range *sites {
+		siteIDs[i] = s.ID
+	}
+	overrides := cache.GetSitePendingStates(siteIDs)
+	for i := range *sites {
+		if s, ok := overrides[(*sites)[i].ID]; ok {
+			(*sites)[i].State = s
+		}
+	}
+	return sites, total, nil
+}
+
+func FindOneByID(id uint, cfg *config.DatabaseConfig) (*siteDomain.Site, error) {
+	s, err := database.NewSiteRepository(cfg).FindOneByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, errors.New("site not found")
+	}
+	return s, nil
 }

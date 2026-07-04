@@ -95,6 +95,10 @@ spec:
             - name: ALERTMANAGERURL
               value: {{ .Values.config.alertmanagerUrl | default "" | quote }}
 
+            # ── Prometheus ───────────────────────────────────
+            - name: PROMETHEUSURL
+              value: {{ .Values.config.prometheusUrl | default "" | quote }}
+
             # ── Loki ─────────────────────────────────────────
             - name: LOKIHOST
               value: {{ include "wimp.lokiHost" . | quote }}

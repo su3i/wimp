@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Monitor, Layers, Bell, X, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
+  Legend,
 } from "recharts";
 import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
@@ -207,33 +208,38 @@ function RadialGauge({ label, value, loading }: { label: string; value: number |
   );
 }
 
-// ── Host performance chart ────────────────────────────────────────────────────
-
-interface HostCpuRow {
-  name: string;
-  cpu: number;
-}
-
-function cpuBarColor(v: number) {
-  if (v >= 80) return "#f85149"; // danger
-  if (v >= 60) return "#d29922"; // warning
-  return "#3fb950"; // success
-}
+// ── Host CPU line chart ───────────────────────────────────────────────────────
 
 const TICK_STYLE = { fill: "#8b949e", fontSize: 10 };
+const LINE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function HostTooltipContent({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className='rounded-md border border-rim bg-surface-highest px-3 py-2 text-xs shadow-xl'>
-      <p className='font-mono text-ink-faint mb-0.5'>{label}</p>
-      <p className='font-mono font-semibold text-ink'>{(payload[0].value as number).toFixed(1)}%</p>
+    <div className='rounded-md border border-rim bg-surface-highest px-3 py-2 text-xs shadow-xl min-w-[150px]'>
+      <p className='font-mono text-ink-faint mb-1.5'>{label}</p>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {payload.map((p: any) => (
+        <div key={p.name} className='flex items-center gap-2 py-0.5'>
+          <span className='size-1.5 rounded-full shrink-0' style={{ background: p.color }} />
+          <span className='text-ink-dim flex-1 truncate'>{p.name}</span>
+          <span className='font-mono font-semibold text-ink ml-2'>{(p.value as number).toFixed(1)}%</span>
+        </div>
+      ))}
     </div>
   );
 }
 
-function HostPerfChart({ data, loading }: { data: HostCpuRow[]; loading: boolean }) {
+function HostCpuLineChart({
+  rows,
+  keys,
+  loading,
+}: {
+  rows: Record<string, string | number>[];
+  keys: string[];
+  loading: boolean;
+}) {
   if (loading) {
     return (
       <div className='flex flex-1 items-center justify-center py-8'>
@@ -241,7 +247,7 @@ function HostPerfChart({ data, loading }: { data: HostCpuRow[]; loading: boolean
       </div>
     );
   }
-  if (!data.length) {
+  if (!rows.length || !keys.length) {
     return (
       <div className='flex flex-1 items-center justify-center py-8'>
         <p className='text-xs text-ink-faint'>No data</p>
@@ -249,71 +255,97 @@ function HostPerfChart({ data, loading }: { data: HostCpuRow[]; loading: boolean
     );
   }
 
-  const chartHeight = Math.max(120, data.length * 48 + 32);
-
   return (
-    <ResponsiveContainer width='100%' height={chartHeight}>
-      <BarChart
-        layout='vertical'
-        data={data}
-        barCategoryGap='15%'
-        margin={{ left: 0, right: 32, top: 16, bottom: 16 }}
-      >
-        <CartesianGrid
-          horizontal={false}
-          verticalValues={[25, 50, 75]}
-          stroke='#30363d'
-          strokeDasharray='3 3'
-        />
+    <ResponsiveContainer width='100%' height={260}>
+      <LineChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+        <CartesianGrid stroke='#30363d' strokeDasharray='3 3' vertical={false} />
         <XAxis
-          type='number'
-          domain={[0, 100]}
-          ticks={[0, 25, 50, 75, 100]}
+          dataKey='time'
           tick={TICK_STYLE}
-          axisLine={{ stroke: "#2a2a2a" }}
-          tickLine={{ stroke: "#2a2a2a" }}
-          tickFormatter={(v) => `${v}%`}
+          axisLine={false}
+          tickLine={false}
+          interval='preserveStartEnd'
         />
         <YAxis
-          type='category'
-          dataKey='name'
+          domain={[0, 100]}
           tick={TICK_STYLE}
-          axisLine={{ stroke: "#2a2a2a" }}
+          axisLine={false}
           tickLine={false}
-          width={100}
+          tickFormatter={(v) => `${v}%`}
+          width={36}
         />
-        <Tooltip content={HostTooltipContent} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-        <Bar dataKey='cpu' radius={[0, 3, 3, 0]} maxBarSize={18}>
-          {data.map((entry, i) => (
-            <Cell key={i} fill={cpuBarColor(entry.cpu)} />
-          ))}
-        </Bar>
-      </BarChart>
+        <Tooltip content={HostTooltipContent} />
+        <Legend wrapperStyle={{ fontSize: 10, color: "#8b949e" }} />
+        {keys.map((key, i) => (
+          <Line
+            key={key}
+            type='monotone'
+            dataKey={key}
+            stroke={LINE_COLORS[i % LINE_COLORS.length]}
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+          />
+        ))}
+      </LineChart>
     </ResponsiveContainer>
   );
 }
 
-// ── Notification row ──────────────────────────────────────────────────────────
+// ── Recent alerts table ───────────────────────────────────────────────────────
 
-const NOTIF_DOT: Record<string, string> = {
-  error: "bg-danger",
-  warning: "bg-warning",
-  info: "bg-[#2f81f7]",
+const LEVEL_CFG: Record<string, { label: string; cls: string }> = {
+  critical: {
+    label: "Critical",
+    cls: "bg-danger/10 text-danger border border-danger/20",
+  },
+  warning: {
+    label: "Warning",
+    cls: "bg-[#d29922]/10 text-[#d29922] border border-[#d29922]/20",
+  },
+  info: {
+    label: "Info",
+    cls: "bg-surface-high text-ink-faint border border-rim",
+  },
 };
 
-function NotifRow({ notif }: { notif: DashboardNotification }) {
-  const Icon = categoryIcon(notif.Category);
+function LevelBadge({ level }: { level: string }) {
+  const cfg = LEVEL_CFG[level] ?? { label: level, cls: "bg-surface-high text-ink-faint border border-rim" };
   return (
-    <div className='flex items-center gap-2.5 py-2 border-b border-rim last:border-0'>
-      <span
-        className={cn("size-1.5 rounded-full shrink-0", NOTIF_DOT[notif.Level ?? ""] ?? "bg-ink-faint")}
-      />
-      <Icon className='size-3.5 text-ink-faint shrink-0' />
-      <div className='flex-1 min-w-0'>
-        <p className='text-xs text-ink truncate'>{notif.Title ?? ""}</p>
-        {notif.Detail ? <p className='text-[0.6875rem] text-ink-faint truncate'>{notif.Detail}</p> : null}
+    <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide whitespace-nowrap", cfg.cls)}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function categoryLabel(cat: string | null | undefined): string {
+  if (cat === "machine") return "Machine";
+  if (cat === "apppool" || cat === "app_pool") return "App Pool";
+  if (cat === "iis") return "IIS";
+  if (cat === "service") return "Service";
+  return cat ?? "System";
+}
+
+function NotifRow({ notif }: { notif: DashboardNotification }) {
+  const CatIcon = categoryIcon(notif.Category);
+  return (
+    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100'>
+      <div className='px-4 py-2.5'>
+        <LevelBadge level={notif.Level ?? "info"} />
       </div>
-      <span className='text-xs text-ink-faint shrink-0 w-14 text-right'>{timeAgo(notif.CreatedAt)}</span>
+      <div className='px-4 py-2.5 min-w-0'>
+        <p className='text-xs font-medium text-ink truncate'>{notif.Title ?? ""}</p>
+        {notif.Detail ? (
+          <p className='mt-0.5 text-[0.6875rem] text-ink-faint truncate'>{notif.Detail}</p>
+        ) : null}
+      </div>
+      <div className='flex items-center gap-1.5 px-4 py-2.5'>
+        <CatIcon className='size-3 text-ink-faint shrink-0' />
+        <span className='text-xs text-ink-dim'>{categoryLabel(notif.Category)}</span>
+      </div>
+      <div className='px-4 py-2.5 text-right'>
+        <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt)}</span>
+      </div>
     </div>
   );
 }
@@ -324,7 +356,6 @@ export function Dashboard() {
   usePageTitle("Dashboard");
   const queryClient = useQueryClient();
   const { activeProject } = useProjectStore();
-  const greeting = "Welcome Back";
   const projectKey = activeProject?.Key ?? "";
 
   const [alerts, setAlerts] = useState<ActiveAlert[]>([]);
@@ -332,23 +363,26 @@ export function Dashboard() {
 
   // ── Fetch project machines to build Prometheus label filter ───────────────
 
-  const { data: machinesResp } = useQuery({
+  const { data: machines } = useQuery({
     queryKey: ["machines", projectKey],
-    queryFn: () => machineService.list(projectKey),
+    queryFn: async () => {
+      const { data } = await machineService.list(projectKey);
+      return data.machines ?? [];
+    },
     enabled: !!projectKey,
     staleTime: 60_000,
   });
 
-  const machineIds = useMemo(() => (machinesResp?.data?.machines ?? []).map((m) => m.ID), [machinesResp]);
+  const machineIds = useMemo(() => (machines ?? []).map((m) => m.ID), [machines]);
 
   // Map machine_id → hostname for the performance chart labels
   const hostNameMap = useMemo(() => {
     const map = new Map<number, string>();
-    for (const m of machinesResp?.data?.machines ?? []) {
+    for (const m of machines ?? []) {
       map.set(m.ID, m.Hostname?.toLowerCase() ?? String(m.ID));
     }
     return map;
-  }, [machinesResp]);
+  }, [machines]);
 
   // Stable string key for queryKey (avoids array reference churn)
   const idKey = machineIds
@@ -395,15 +429,19 @@ export function Dashboard() {
   });
   const { data: rCpuHost, isLoading: lCpuHost } = useQuery({
     queryKey: ["d-cpuhost", idKey],
-    queryFn: () => prometheusService.instant(PQ.cpuPerHost(machineIds)),
+    queryFn: () => {
+      const now = Math.floor(Date.now() / 1000);
+      return prometheusService.range(PQ.cpuPerHost(machineIds), now - 60 * 60, now, 60);
+    },
     ...qOpts,
   });
 
   // ── Notifications ─────────────────────────────────────────────────────────
 
   const { data: notifications = [] } = useQuery({
-    queryKey: ["dashboard-notifications"],
-    queryFn: () => dashboardService.getNotifications(),
+    queryKey: ["dashboard-notifications", projectKey],
+    queryFn: () => dashboardService.getNotifications(projectKey || undefined),
+    enabled: !!projectKey,
     refetchInterval: 5_000,
     select: (d) => d ?? [],
   });
@@ -442,11 +480,7 @@ export function Dashboard() {
               break;
             }
             case "notification": {
-              const n = msg.payload as DashboardNotification;
-              queryClient.setQueryData(
-                ["dashboard-notifications"],
-                (old: DashboardNotification[] | undefined) => [n, ...(old ?? [])].slice(0, 10),
-              );
+              queryClient.invalidateQueries({ queryKey: ["dashboard-notifications", projectKey] });
               break;
             }
           }
@@ -461,7 +495,7 @@ export function Dashboard() {
     return () => {
       ws?.close();
     };
-  }, [queryClient]);
+  }, [queryClient, projectKey]);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -472,16 +506,22 @@ export function Dashboard() {
   const memAvgVal = scalar(rMemAvg);
   const queueVal = scalar(rQueue);
 
-  // Per-host CPU data for bar chart - sorted worst (highest %) first
-  const hostPerfData = useMemo<HostCpuRow[]>(() => {
-    if (!rCpuHost?.length) return [];
-    return rCpuHost
-      .map((r) => ({
-        name: hostNameMap.get(Number(r.metric.machine_id)) ?? r.metric.machine_id ?? "?",
-        cpu: parseFloat(r.value[1]),
-      }))
-      .filter((r) => isFinite(r.cpu))
-      .sort((a, b) => b.cpu - a.cpu);
+  // Per-host CPU time-series — one row per timestamp, one key per machine
+  const hostPerfData = useMemo(() => {
+    if (!rCpuHost?.length) return { rows: [] as Record<string, string | number>[], keys: [] as string[] };
+    const keys = rCpuHost.map((s) => hostNameMap.get(Number(s.metric.machine_id)) ?? s.metric.machine_id ?? "?");
+    const timestamps = rCpuHost[0]?.values?.map(([ts]) => ts) ?? [];
+    const rows = timestamps.map((ts, i) => {
+      const row: Record<string, string | number> = {
+        time: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      rCpuHost.forEach((s, si) => {
+        const val = parseFloat(s.values[i]?.[1] ?? "0");
+        row[keys[si]] = isFinite(val) ? parseFloat(val.toFixed(1)) : 0;
+      });
+      return row;
+    });
+    return { rows, keys };
   }, [rCpuHost, hostNameMap]);
 
   const visibleAlerts = alerts.filter((a) => a.id && !dismissed.has(a.id));
@@ -507,12 +547,10 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Greeting */}
+      {/* Header */}
       <div className='mb-6'>
-        <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-2'>
-          {activeProject?.Name ?? "Dashboard"}
-        </p>
-        <h1 className='text-2xl font-semibold text-ink tracking-tight'>{greeting}</h1>
+        <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-2'>Overview</p>
+        <h1 className='text-2xl font-semibold text-ink tracking-tight'>{activeProject?.Name ?? "Dashboard"}</h1>
       </div>
 
       <div className='space-y-4'>
@@ -557,20 +595,20 @@ export function Dashboard() {
             </div>
           </div>
 
-          {/* Host Performance - per-host CPU sorted worst → best */}
+          {/* Host Performance — per-host CPU time series */}
           <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-3'>
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Host Performance CPU %
+              Host CPU %
             </p>
-            <HostPerfChart data={hostPerfData} loading={pl(lCpuHost)} />
+            <HostCpuLineChart rows={hostPerfData.rows} keys={hostPerfData.keys} loading={pl(lCpuHost)} />
           </div>
         </div>
 
-        {/* ── Row 3: Recent Activity ───────────────────────────────────── */}
-        <div className='rounded-lg border border-rim bg-surface px-4 pt-4 pb-2'>
-          <div className='flex items-center justify-between mb-3 pr-1'>
+        {/* ── Row 3: Recent Alerts ─────────────────────────────────────── */}
+        <div className='rounded-lg border border-rim overflow-hidden'>
+          <div className='flex items-center justify-between px-4 py-3 border-b border-rim bg-surface-alt'>
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Recent Activity
+              Recent Alerts
             </p>
             <Link
               to='/alerts'
@@ -580,14 +618,14 @@ export function Dashboard() {
             </Link>
           </div>
           {notifications.length > 0 ? (
-            <div className='max-h-72 overflow-y-auto pr-3'>
+            <div className='max-h-72 overflow-y-auto bg-surface'>
               {notifications.map((n, i) => (
                 <NotifRow key={n.ID ?? i} notif={n} />
               ))}
             </div>
           ) : (
-            <div className='flex h-24 items-center justify-center text-xs text-ink-faint'>
-              No recent activity
+            <div className='flex h-24 items-center justify-center text-xs text-ink-faint bg-surface'>
+              No recent alerts
             </div>
           )}
         </div>

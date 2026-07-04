@@ -7,10 +7,25 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// agentConn wraps a WebSocket connection with its own write mutex so concurrent
+// HTTP handlers (e.g. two simultaneous app-pool commands) cannot race on writes.
+// gorilla/websocket allows one concurrent reader and one concurrent writer; the
+// read loop in ws.go is the sole reader, so only writes need the extra mutex.
+type agentConn struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+func (a *agentConn) write(msg []byte) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.conn.WriteMessage(websocket.TextMessage, msg)
+}
+
 // Hub holds the live WebSocket connections from all agents, keyed by machine ID.
 type Hub struct {
 	mu    sync.RWMutex
-	conns map[uint]*websocket.Conn
+	conns map[uint]*agentConn
 }
 
 var (
@@ -21,7 +36,7 @@ var (
 func Get() *Hub {
 	once.Do(func() {
 		instance = &Hub{
-			conns: make(map[uint]*websocket.Conn),
+			conns: make(map[uint]*agentConn),
 		}
 	})
 	return instance
@@ -30,7 +45,7 @@ func Get() *Hub {
 func (h *Hub) Register(machineID uint, conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.conns[machineID] = conn
+	h.conns[machineID] = &agentConn{conn: conn}
 }
 
 func (h *Hub) Deregister(machineID uint) {
@@ -50,12 +65,12 @@ func (h *Hub) IsOnline(machineID uint) bool {
 // machine is not currently connected.
 func (h *Hub) Send(machineID uint, msg []byte) error {
 	h.mu.RLock()
-	conn, ok := h.conns[machineID]
+	ac, ok := h.conns[machineID]
 	h.mu.RUnlock()
 
 	if !ok {
 		return errors.New("machine not connected")
 	}
 
-	return conn.WriteMessage(websocket.TextMessage, msg)
+	return ac.write(msg)
 }

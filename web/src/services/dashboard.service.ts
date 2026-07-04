@@ -62,7 +62,7 @@ export interface DashboardMachine {
 export interface DashboardNotification {
   ID: number;
   CreatedAt: string;
-  Level: "info" | "warning" | "error" | string;
+  Level: "info" | "warning" | "critical" | string;
   Category: "machine" | "app_pool" | "service" | string;
   Title: string;
   Detail: string;
@@ -128,12 +128,28 @@ export const dashboardService = {
     }
   },
 
-  async getNotifications(): Promise<DashboardNotification[]> {
+  async getNotifications(projectKey?: string): Promise<DashboardNotification[]> {
     try {
-      const { data } = await api.get("/notifications", { params: { limit: 10 } });
+      const url = projectKey ? `/projects/${projectKey}/notifications` : "/notifications";
+      const { data } = await api.get(url, { params: { limit: 10 } });
       return (data.notifications as DashboardNotification[]) ?? [];
     } catch {
       return [];
+    }
+  },
+
+  async listNotifications(
+    projectKey: string,
+    params: { page: number; limit: number; level?: string },
+  ): Promise<{ notifications: DashboardNotification[]; total: number }> {
+    try {
+      const { data } = await api.get(`/projects/${projectKey}/notifications`, { params });
+      return {
+        notifications: (data.notifications as DashboardNotification[]) ?? [],
+        total: (data.total as number) ?? 0,
+      };
+    } catch {
+      return { notifications: [], total: 0 };
     }
   },
 };

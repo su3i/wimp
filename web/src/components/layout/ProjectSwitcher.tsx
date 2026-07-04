@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Layers, Check, Plus, X, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Layers, Check, Plus, X, Trash2, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/utils/cn'
 import { useProjectStore } from '@/store/project'
@@ -81,7 +82,7 @@ function DeleteProjectModal({
 
 // ── Project switcher ──────────────────────────────────────────────────────────
 
-export function ProjectSwitcher() {
+export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
   const [open, setOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
@@ -89,6 +90,7 @@ export function ProjectSwitcher() {
   const buttonRef = useRef<HTMLButtonElement>(null)
   const queryClient = useQueryClient()
 
+  const navigate = useNavigate()
   const { activeProject, setActiveProject, clearActiveProject } = useProjectStore()
 
   const { data: projects } = useQuery({
@@ -110,7 +112,12 @@ export function ProjectSwitcher() {
   function handleToggle() {
     if (!buttonRef.current) return
     const rect = buttonRef.current.getBoundingClientRect()
-    setPos({ top: rect.top, left: rect.right + 8 })
+    if (expanded) {
+      // Drop down below the trigger, flush with the sidebar's left edge
+      setPos({ top: rect.bottom + 4, left: rect.left - 8 })
+    } else {
+      setPos({ top: rect.top, left: rect.right + 8 })
+    }
     setOpen(v => !v)
   }
 
@@ -143,19 +150,31 @@ export function ProjectSwitcher() {
         onClick={handleToggle}
         title={activeProject?.Name ?? 'Select project'}
         className={cn(
-          'cursor-pointer w-full h-8 flex items-center justify-center rounded-md transition-colors',
+          'cursor-pointer w-full h-8 flex items-center rounded-md transition-colors',
+          expanded ? 'gap-2 px-2' : 'justify-center',
           'text-ink-dim hover:text-ink hover:bg-surface-high',
           open && 'bg-surface-high text-ink',
         )}
       >
         <Layers className='size-4 shrink-0 text-ink-faint' />
+        {expanded && (
+          <>
+            <span className='flex-1 text-xs font-medium truncate text-left'>
+              {activeProject?.Name ?? 'Select project'}
+            </span>
+            <ChevronDown className={cn('size-3.5 shrink-0 text-ink-faint transition-transform duration-150', open && 'rotate-180')} />
+          </>
+        )}
       </button>
 
       {open && createPortal(
         <div
           onMouseDown={e => e.stopPropagation()}
           style={{ position: 'fixed', top: pos.top, left: pos.left }}
-          className='z-[9999] w-64 rounded-md border border-rim bg-surface-highest shadow-[0_8px_24px_rgba(1,4,9,0.7)] overflow-hidden'
+          className={cn(
+            'z-[9999] rounded-md border border-rim bg-surface-highest shadow-[0_8px_24px_rgba(1,4,9,0.7)] overflow-hidden',
+            expanded ? 'w-52' : 'w-64',
+          )}
         >
           <div className='flex items-center justify-between border-b border-rim px-3.5 py-2.5'>
             <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
@@ -186,9 +205,12 @@ export function ProjectSwitcher() {
                       onClick={() => {
                         if (project.ID !== activeProject?.ID) {
                           queryClient.removeQueries({ predicate: q => q.queryKey[0] !== 'projects' })
+                          setActiveProject(project)
+                          setOpen(false)
+                          navigate('/')
+                        } else {
+                          setOpen(false)
                         }
-                        setActiveProject(project)
-                        setOpen(false)
                       }}
                       className={cn(
                         'cursor-pointer flex-1 flex items-center gap-2.5 px-3 py-2 text-left min-w-0',
@@ -201,11 +223,6 @@ export function ProjectSwitcher() {
                       <span className='flex-1 min-w-0 text-xs font-medium truncate'>
                         {project.Name}
                       </span>
-                      {isActive && (
-                        <span className='text-[0.5625rem] rounded px-1.5 py-0.5 bg-primary/10 text-primary font-semibold uppercase tracking-wide shrink-0'>
-                          active
-                        </span>
-                      )}
                     </button>
                     <button
                       type='button'

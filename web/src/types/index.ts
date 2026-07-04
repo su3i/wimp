@@ -156,3 +156,17 @@ export interface LokiResponse {
     result: LokiStream[]
   }
 }
+
+
+// ── Monitor ───────────────────────────────────────────────────────────────
+
+export interface Monitor {
+  ID: number
+  ProjectID: number
+  Name: string
+  URL: string
+  IntervalSeconds: number
+  Enabled: boolean
+  CreatedAt: string
+  UpdatedAt: string
+}

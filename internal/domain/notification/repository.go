@@ -6,6 +6,7 @@ type Filter struct {
 	Level      string
 	Category   string
 	MachineID  *uint
+	ProjectKey *string
 	UnreadOnly bool
 	Page       int
 	Limit      int

@@ -15,4 +15,5 @@ type CommonConfig struct {
 	DefaultAdminEmail    string `required:"true"`
 	DefaultAdminPassword string `required:"true"`
 	AlertmanagerUrl      string `required:"false"`
+	PrometheusUrl        string `required:"false"`
 }

@@ -169,6 +169,17 @@ func runningSites() []string {
 // ── Command execution ─────────────────────────────────────────────────────────
 
 func executeCommand(action, targetType, target string) (string, error) {
+	if targetType == "machine" {
+		switch action {
+		case "shutdown":
+			return run("shutdown", "/s", "/t", "5")
+		case "restart":
+			return run("shutdown", "/r", "/t", "5")
+		default:
+			return "", fmt.Errorf("unknown action: %s", action)
+		}
+	}
+
 	if !iisAvailable() {
 		return "", fmt.Errorf("IIS not available on this machine")
 	}
@@ -190,6 +201,21 @@ func executeCommand(action, targetType, target string) (string, error) {
 				return "", fmt.Errorf("stop failed: %w", err)
 			}
 			return run(cmd, "start", "apppool", nameArg)
+		default:
+			return "", fmt.Errorf("unknown action: %s", action)
+		}
+	case "site":
+		nameArg := fmt.Sprintf("/site.name:%s", target)
+		switch action {
+		case "start":
+			return run(cmd, "start", "site", nameArg)
+		case "stop":
+			return run(cmd, "stop", "site", nameArg)
+		case "restart":
+			if _, err := run(cmd, "stop", "site", nameArg); err != nil {
+				return "", fmt.Errorf("stop failed: %w", err)
+			}
+			return run(cmd, "start", "site", nameArg)
 		default:
 			return "", fmt.Errorf("unknown action: %s", action)
 		}

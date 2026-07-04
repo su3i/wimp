@@ -3,16 +3,19 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Layers, HardDrive, Server, AlertCircle, Clock, Plus, Copy, Check, Trash2 } from "lucide-react";
+import { Layers, HardDrive, Server, AlertCircle, Clock, Plus, Copy, Check, Trash2, Power, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { RowMenu } from "@/components/ui/RowMenu";
+import { Pagination } from "@/components/ui/Pagination";
 import { useProjectStore } from "@/store/project";
 import { machineService } from "@/services/machine.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import type { Machine } from "@/types";
+
+const PAGE_SIZE = 20;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -181,6 +184,7 @@ export function Machines() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const [page, setPage] = useState(1);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [downloadCommand, setDownloadCommand] = useState("");
@@ -189,6 +193,8 @@ export function Machines() {
   const [copied, setCopied] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Machine | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [commandTarget, setCommandTarget] = useState<{ machine: Machine; action: "shutdown" | "restart" } | null>(null);
+  const [commandLoading, setCommandLoading] = useState(false);
   const [uninstallCmd, setUninstallCmd] = useState<string | null>(null);
 
   const {
@@ -198,6 +204,7 @@ export function Machines() {
   } = useQuery({
     queryKey: ["machines", activeProject?.Key],
     enabled: !!activeProject,
+    refetchInterval: 5_000,
     queryFn: async () => {
       const { data } = await machineService.list(activeProject!.Key);
       return data.machines ?? [];
@@ -236,6 +243,23 @@ export function Machines() {
     }
   }
 
+  async function handleMachineCommand() {
+    if (!commandTarget || !activeProject) return;
+    setCommandLoading(true);
+    try {
+      await machineService.command(activeProject.Key, commandTarget.machine.ID, commandTarget.action);
+      queryClient.invalidateQueries({ queryKey: ["machines", activeProject.Key] });
+      setCommandTarget(null);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Command failed. Please try again.";
+      toast.error(msg);
+    } finally {
+      setCommandLoading(false);
+    }
+  }
+
   async function handleCopy(key: string, text: string) {
     await navigator.clipboard.writeText(text);
     setCopied(key);
@@ -243,6 +267,10 @@ export function Machines() {
   }
 
   if (!activeProject) return <NoProjectSelected />;
+
+  const total = machines?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const paginated = machines?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? [];
 
   return (
     <div className='space-y-5'>
@@ -272,13 +300,13 @@ export function Machines() {
         <div className='rounded-lg border border-rim overflow-hidden'>
           <div className='grid grid-cols-[2fr_2fr_1fr_1fr_auto] border-b border-rim bg-surface-alt'>
             <div className={TH}>Hostname</div>
-            <div className={TH}>IP Addresses</div>
+            <div className={TH}>IP Address(es)</div>
             <div className={TH}>Status</div>
             <div className={TH}>Last Ping</div>
             <div className='px-4 py-2.5' />
           </div>
 
-          {machines.map((machine) => {
+          {(paginated as Machine[]).map((machine) => {
             const ipv4s = filterIPv4(machine.IPs);
             return (
               <div
@@ -314,6 +342,18 @@ export function Machines() {
                   <RowMenu
                     items={[
                       {
+                        icon: RotateCw,
+                        label: "Restart",
+                        onClick: () => setCommandTarget({ machine, action: "restart" }),
+                      },
+                      {
+                        icon: Power,
+                        label: "Shutdown",
+                        variant: "danger",
+                        onClick: () => setCommandTarget({ machine, action: "shutdown" }),
+                      },
+                      { type: "separator" },
+                      {
                         icon: Trash2,
                         label: "Delete",
                         variant: "danger",
@@ -328,6 +368,14 @@ export function Machines() {
         </div>
       )}
 
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        onPageChange={setPage}
+        itemLabel='host'
+      />
+
       {/* Delete confirm */}
       <ConfirmModal
         open={!!deleteTarget}
@@ -339,6 +387,21 @@ export function Machines() {
         loading={deleting}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
+      />
+
+      {/* Shutdown/restart confirm */}
+      <ConfirmModal
+        open={!!commandTarget}
+        title={commandTarget?.action === "shutdown" ? "Shutdown Host" : "Restart Host"}
+        description={
+          commandTarget?.action === "shutdown"
+            ? `Are you sure you want to shut down "${commandTarget?.machine.Hostname || "this host"}"? It will go offline until someone powers it back on.`
+            : `Are you sure you want to restart "${commandTarget?.machine.Hostname || "this host"}"? It will be briefly unreachable.`
+        }
+        confirmLabel={commandTarget?.action === "shutdown" ? "Shutdown" : "Restart"}
+        loading={commandLoading}
+        onClose={() => setCommandTarget(null)}
+        onConfirm={() => void handleMachineCommand()}
       />
 
       {/* New machine confirm */}

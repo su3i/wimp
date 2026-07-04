@@ -81,8 +81,14 @@ func AgentWebSocket(c *gin.Context) {
 		m.Status = machineDomain.Offline
 		repo.Update(m)
 		log.Printf("machine (%d) agent disconnected", m.ID)
-		go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryMachine,
-			"Machine disconnected", m.Hostname+" went offline", cfg)
+		if cache.IsMachineActionPending(m.ID) {
+			cache.ClearMachineActionPending(m.ID)
+			go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
+				"Machine restarting", m.Hostname+" is restarting", cfg)
+		} else {
+			go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryMachine,
+				"Machine disconnected", m.Hostname+" went offline", cfg)
+		}
 	}()
 
 	for {
@@ -138,6 +144,7 @@ func AgentWebSocket(c *gin.Context) {
 			stoppedPools, startedPools, _ := appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
 			cache.InvalidatePoolsByMachine(m.ID)
 			siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
+			cache.InvalidateSitesByMachine(m.ID)
 			for _, name := range stoppedPools {
 				go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryAppPool,
 					"App pool stopped", name+" stopped on "+m.Hostname, cfg)

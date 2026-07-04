@@ -1,15 +1,20 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	authorizationService "github.com/su3i/wimp/internal/application/authorization"
 	machineService "github.com/su3i/wimp/internal/application/machine"
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	authorizationDomain "github.com/su3i/wimp/internal/domain/authorization"
+	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
 )
@@ -163,4 +168,69 @@ func GetUninstallCommand(c *gin.Context) {
 
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusOK, cmd)
+}
+
+func MachineCommand(action string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		projectKey := c.Param("key")
+
+		allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+		if err != nil || !allow {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		machineID, err := strconv.ParseUint(c.Param("machineId"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid machine id"})
+			return
+		}
+
+		if _, _, err := machineService.GetBootstrapToken(uint(machineID), projectKey, "", "", config.Database()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
+			return
+		}
+
+		if !hub.Get().IsOnline(uint(machineID)) {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "machine is not connected"})
+			return
+		}
+
+		cmdID := uuid.New().String()
+		ch := hub.RegisterCommand(cmdID)
+		defer hub.DeregisterCommand(cmdID)
+
+		payload, _ := json.Marshal(protocol.CommandPayload{
+			CommandID:  cmdID,
+			Action:     action,
+			TargetType: "machine",
+		})
+		msg, _ := json.Marshal(protocol.Message{
+			Type:    protocol.TypeCommand,
+			Payload: payload,
+		})
+
+		if err := hub.Get().Send(uint(machineID), msg); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to send command"})
+			return
+		}
+
+		cache.SetMachineActionPending(uint(machineID), action)
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), commandTimeout)
+		defer cancel()
+
+		select {
+		case result := <-ch:
+			if result.Success {
+				c.JSON(http.StatusOK, gin.H{"message": "success", "output": result.Output})
+			} else {
+				cache.ClearMachineActionPending(uint(machineID))
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": result.Error, "output": result.Output})
+			}
+		case <-ctx.Done():
+			cache.ClearMachineActionPending(uint(machineID))
+			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "command timed out"})
+		}
+	}
 }
