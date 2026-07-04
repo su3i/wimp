@@ -594,11 +594,6 @@ export function ApplicationDetail() {
           {(() => {
             const total = app.app_pools?.length ?? 0;
             const healthy = (app.app_pools ?? []).filter((p) => p.State === "Started").length;
-            const healthColor =
-              total === 0 ? "text-ink-faint"
-              : healthy === total ? "text-success"
-              : healthy === 0 ? "text-danger"
-              : "text-warning";
             const dotColor =
               total === 0 ? "bg-ink-faint"
               : healthy === total ? "bg-success"
