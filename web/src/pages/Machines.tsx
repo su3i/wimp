@@ -371,9 +371,7 @@ export function Machines() {
       <Pagination
         page={page}
         totalPages={totalPages}
-        total={total}
         onPageChange={setPage}
-        itemLabel='host'
       />
 
       {/* Delete confirm */}

@@ -218,9 +218,7 @@ export function SitesTab({
       <Pagination
         page={page}
         totalPages={totalPages}
-        total={data?.total}
         onPageChange={setPage}
-        itemLabel='site'
       />
     </div>
   )

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Activity, Plus, Trash2, AlertCircle, ExternalLink,
-  ShieldCheck, ShieldAlert, Wifi, WifiOff, HelpCircle,
+  ShieldCheck, ShieldAlert, HelpCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -324,9 +324,6 @@ export function Monitors() {
 
   if (!activeProject) return <NoProjectSelected />
 
-  const up = (monitors ?? []).filter(m => statusFor(m.ID) === 'up').length
-  const down = (monitors ?? []).filter(m => statusFor(m.ID) === 'down').length
-
   return (
     <div className='space-y-5'>
       {/* Header */}
@@ -352,24 +349,6 @@ export function Monitors() {
           </p>
         </div>
       )}
-
-      {/* Summary pills */}
-      {/* {!!monitors?.length && (
-        <div className='flex items-center gap-2'>
-          <div className='flex items-center gap-1.5 rounded-md border border-rim bg-surface px-3 py-1.5'>
-            <Wifi className='size-3 text-success' />
-            <span className='text-xs font-medium text-ink'>{up} up</span>
-          </div>
-          <div className='flex items-center gap-1.5 rounded-md border border-rim bg-surface px-3 py-1.5'>
-            <WifiOff className='size-3 text-danger' />
-            <span className='text-xs font-medium text-ink'>{down} down</span>
-          </div>
-          <div className='flex items-center gap-1.5 rounded-md border border-rim bg-surface px-3 py-1.5'>
-            <Activity className='size-3 text-ink-faint' />
-            <span className='text-xs font-medium text-ink'>{monitors.length} total</span>
-          </div>
-        </div>
-      )} */}
 
       {/* Table */}
       {isLoading ? (

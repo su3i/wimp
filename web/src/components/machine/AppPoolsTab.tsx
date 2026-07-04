@@ -215,9 +215,7 @@ export function AppPoolsTab({ projectKey, machineId }: { projectKey: string; mac
       <Pagination
         page={page}
         totalPages={totalPages}
-        total={data?.total}
         onPageChange={setPage}
-        itemLabel='pool'
       />
     </div>
   );

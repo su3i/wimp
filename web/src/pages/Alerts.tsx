@@ -221,9 +221,7 @@ export function Alerts() {
       <Pagination
         page={page}
         totalPages={totalPages}
-        total={total}
         onPageChange={setPage}
-        itemLabel='alert'
       />
     </div>
   );

@@ -311,9 +311,7 @@ export function Applications() {
       <Pagination
         page={page}
         totalPages={totalPages}
-        total={appTotal}
         onPageChange={setPage}
-        itemLabel='application'
       />
 
       <ConfirmModal
