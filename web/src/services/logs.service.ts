@@ -17,4 +17,10 @@ export const logsService = {
 
   listFiles: (projectKey: string, appId: number) =>
     api.get<{ message: string; files: string[] }>(`/projects/${projectKey}/applications/${appId}/files`),
+
+  downloadLogs: (projectKey: string, machineId: number, logPath: string) =>
+    api.get(`/projects/${projectKey}/machines/${machineId}/logs/download`, {
+      params: { path: logPath },
+      responseType: 'blob',
+    }),
 }

@@ -16,4 +16,5 @@ type Machine struct {
 	Token          string        `gorm:"unique;not null"`
 	TokenExpiresAt time.Time
 	LastSeenAt     *time.Time
+	AgentVersion   string `gorm:"default:null"`
 }

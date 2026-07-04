@@ -80,6 +80,8 @@ func InitializeRouter() *gin.Engine {
 	router.DELETE("/projects/:key/machines/:machineId", middleware.AuthMiddleware(), handlers.DeleteMachine)
 	router.POST("/projects/:key/machines/:machineId/shutdown", middleware.AuthMiddleware(), handlers.MachineCommand("shutdown"))
 	router.POST("/projects/:key/machines/:machineId/restart", middleware.AuthMiddleware(), handlers.MachineCommand("restart"))
+	router.POST("/projects/:key/machines/:machineId/agent/update", middleware.AuthMiddleware(), handlers.UpdateAgentCommand)
+	router.GET("/projects/:key/machines/:machineId/logs/download", middleware.AuthMiddleware(), handlers.DownloadLogs)
 
 	// Applications (project-scoped)
 	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)

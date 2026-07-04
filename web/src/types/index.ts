@@ -78,6 +78,7 @@ export interface Machine {
   Token: string
   TokenExpiresAt: string
   LastSeenAt: string | null
+  AgentVersion: string
   CreatedAt: string
   UpdatedAt: string
 }

@@ -25,7 +25,7 @@ jobs:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o agent.exe ./cmd/agent/
+        run: go build -ldflags="-s -w -X github.com/su3i/wimp/internal/agent.Version=${{ github.event.inputs.version }}" -o agent.exe ./cmd/agent/
 
       - name: Create release
         uses: softprops/action-gh-release@v2

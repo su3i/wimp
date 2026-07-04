@@ -69,7 +69,7 @@ function Skeleton() {
 
 const STATUS_FILTERS: StatusFilter[] = ["All", "Started", "Stopped"];
 
-export function AppPoolsTab({ projectKey, machineId }: { projectKey: string; machineId: number }) {
+export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: string; machineId: number; isOffline?: boolean }) {
   const [acting, setActing] = useState<Record<number, string>>({});
   const [status, setStatus] = useState<StatusFilter>("Started");
   const [page, setPage] = useState(1);
@@ -203,7 +203,7 @@ export function AppPoolsTab({ projectKey, machineId }: { projectKey: string; mac
                 </div>
 
                 <div className='flex items-center justify-center px-2 py-3'>
-                  <RowMenu items={menuItems} disabled={!!busy} />
+                  <RowMenu items={menuItems} disabled={!!busy || !!isOffline} />
                 </div>
               </div>
             );

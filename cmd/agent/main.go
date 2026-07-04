@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	svcName        = "wimp-agent"
 	svcDisplayName = "wimp Agent"
 	svcDescription = "wimp Windows Infrastructure Management Agent"
 )
@@ -20,7 +19,7 @@ func main() {
 	}
 
 	svcConfig := &service.Config{
-		Name:        svcName,
+		Name:        agent.ServiceName,
 		DisplayName: svcDisplayName,
 		Description: svcDescription,
 	}

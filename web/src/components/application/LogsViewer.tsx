@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Terminal, ChevronDown, Maximize2, Minimize2 } from "lucide-react";
+import { RefreshCw, Terminal, ChevronDown, Maximize2, Minimize2, Download } from "lucide-react";
+import { toast } from "sonner";
 import { logsService } from "@/services/logs.service";
 import { cn } from "@/utils/cn";
 
@@ -123,6 +124,7 @@ export function LogsViewer({
   const [limit, setLimit] = useState<number>(100);
   const [atBottom, setAtBottom] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // When machine changes, reset pool selection
@@ -224,6 +226,32 @@ export function LogsViewer({
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
   }
 
+  async function handleDownload() {
+    if (!machineId || !filename) {
+      toast.error("Select a host and log file before downloading.");
+      return;
+    }
+    setDownloading(true);
+    try {
+      const resp = await logsService.downloadLogs(projectKey, Number(machineId), filename);
+      const blob = new Blob([resp.data as BlobPart], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const hostname = machines.find((m) => m.id === Number(machineId))?.hostname ?? String(machineId);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `logs-${hostname}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Failed to download logs.";
+      toast.error(msg);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -275,6 +303,16 @@ export function LogsViewer({
         />
 
         <div className='ml-auto flex items-center gap-1.5'>
+          <button
+            type='button'
+            onClick={() => void handleDownload()}
+            disabled={downloading || !machineId || !filename}
+            className='flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-rim bg-surface text-xs text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+            title='Download logs as zip'
+          >
+            <Download className={cn("size-3", downloading && "animate-pulse")} />
+            {downloading ? "Downloading…" : "Download"}
+          </button>
           <button
             type='button'
             onClick={() => void refetch()}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Server, Clock, Power, RotateCw } from 'lucide-react'
+import { ArrowLeft, Clock, Power, RotateCw, Server } from 'lucide-react'
 import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
@@ -31,10 +31,10 @@ function formatLastPing(lastSeenAt: string | null) {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-const machineStatusCfg: Record<MachineStatus, { dot: string; text: string; label: string }> = {
-  online:  { dot: 'bg-success', text: 'text-success', label: 'Online'  },
-  offline: { dot: 'bg-danger',  text: 'text-danger',  label: 'Offline' },
-  pending: { dot: 'bg-warning', text: 'text-warning', label: 'Pending' },
+const machineStatusCfg: Record<MachineStatus, { dot: string; label: string; text: string; pill: string }> = {
+  online:  { dot: 'bg-success', label: 'Online',  text: 'text-success', pill: 'bg-success/10 text-success'  },
+  offline: { dot: 'bg-danger',  label: 'Offline', text: 'text-danger',  pill: 'bg-danger/10 text-danger'   },
+  pending: { dot: 'bg-warning', label: 'Pending', text: 'text-warning', pill: 'bg-warning/10 text-warning' },
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -72,6 +72,7 @@ export function MachineDetail() {
   usePageTitle(machine?.Hostname?.toLowerCase() ?? undefined)
   const machineCfg = machine ? machineStatusCfg[machine.Status] : null
   const ipv4s = machine ? filterIPv4(machine.IPs) : []
+  const isOffline = machine?.Status === 'offline'
 
   async function handleMachineCommand() {
     if (!confirmAction || !activeProject) return
@@ -101,65 +102,70 @@ export function MachineDetail() {
         Hosts
       </button>
 
-      {/* Machine header card */}
-      <div className="rounded-lg border border-rim bg-surface px-5 py-4">
-        {machine ? (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-rim bg-surface-high">
-                <Server className="size-4 text-ink-faint" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="font-mono text-sm font-semibold text-ink truncate">{machine.Hostname?.toLowerCase() || 'Awaiting connection...'}</h1>
-                <div className="flex items-center gap-3 mt-0.5 text-[0.6875rem] text-ink-faint">
-                  {ipv4s.length > 0 && <span className="font-mono">{ipv4s.join(' / ')}</span>}
-                  {ipv4s.length > 0 && <span>·</span>}
-                  <span className="flex items-center gap-1">
-                    <Clock className="size-3" />
-                    {formatLastPing(machine.LastSeenAt)}
+      {/* Machine header */}
+      {machine ? (
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg border border-rim bg-surface-alt">
+              <Server className="size-4 text-ink-faint" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 mb-3">
+                <h1 className="font-mono text-base font-semibold text-ink">{machine.Hostname?.toLowerCase() || 'Awaiting connection...'}</h1>
+                {machineCfg && (
+                  <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium', machineCfg.text)}>
+                    <span className={cn('size-1.5 rounded-full shrink-0', machineCfg.dot)} />
+                    {machineCfg.label}
                   </span>
-                </div>
+                )}
               </div>
-            </div>
-            <div className="flex items-center gap-4 shrink-0">
-              {machineCfg && (
-                <div className="flex items-center gap-2">
-                  <span className={cn('size-2 rounded-full', machineCfg.dot)} />
-                  <span className={cn('text-xs font-medium', machineCfg.text)}>{machineCfg.label}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={actingOnMachine}
-                  onClick={() => setConfirmAction('restart')}
-                >
-                  <RotateCw className="size-3" />
-                  Restart
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  disabled={actingOnMachine}
-                  onClick={() => setConfirmAction('shutdown')}
-                >
-                  <Power className="size-3" />
-                  Shutdown
-                </Button>
+              <div className="space-y-1.5">
+                {ipv4s.length > 0 && (
+                  <p className="font-mono text-xs text-ink-faint">{ipv4s.join(' · ')}</p>
+                )}
+                <p className="flex items-center gap-1.5 text-xs text-ink-faint mt-3">
+                  <Clock className="size-3 shrink-0" />
+                  {formatLastPing(machine.LastSeenAt)}
+                </p>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="flex items-center gap-3.5 animate-pulse">
-            <div className="size-9 rounded-lg border border-rim bg-surface-high" />
+          <div className="flex items-center gap-2 shrink-0 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={actingOnMachine || isOffline}
+              onClick={() => setConfirmAction('restart')}
+            >
+              <RotateCw className="size-3" />
+              Restart
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={actingOnMachine || isOffline}
+              onClick={() => setConfirmAction('shutdown')}
+            >
+              <Power className="size-3" />
+              Shutdown
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-4 animate-pulse">
+          <div className="mt-1 size-9 rounded-lg border border-rim bg-surface-high shrink-0" />
+          <div>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="h-4 w-48 rounded bg-surface-high" />
+              <div className="h-5 w-14 rounded-full bg-surface-high" />
+            </div>
             <div className="space-y-1.5">
-              <div className="h-3.5 w-48 rounded bg-surface-high" />
-              <div className="h-2.5 w-32 rounded bg-surface-high" />
+              <div className="h-2.5 w-28 rounded bg-surface-high" />
+              <div className="h-2.5 w-20 rounded bg-surface-high" />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-rim">
@@ -180,15 +186,17 @@ export function MachineDetail() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'metrics' && (
-        <MetricsTab machineId={numericId} />
-      )}
-      {activeTab === 'pools' && activeProject && (
-        <AppPoolsTab projectKey={activeProject.Key} machineId={numericId} />
-      )}
-      {activeTab === 'sites' && activeProject && (
-        <SitesTab projectKey={activeProject.Key} machineId={numericId} />
-      )}
+      <div className={cn(isOffline && 'opacity-40 pointer-events-none select-none')}>
+        {activeTab === 'metrics' && (
+          <MetricsTab machineId={numericId} />
+        )}
+        {activeTab === 'pools' && activeProject && (
+          <AppPoolsTab projectKey={activeProject.Key} machineId={numericId} isOffline={isOffline} />
+        )}
+        {activeTab === 'sites' && activeProject && (
+          <SitesTab projectKey={activeProject.Key} machineId={numericId} isOffline={isOffline} />
+        )}
+      </div>
 
       <ConfirmModal
         open={!!confirmAction}

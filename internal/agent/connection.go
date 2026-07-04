@@ -1,9 +1,13 @@
 package agent
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -75,6 +79,7 @@ func (a *Agent) dial(ctx context.Context) error {
 			MachineId: a.cfg.MachineId,
 			Hostname:  hostname,
 			IPs:       localIPs(),
+			Version:   Version,
 		}),
 	}); err != nil {
 		return fmt.Errorf("registration send: %w", err)
@@ -196,8 +201,80 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 					Payload: mustMarshal(result),
 				})
 			}(req)
+
+		case protocol.TypeDownloadLogs:
+			var req protocol.DownloadLogsPayload
+			if err := json.Unmarshal(msg.Payload, &req); err != nil {
+				continue
+			}
+			go func(r protocol.DownloadLogsPayload) {
+				result := protocol.DownloadLogsResultPayload{RequestID: r.RequestID}
+				data, err := zipLogFolder(r.LogPath)
+				if err != nil {
+					result.Error = err.Error()
+				} else {
+					result.Data = base64.StdEncoding.EncodeToString(data)
+				}
+				wc.writeJSON(protocol.Message{ //nolint:errcheck
+					Type:    protocol.TypeDownloadLogsResult,
+					Payload: mustMarshal(result),
+				})
+			}(req)
 		}
 	}
+}
+
+const (
+	maxFolderBytes int64 = 500 * 1024 * 1024 // 500 MB uncompressed
+	maxZipBytes    int   = 100 * 1024 * 1024  // 100 MB zipped
+)
+
+func zipLogFolder(logFilePath string) ([]byte, error) {
+	dir := filepath.Dir(logFilePath)
+
+	var folderSize int64
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			folderSize += info.Size()
+		}
+		return nil
+	})
+	if folderSize > maxFolderBytes {
+		return nil, fmt.Errorf("log folder exceeds 500 MB limit (%.0f MB uncompressed)", float64(folderSize)/1024/1024)
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, path)
+		fw, err := zw.Create(rel)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(fw, f)
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("zip error: %w", err)
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+
+	if buf.Len() > maxZipBytes {
+		return nil, fmt.Errorf("compressed archive exceeds 100 MB limit (%.0f MB)", float64(buf.Len())/1024/1024)
+	}
+
+	return buf.Bytes(), nil
 }
 
 func listFiles(dirPath string) ([]string, error) {

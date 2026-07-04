@@ -31,18 +31,9 @@ function mids(ids: number[]) {
 }
 
 const PQ = {
-  // % of last 24h that IIS (W3SVC) was in running state, averaged across all hosts
-  serviceUptime: (ids: number[]) =>
-    `avg(avg_over_time(windows_service_state{${mids(ids)},name="W3SVC",state="running"}[24h])) * 100`,
-
   // Total IIS request rate across all hosts and sites (req/s)
   throughput: (ids: number[]) => `sum(rate(windows_iis_requests_total{${mids(ids)}}[5m]))`,
 
-  // Rejected requests as % of total - proxy for error rate until log tailing
-  errorRate: (ids: number[]) =>
-    `sum(rate(windows_iis_requests_rejected_total{${mids(
-      ids,
-    )}}[5m])) / sum(rate(windows_iis_requests_total{${mids(ids)}}[5m])) * 100`,
 
   // Average CPU % across all project hosts
   cpuAvg: (ids: number[]) =>
@@ -54,8 +45,11 @@ const PQ = {
       ids,
     )}} * 100))`,
 
-  // Total IIS request queue depth across all hosts
-  queueDepth: (ids: number[]) => `sum(windows_iis_requests_queued{${mids(ids)}})`,
+  networkIn: (ids: number[]) =>
+    `sum(rate(windows_net_bytes_received_total{${mids(ids)},nic!~".*isatap.*"}[5m]))`,
+
+  networkOut: (ids: number[]) =>
+    `sum(rate(windows_net_bytes_sent_total{${mids(ids)},nic!~".*isatap.*"}[5m]))`,
 
   // Per-host CPU %, one result per machine_id label - used for comparison chart
   cpuPerHost: (ids: number[]) =>
@@ -81,8 +75,11 @@ function fmtRate(v: number) {
   return `${v.toFixed(1)}/s`;
 }
 
-function fmtQueue(v: number) {
-  return Math.round(v).toLocaleString();
+function fmtBytes(v: number) {
+  if (v >= 1_073_741_824) return `${(v / 1_073_741_824).toFixed(1)} GB/s`;
+  if (v >= 1_048_576) return `${(v / 1_048_576).toFixed(1)} MB/s`;
+  if (v >= 1_024) return `${(v / 1_024).toFixed(1)} KB/s`;
+  return `${Math.round(v)} B/s`;
 }
 
 function timeAgo(dateStr: string | null | undefined): string {
@@ -163,6 +160,62 @@ function MetricCard({
         {loading ? "-" : (value ?? "N/A")}
       </span>
       {sub && <span className='text-[0.625rem] text-ink-faint'>{sub}</span>}
+    </div>
+  );
+}
+
+// ── Critical events card ──────────────────────────────────────────────────────
+
+function CriticalEventsCard({ count }: { count: number }) {
+  const hot = count > 0;
+  return (
+    <div className={cn(
+      'rounded-lg border bg-surface px-5 py-5 flex flex-col gap-3 transition-colors',
+      hot ? 'border-danger/40 bg-danger/5' : 'border-rim',
+    )}>
+      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+        Critical Events
+      </span>
+      <span className={cn('text-3xl font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
+        {count}
+      </span>
+      <span className='text-[0.625rem] text-ink-faint'>in the last hour</span>
+    </div>
+  );
+}
+
+// ── Bandwidth card ────────────────────────────────────────────────────────────
+
+function BandwidthCard({
+  inVal,
+  outVal,
+  loading,
+}: {
+  inVal: number | null;
+  outVal: number | null;
+  loading: boolean;
+}) {
+  return (
+    <div className='rounded-lg border border-rim bg-surface px-5 py-5 flex flex-col gap-3'>
+      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+        Bandwidth
+      </span>
+      <div className='flex items-end gap-4'>
+        <div className='flex flex-col gap-1'>
+          <span className={cn('text-2xl font-semibold font-mono leading-none', loading ? 'text-ink-faint' : 'text-ink')}>
+            {loading ? '-' : (inVal != null ? fmtBytes(inVal) : 'N/A')}
+            <span className='ml-1.5 text-[0.625rem] text-ink-faint'>IN</span>
+          </span>
+        </div>
+        <span className='text-ink-faint/40 text-lg font-light mb-0.5'>/</span>
+        <div className='flex flex-col gap-1'>
+          <span className={cn('text-2xl font-semibold font-mono leading-none', loading ? 'text-ink-faint' : 'text-ink')}>
+            {loading ? '-' : (outVal != null ? fmtBytes(outVal) : 'N/A')}
+            <span className='ml-1.5 text-[0.625rem] text-ink-faint'>OUT</span>
+          </span>
+        </div>
+      </div>
+      <span className='text-[0.625rem] text-ink-faint'>last 5 min</span>
     </div>
   );
 }
@@ -397,19 +450,9 @@ export function Dashboard() {
 
   // ── Prometheus instant queries (all project-level aggregates) ─────────────
 
-  const { data: rUptime, isLoading: lUptime } = useQuery({
-    queryKey: ["d-uptime", idKey],
-    queryFn: () => prometheusService.instant(PQ.serviceUptime(machineIds)),
-    ...qOpts,
-  });
   const { data: rThroughput, isLoading: lThroughput } = useQuery({
     queryKey: ["d-throughput", idKey],
     queryFn: () => prometheusService.instant(PQ.throughput(machineIds)),
-    ...qOpts,
-  });
-  const { data: rError, isLoading: lError } = useQuery({
-    queryKey: ["d-error", idKey],
-    queryFn: () => prometheusService.instant(PQ.errorRate(machineIds)),
     ...qOpts,
   });
   const { data: rCpuAvg, isLoading: lCpuAvg } = useQuery({
@@ -422,9 +465,14 @@ export function Dashboard() {
     queryFn: () => prometheusService.instant(PQ.memAvg(machineIds)),
     ...qOpts,
   });
-  const { data: rQueue, isLoading: lQueue } = useQuery({
-    queryKey: ["d-queue", idKey],
-    queryFn: () => prometheusService.instant(PQ.queueDepth(machineIds)),
+  const { data: rNetIn, isLoading: lNetIn } = useQuery({
+    queryKey: ["d-net-in", idKey],
+    queryFn: () => prometheusService.instant(PQ.networkIn(machineIds)),
+    ...qOpts,
+  });
+  const { data: rNetOut, isLoading: lNetOut } = useQuery({
+    queryKey: ["d-net-out", idKey],
+    queryFn: () => prometheusService.instant(PQ.networkOut(machineIds)),
     ...qOpts,
   });
   const { data: rCpuHost, isLoading: lCpuHost } = useQuery({
@@ -499,12 +547,17 @@ export function Dashboard() {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const uptimeVal = scalar(rUptime);
+  const criticalLastHour = useMemo(() => {
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    return notifications.filter(
+      (n) => n.Level === 'critical' && new Date(n.CreatedAt).getTime() >= cutoff,
+    ).length;
+  }, [notifications]);
   const throughputVal = scalar(rThroughput);
-  const errorVal = scalar(rError);
   const cpuAvgVal = scalar(rCpuAvg);
   const memAvgVal = scalar(rMemAvg);
-  const queueVal = scalar(rQueue);
+  const netInVal = scalar(rNetIn);
+  const netOutVal = scalar(rNetOut);
 
   // Per-host CPU time-series — one row per timestamp, one key per machine
   const hostPerfData = useMemo(() => {
@@ -555,30 +608,18 @@ export function Dashboard() {
 
       <div className='space-y-4'>
         {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
-        <div className='grid grid-cols-4 gap-4'>
-          <MetricCard
-            label='Service Uptime'
-            value={uptimeVal != null ? fmtPct(uptimeVal) : null}
-            sub='24h average across hosts'
-            loading={pl(lUptime)}
-          />
+        <div className='grid grid-cols-[1fr_1fr_1.5fr] gap-4'>
+          <CriticalEventsCard count={criticalLastHour} />
           <MetricCard
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}
             sub='last 5 min'
             loading={pl(lThroughput)}
           />
-          <MetricCard
-            label='Error Rate'
-            value={errorVal != null ? fmtPct(errorVal) : null}
-            sub='rejected / total requests'
-            loading={pl(lError)}
-          />
-          <MetricCard
-            label='Queue Depth'
-            value={queueVal != null ? fmtQueue(queueVal) : null}
-            sub='current queued requests'
-            loading={pl(lQueue)}
+          <BandwidthCard
+            inVal={netInVal}
+            outVal={netOutVal}
+            loading={pl(lNetIn) || pl(lNetOut)}
           />
         </div>
 

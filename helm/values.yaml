@@ -36,6 +36,8 @@ persistence:
 config:
   appEnv: production
   agentVersion: "0.0.5"
+  autoUpdateAgent: false
+  autoUpdateAgentProject: "test-environment"  # project key that gets auto-updates even when autoUpdateAgent is false
   enforceMfa: false
 
   # REQUIRED - generate strong random values before deploying

@@ -180,6 +180,15 @@ func executeCommand(action, targetType, target string) (string, error) {
 		}
 	}
 
+	if targetType == "agent" {
+		switch action {
+		case "update":
+			return updateAgent(target)
+		default:
+			return "", fmt.Errorf("unknown action: %s", action)
+		}
+	}
+
 	if !iisAvailable() {
 		return "", fmt.Errorf("IIS not available on this machine")
 	}

@@ -12,8 +12,6 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
-const agentReleaseBaseURL = "https://github.com/su3i/wimp/releases/download"
-
 type bootstrapData struct {
 	ControlPlaneUrl   string
 	AgentExeUrl       string
@@ -56,7 +54,7 @@ func Bootstrap(c *gin.Context) {
 	}
 
 	cfg := config.Common()
-	agentExeUrl := fmt.Sprintf("%s/v%s/agent.exe", agentReleaseBaseURL, cfg.AgentVersion)
+	agentExeUrl := fmt.Sprintf("%s/v%s/agent.exe", config.AgentReleaseBaseURL, cfg.AgentVersion)
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, bootstrapData{

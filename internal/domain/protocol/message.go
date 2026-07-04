@@ -11,8 +11,10 @@ const (
 	TypeCommand        = "command"
 	TypeCommandResult  = "command_result"
 	TypeFluentConfig   = "fluent_config"
-	TypeListFiles      = "list_files"
-	TypeListFilesResult = "list_files_result"
+	TypeListFiles          = "list_files"
+	TypeListFilesResult    = "list_files_result"
+	TypeDownloadLogs       = "download_logs"
+	TypeDownloadLogsResult = "download_logs_result"
 )
 
 // Message is the envelope for every WebSocket frame.
@@ -26,6 +28,7 @@ type RegisterPayload struct {
 	MachineId uint     `json:"machine_id"`
 	Hostname  string   `json:"hostname"`
 	IPs       []string `json:"ips"`
+	Version   string   `json:"version"`
 }
 
 // DiscoveryPayload is sent by the agent after RegisterAck with full IIS state.
@@ -68,9 +71,9 @@ type HeartbeatPayload struct {
 // CommandPayload is sent by the control plane to trigger an IIS action.
 type CommandPayload struct {
 	CommandID  string `json:"command_id"`
-	Action     string `json:"action"`      // start, stop, restart, recycle, shutdown
-	TargetType string `json:"target_type"` // app_pool, site, machine
-	Target     string `json:"target"`      // name of the target (unused for machine)
+	Action     string `json:"action"`      // start, stop, restart, recycle, shutdown, update
+	TargetType string `json:"target_type"` // app_pool, site, machine, agent
+	Target     string `json:"target"`      // name of the target (unused for machine); download URL for agent update
 }
 
 // CommandResultPayload is sent by the agent after executing a command.
@@ -108,4 +111,18 @@ type ListFilesResultPayload struct {
 	RequestID string   `json:"request_id"`
 	Files     []string `json:"files"`
 	Error     string   `json:"error,omitempty"`
+}
+
+// DownloadLogsPayload is sent by the control plane to request a zipped log folder.
+// LogPath is the full path to any file in the log directory; the agent zips the parent directory.
+type DownloadLogsPayload struct {
+	RequestID string `json:"request_id"`
+	LogPath   string `json:"log_path"`
+}
+
+// DownloadLogsResultPayload is sent by the agent with the base64-encoded zip archive.
+type DownloadLogsResultPayload struct {
+	RequestID string `json:"request_id"`
+	Data      string `json:"data,omitempty"`  // base64-encoded zip bytes
+	Error     string `json:"error,omitempty"`
 }

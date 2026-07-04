@@ -59,9 +59,11 @@ const STATUS_FILTERS: StatusFilter[] = ['All', 'Started', 'Stopped']
 export function SitesTab({
   projectKey,
   machineId,
+  isOffline,
 }: {
   projectKey: string
   machineId: number
+  isOffline?: boolean
 }) {
   const [acting, setActing] = useState<Record<number, string>>({})
   const [status, setStatus] = useState<StatusFilter>('Started')
@@ -206,7 +208,7 @@ export function SitesTab({
                 </div>
 
                 <div className="flex items-center justify-center px-2 py-3">
-                  <RowMenu items={menuItems} disabled={!!busy} />
+                  <RowMenu items={menuItems} disabled={!!busy || !!isOffline} />
                 </div>
               </div>
             )

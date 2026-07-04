@@ -7,6 +7,9 @@ import (
 	"github.com/kardianos/service"
 )
 
+// ServiceName is the Windows service name this agent is installed under (see bootstrap.ps1).
+const ServiceName = "wimp-agent"
+
 // Agent implements service.Interface so it can be managed by the OS service manager.
 type Agent struct {
 	cfg    *Config

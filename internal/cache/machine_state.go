@@ -34,6 +34,18 @@ func IsMachineActionPending(machineID uint) bool {
 	return ok && time.Now().Before(e.expiresAt)
 }
 
+// GetMachineActionPending returns the pending action ("shutdown" or "restart") and
+// whether one is still in flight.
+func GetMachineActionPending(machineID uint) (string, bool) {
+	machineActionMu.Lock()
+	defer machineActionMu.Unlock()
+	e, ok := machineActionPending[machineID]
+	if !ok || time.Now().After(e.expiresAt) {
+		return "", false
+	}
+	return e.action, true
+}
+
 func ClearMachineActionPending(machineID uint) {
 	machineActionMu.Lock()
 	delete(machineActionPending, machineID)

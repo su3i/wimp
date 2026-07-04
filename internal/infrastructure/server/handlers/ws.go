@@ -81,10 +81,15 @@ func AgentWebSocket(c *gin.Context) {
 		m.Status = machineDomain.Offline
 		repo.Update(m)
 		log.Printf("machine (%d) agent disconnected", m.ID)
-		if cache.IsMachineActionPending(m.ID) {
+		if action, ok := cache.GetMachineActionPending(m.ID); ok {
 			cache.ClearMachineActionPending(m.ID)
-			go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
-				"Machine restarting", m.Hostname+" is restarting", cfg)
+			if action == "shutdown" {
+				go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
+					"Machine shutdown", m.Hostname+" was shut down", cfg)
+			} else {
+				go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
+					"Machine restarting", m.Hostname+" is restarting", cfg)
+			}
 		} else {
 			go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryMachine,
 				"Machine disconnected", m.Hostname+" went offline", cfg)
@@ -106,8 +111,14 @@ func AgentWebSocket(c *gin.Context) {
 		case protocol.TypeRegister:
 			var reg protocol.RegisterPayload
 			if err := json.Unmarshal(msg.Payload, &reg); err == nil {
+				prevVersion := m.AgentVersion
 				m.Hostname = reg.Hostname
 				m.IPs = reg.IPs
+				m.AgentVersion = reg.Version
+				if reg.Version != "" && reg.Version != "dev" && reg.Version != prevVersion {
+					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
+						"Agent updated", m.Hostname+" agent updated to "+reg.Version, cfg)
+				}
 			}
 			repo.Update(m)
 
@@ -119,6 +130,15 @@ func AgentWebSocket(c *gin.Context) {
 					log.Printf("machine (%d) fluent config push: %v", machineID, err)
 				}
 			}(m.ID)
+
+			if reg.Version != "dev" && reg.Version != config.Common().AgentVersion && shouldAutoUpdate(m.ProjectID) {
+				go func(machineID uint, reportedVersion string) {
+					log.Printf("machine (%d) agent version %q is outdated (latest %q) - pushing auto-update", machineID, reportedVersion, config.Common().AgentVersion)
+					if err := pushAgentUpdate(machineID); err != nil {
+						log.Printf("machine (%d) agent auto-update push failed: %v", machineID, err)
+					}
+				}(m.ID, reg.Version)
+			}
 
 		case protocol.TypeDiscovery:
 			var disc protocol.DiscoveryPayload
@@ -174,6 +194,17 @@ func AgentWebSocket(c *gin.Context) {
 			hub.ResolveCommand(result.RequestID, hub.CommandResult{
 				Success: result.Error == "",
 				Output:  string(filesJSON),
+				Error:   result.Error,
+			})
+
+		case protocol.TypeDownloadLogsResult:
+			var result protocol.DownloadLogsResultPayload
+			if err := json.Unmarshal(msg.Payload, &result); err != nil {
+				continue
+			}
+			hub.ResolveCommand(result.RequestID, hub.CommandResult{
+				Success: result.Error == "",
+				Output:  result.Data,
 				Error:   result.Error,
 			})
 		}

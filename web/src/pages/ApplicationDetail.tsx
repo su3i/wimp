@@ -571,7 +571,16 @@ export function ApplicationDetail() {
 
       {isLoading ? (
         <div className='space-y-4'>
-          <div className='h-20 rounded-lg border border-rim bg-surface animate-pulse' />
+          <div className='flex items-start gap-4 animate-pulse'>
+            <div className='mt-1 size-9 rounded-lg border border-rim bg-surface-high shrink-0' />
+            <div>
+              <div className='flex items-center gap-2.5 mb-3'>
+                <div className='h-4 w-40 rounded bg-surface-high' />
+                <div className='h-5 w-16 rounded-full bg-surface-high' />
+              </div>
+              <div className='h-2.5 w-28 rounded bg-surface-high' />
+            </div>
+          </div>
           <div className='h-48 rounded-lg border border-rim bg-surface animate-pulse' />
         </div>
       ) : isError ? (
@@ -581,55 +590,52 @@ export function ApplicationDetail() {
         </div>
       ) : app ? (
         <>
-          {/* Header card */}
+          {/* Header */}
           {(() => {
             const total = app.app_pools?.length ?? 0;
             const healthy = (app.app_pools ?? []).filter((p) => p.State === "Started").length;
             const healthColor =
-              total === 0
-                ? "text-ink-faint"
-                : healthy === total
-                ? "text-success"
-                : healthy === 0
-                ? "text-danger"
-                : "text-warning";
+              total === 0 ? "text-ink-faint"
+              : healthy === total ? "text-success"
+              : healthy === 0 ? "text-danger"
+              : "text-warning";
             const dotColor =
-              total === 0
-                ? "bg-ink-faint"
-                : healthy === total
-                ? "bg-success"
-                : healthy === 0
-                ? "bg-danger"
-                : "bg-warning";
+              total === 0 ? "bg-ink-faint"
+              : healthy === total ? "bg-success"
+              : healthy === 0 ? "bg-danger"
+              : "bg-warning";
             return (
-              <div className='flex items-center justify-between rounded-lg border border-rim bg-surface px-5 py-4'>
-                <div className='flex items-center gap-3'>
-                  <div className='flex size-9 shrink-0 items-center justify-center rounded-lg border border-rim bg-surface-alt'>
+              <div className='flex items-start justify-between gap-6'>
+                <div className='flex items-start gap-4'>
+                  <div className='mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg border border-rim bg-surface-alt'>
                     <AppWindow className='size-4 text-ink-faint' />
                   </div>
                   <div>
-                    <h1 className='text-sm font-semibold text-ink'>{app.Name}</h1>
-                    <div className='mt-0.5 flex items-center gap-3'>
-                      <span className='text-xs text-ink-faint'>
-                        Created{" "}
-                        {new Date(app.CreatedAt).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
+                    <div className='flex items-center gap-2.5 mb-3'>
+                      <h1 className='text-base font-semibold text-ink'>{app.Name}</h1>
                       {total > 0 && (
-                        <div className='flex items-center gap-1.5'>
-                          <span className={cn("size-1.5 rounded-full shrink-0", dotColor)} />
-                          <span className={cn("text-xs", healthColor)}>
-                            {healthy}/{total} Healthy
-                          </span>
-                        </div>
+                        <span className={cn(
+                          'inline-flex items-center gap-1.5 text-xs font-medium',
+                          healthy === total ? 'text-success' :
+                          healthy === 0    ? 'text-danger'   :
+                                             'text-warning'
+                        )}>
+                          <span className={cn('size-1.5 rounded-full shrink-0', dotColor)} />
+                          {healthy}/{total} healthy
+                        </span>
                       )}
                     </div>
+                    <p className='text-xs text-ink-faint'>
+                      Created{' '}
+                      {new Date(app.CreatedAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
                   </div>
                 </div>
-                <div className='flex items-center gap-2'>
+                <div className='flex items-center gap-2 shrink-0 pt-1'>
                   {total > 0 && (
                     <>
                       <Button
