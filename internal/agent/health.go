@@ -5,18 +5,27 @@ import (
 	"strings"
 )
 
-// serviceRunning reports whether the named Windows service is currently RUNNING.
-func serviceRunning(name string) bool {
+// serviceState returns the named Windows service's current state word (RUNNING,
+// STOPPED, STOP_PENDING, START_PENDING, ...), or "" if it couldn't be determined.
+func serviceState(name string) string {
 	out, err := exec.Command("sc.exe", "query", name).Output()
 	if err != nil {
-		return false
+		return ""
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.Contains(line, "STATE") {
-			return strings.Contains(line, "RUNNING")
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				return fields[len(fields)-1]
+			}
 		}
 	}
-	return false
+	return ""
+}
+
+// serviceRunning reports whether the named Windows service is currently RUNNING.
+func serviceRunning(name string) bool {
+	return serviceState(name) == "RUNNING"
 }
 
 func checkWindowsExporterHealthy() bool {

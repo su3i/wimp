@@ -70,26 +70,38 @@ func downloadFile(url, dest string) error {
 // service back up, and deletes the task itself. Using Task Scheduler rather than a
 // detached helper process means the swap happens deterministically once the service
 // has actually stopped, with no dependency on this process's own lifetime.
+//
+// The actual stop/move/start sequence lives in a small batch script rather than being
+// crammed into schtasks' /TR argument as a single quoted string: nesting quotes inside
+// a `cmd /c "..."` value only works when a shell is the one typing/escaping it, and
+// doesn't survive being handed through exec.Command and then re-invoked later by Task
+// Scheduler itself - that mismatch let `/Create` succeed while the stored task's command
+// line was silently malformed, so it fired but did nothing.
 func scheduleSwapAndRestart(stagedPath, exePath string) error {
 	const taskName = "WimpAgentUpdate"
 
-	startTime := time.Now().Add(updateApplyDelay).Format("15:04:05")
-
-	trigger := fmt.Sprintf(
-		`cmd /c "net stop %s & move /Y \"%s\" \"%s\" & net start %s & schtasks /Delete /TN %s /F"`,
+	scriptPath := filepath.Join(filepath.Dir(exePath), "wimp_update.bat")
+	script := fmt.Sprintf(
+		"net stop %s\r\nmove /Y \"%s\" \"%s\"\r\nnet start %s\r\nschtasks /Delete /TN %s /F\r\ndel \"%%~f0\"\r\n",
 		ServiceName, stagedPath, exePath, ServiceName, taskName,
 	)
+	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
+		return fmt.Errorf("write update script: %w", err)
+	}
+
+	startTime := time.Now().Add(updateApplyDelay).Format("15:04:05")
 
 	cmd := exec.Command("schtasks",
 		"/Create", "/SC", "ONCE",
 		"/ST", startTime,
 		"/TN", taskName,
-		"/TR", trigger,
+		"/TR", `"`+scriptPath+`"`,
 		"/RU", "SYSTEM",
 		"/F",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		os.Remove(scriptPath) //nolint:errcheck
 		return fmt.Errorf("schtasks: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil

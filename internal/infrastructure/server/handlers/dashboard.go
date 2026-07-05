@@ -50,7 +50,7 @@ func DashboardStats(c *gin.Context) {
 		return
 	}
 
-	criticalLastHour, err := notificationService.CriticalCount(time.Now().Add(-time.Hour), projectKey, cfg)
+	criticalLast24h, err := notificationService.CriticalCount(time.Now().Add(-24*time.Hour), projectKey, cfg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -60,6 +60,6 @@ func DashboardStats(c *gin.Context) {
 		"machines_count":       machinesCount,
 		"applications_count":   applicationsCount,
 		"unread_notifications": unreadCount,
-		"critical_last_hour":   criticalLastHour,
+		"critical_last_24h":    criticalLast24h,
 	})
 }

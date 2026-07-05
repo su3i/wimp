@@ -171,7 +171,7 @@ function CriticalEventsCard({ count }: { count: number }) {
       <span className={cn('text-3xl font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
         {count}
       </span>
-      <span className='text-[0.625rem] text-ink-faint'>last hour</span>
+      <span className='text-[0.625rem] text-ink-faint'>last 24h</span>
     </div>
   );
 }
@@ -454,7 +454,7 @@ export function Dashboard() {
     ...qOpts,
   });
 
-  // ── Dashboard stats (machines count + critical_last_hour) ─────────────────
+  // ── Dashboard stats (machines count + critical_last_24h) ──────────────────
 
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats", projectKey],
@@ -527,7 +527,7 @@ export function Dashboard() {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const criticalLastHour = stats?.critical_last_hour ?? 0;
+  const criticalLast24h = stats?.critical_last_24h ?? 0;
   const throughputVal = scalar(rThroughput);
   const cpuAvgVal = scalar(rCpuAvg);
   const memAvgVal = scalar(rMemAvg);
@@ -579,7 +579,7 @@ export function Dashboard() {
       <div className='space-y-4'>
         {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
         <div className='grid grid-cols-[1fr_1fr_1.5fr] gap-4'>
-          <CriticalEventsCard count={criticalLastHour} />
+          <CriticalEventsCard count={criticalLast24h} />
           <MetricCard
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}
