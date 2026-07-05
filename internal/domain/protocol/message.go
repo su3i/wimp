@@ -63,9 +63,11 @@ type BindingInfo struct {
 
 // HeartbeatPayload contains only the names of currently running app pools and sites.
 type HeartbeatPayload struct {
-	MachineId uint     `json:"machine_id"`
-	AppPools  []string `json:"app_pools"`
-	Sites     []string `json:"sites"`
+	MachineId              uint     `json:"machine_id"`
+	AppPools               []string `json:"app_pools"`
+	Sites                  []string `json:"sites"`
+	WindowsExporterHealthy bool     `json:"windows_exporter_healthy"`
+	FluentBitHealthy       bool     `json:"fluent_bit_healthy"`
 }
 
 // CommandPayload is sent by the control plane to trigger an IIS action.

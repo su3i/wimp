@@ -4,8 +4,11 @@ import type { MachineWithPools } from '@/types'
 type MachineCommand = 'shutdown' | 'restart'
 
 export const machineService = {
-  list: (projectKey: string) =>
-    api.get<{ message: string; machines: MachineWithPools[] }>(`/projects/${projectKey}/machines`),
+  list: (projectKey: string, params?: { page?: number; per_page?: number; status?: string }) =>
+    api.get<{ message: string; machines: MachineWithPools[]; total: number; page: number; per_page: number }>(
+      `/projects/${projectKey}/machines`,
+      { params },
+    ),
 
   create: (projectKey: string) =>
     api.post<{ message: string; machine: MachineWithPools; download_command: string; run_command: string }>(

@@ -1,9 +1,15 @@
 package application
 
+type PoolCounts struct {
+	Total   int64
+	Healthy int64
+}
+
 type ApplicationRepository interface {
 	Create(app *Application) (*Application, error)
 	FindByProjectID(projectID uint) (*[]Application, error)
 	FindByProjectIDPaginated(projectID uint, page, perPage int) (*[]Application, int64, error)
+	FindPoolCountsByApplicationIDs(appIDs []uint) (map[uint]PoolCounts, error)
 	FindOneByID(id uint) (*Application, error)
 	AddAppPool(rel *ApplicationAppPool) error
 	RemoveAppPool(applicationID, appPoolID uint) error

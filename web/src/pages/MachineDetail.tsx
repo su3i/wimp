@@ -63,7 +63,7 @@ export function MachineDetail() {
     enabled: !!activeProject,
     refetchInterval: 5_000,
     queryFn: async () => {
-      const { data } = await machineService.list(activeProject!.Key)
+      const { data } = await machineService.list(activeProject!.Key, { per_page: 100 })
       return data.machines ?? []
     },
   })

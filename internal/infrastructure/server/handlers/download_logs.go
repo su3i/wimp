@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	machineService "github.com/su3i/wimp/internal/application/machine"
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/hub"
@@ -89,9 +91,54 @@ func DownloadLogs(c *gin.Context) {
 		if hostname == "" {
 			hostname = strconv.FormatUint(machineID, 10)
 		}
-		c.Header("Content-Disposition", `attachment; filename="logs-`+hostname+`.zip"`)
-		c.Data(http.StatusOK, "application/zip", data)
+		fileName := "logs-" + hostname + ".zip"
+
+		tmpFile, err := os.CreateTemp("", "wimp-logs-*.zip")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to stage archive"})
+			return
+		}
+		if _, err := tmpFile.Write(data); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpFile.Name())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to stage archive"})
+			return
+		}
+		tmpFile.Close()
+
+		token := uuid.New().String()
+		cache.StageDownload(token, tmpFile.Name(), fileName, int64(len(data)))
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "success",
+			"token":     token,
+			"file_name": fileName,
+			"file_size": len(data),
+		})
 	case <-ctx.Done():
 		c.JSON(http.StatusGatewayTimeout, gin.H{"error": "agent did not respond in time"})
 	}
+}
+
+// FetchStagedDownload serves a previously staged log archive by its one-time token,
+// then deletes it - the temp file is not meant to be fetched twice.
+func FetchStagedDownload(c *gin.Context) {
+	token := c.Param("token")
+
+	staged, ok := cache.GetStagedDownload(token)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "download expired or not found"})
+		return
+	}
+
+	data, err := os.ReadFile(staged.Path)
+	cache.ConsumeStagedDownload(token)
+	os.Remove(staged.Path) //nolint:errcheck
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read staged archive"})
+		return
+	}
+
+	c.Header("Content-Disposition", `attachment; filename="`+staged.FileName+`"`)
+	c.Data(http.StatusOK, "application/zip", data)
 }

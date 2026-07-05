@@ -347,7 +347,7 @@ function AddAppPoolModal({
     queryKey: ["machines-with-pools", projectKey],
     enabled: open,
     queryFn: async () => {
-      const { data } = await machineService.list(projectKey);
+      const { data } = await machineService.list(projectKey, { per_page: 100 });
       return data.machines ?? [];
     },
   });

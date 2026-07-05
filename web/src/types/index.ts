@@ -131,6 +131,8 @@ export interface Application {
   Name: string
   CreatedAt: string
   UpdatedAt: string
+  pool_total?: number
+  pool_healthy?: number
 }
 
 export interface AppPoolWithDetails extends AppPool {

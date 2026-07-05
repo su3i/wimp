@@ -139,25 +139,18 @@ function MetricCard({
   label,
   value,
   sub,
-  loading,
 }: {
   label: string;
   value: string | null;
   sub?: string;
-  loading: boolean;
 }) {
   return (
     <div className='rounded-lg border border-rim bg-surface px-5 py-5 flex flex-col gap-3'>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         {label}
       </span>
-      <span
-        className={cn(
-          "text-3xl font-semibold font-mono leading-none",
-          loading ? "text-ink-faint" : "text-ink",
-        )}
-      >
-        {loading ? "-" : (value ?? "N/A")}
+      <span className='text-3xl font-semibold font-mono leading-none text-ink'>
+        {value ?? "N/A"}
       </span>
       {sub && <span className='text-[0.625rem] text-ink-faint'>{sub}</span>}
     </div>
@@ -170,8 +163,7 @@ function CriticalEventsCard({ count }: { count: number }) {
   const hot = count > 0;
   return (
     <div className={cn(
-      'rounded-lg border bg-surface px-5 py-5 flex flex-col gap-3 transition-colors',
-      hot ? 'border-danger/40 bg-danger/5' : 'border-rim',
+      'rounded-lg border bg-surface px-5 py-5 flex flex-col gap-3 transition-colors border-rim',
     )}>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Critical Events
@@ -179,41 +171,29 @@ function CriticalEventsCard({ count }: { count: number }) {
       <span className={cn('text-3xl font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
         {count}
       </span>
-      <span className='text-[0.625rem] text-ink-faint'>in the last hour</span>
+      <span className='text-[0.625rem] text-ink-faint'>last hour</span>
     </div>
   );
 }
 
 // ── Bandwidth card ────────────────────────────────────────────────────────────
 
-function BandwidthCard({
-  inVal,
-  outVal,
-  loading,
-}: {
-  inVal: number | null;
-  outVal: number | null;
-  loading: boolean;
-}) {
+function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number | null }) {
   return (
     <div className='rounded-lg border border-rim bg-surface px-5 py-5 flex flex-col gap-3'>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Bandwidth
       </span>
       <div className='flex items-end gap-4'>
-        <div className='flex flex-col gap-1'>
-          <span className={cn('text-2xl font-semibold font-mono leading-none', loading ? 'text-ink-faint' : 'text-ink')}>
-            {loading ? '-' : (inVal != null ? fmtBytes(inVal) : 'N/A')}
-            <span className='ml-1.5 text-[0.625rem] text-ink-faint'>IN</span>
-          </span>
-        </div>
+        <span className='text-2xl font-semibold font-mono leading-none text-ink'>
+          {inVal != null ? fmtBytes(inVal) : 'N/A'}
+          <span className='ml-1.5 text-[0.625rem] text-ink-faint'>IN</span>
+        </span>
         <span className='text-ink-faint/40 text-lg font-light mb-0.5'>/</span>
-        <div className='flex flex-col gap-1'>
-          <span className={cn('text-2xl font-semibold font-mono leading-none', loading ? 'text-ink-faint' : 'text-ink')}>
-            {loading ? '-' : (outVal != null ? fmtBytes(outVal) : 'N/A')}
-            <span className='ml-1.5 text-[0.625rem] text-ink-faint'>OUT</span>
-          </span>
-        </div>
+        <span className='text-2xl font-semibold font-mono leading-none text-ink'>
+          {outVal != null ? fmtBytes(outVal) : 'N/A'}
+          <span className='ml-1.5 text-[0.625rem] text-ink-faint'>OUT</span>
+        </span>
       </div>
       <span className='text-[0.625rem] text-ink-faint'>last 5 min</span>
     </div>
@@ -222,10 +202,10 @@ function BandwidthCard({
 
 // ── Radial gauge ──────────────────────────────────────────────────────────────
 
-function RadialGauge({ label, value, loading }: { label: string; value: number | null; loading: boolean }) {
+function RadialGauge({ label, value }: { label: string; value: number | null }) {
   const pct = Math.min(Math.max(value ?? 0, 0), 100);
   const color = pct >= 80 ? "#f85149" : pct >= 60 ? "#d29922" : "#3fb950";
-  const data = [{ v: loading ? 0 : pct }, { v: loading ? 100 : 100 - pct }];
+  const data = [{ v: pct }, { v: 100 - pct }];
 
   return (
     <div className='flex flex-col items-center'>
@@ -249,10 +229,9 @@ function RadialGauge({ label, value, loading }: { label: string; value: number |
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        {/* Value centered at the arc midpoint */}
         <div className='absolute inset-0 flex items-center justify-center' style={{ paddingTop: "10%" }}>
           <span className='text-2xl font-semibold font-mono text-ink leading-none'>
-            {loading ? "-" : value != null ? fmtPct(value) : "N/A"}
+            {value != null ? fmtPct(value) : "N/A"}
           </span>
         </div>
       </div>
@@ -287,19 +266,10 @@ function HostTooltipContent({ active, payload, label }: any) {
 function HostCpuLineChart({
   rows,
   keys,
-  loading,
 }: {
   rows: Record<string, string | number>[];
   keys: string[];
-  loading: boolean;
 }) {
-  if (loading) {
-    return (
-      <div className='flex flex-1 items-center justify-center py-8'>
-        <span className='size-4 rounded-full border-2 border-primary border-t-transparent animate-spin' />
-      </div>
-    );
-  }
   if (!rows.length || !keys.length) {
     return (
       <div className='flex flex-1 items-center justify-center py-8'>
@@ -419,7 +389,7 @@ export function Dashboard() {
   const { data: machines } = useQuery({
     queryKey: ["machines", projectKey],
     queryFn: async () => {
-      const { data } = await machineService.list(projectKey);
+      const { data } = await machineService.list(projectKey, { per_page: 100 });
       return data.machines ?? [];
     },
     enabled: !!projectKey,
@@ -450,38 +420,48 @@ export function Dashboard() {
 
   // ── Prometheus instant queries (all project-level aggregates) ─────────────
 
-  const { data: rThroughput, isLoading: lThroughput } = useQuery({
+  const { data: rThroughput } = useQuery({
     queryKey: ["d-throughput", idKey],
     queryFn: () => prometheusService.instant(PQ.throughput(machineIds)),
     ...qOpts,
   });
-  const { data: rCpuAvg, isLoading: lCpuAvg } = useQuery({
+  const { data: rCpuAvg } = useQuery({
     queryKey: ["d-cpuavg", idKey],
     queryFn: () => prometheusService.instant(PQ.cpuAvg(machineIds)),
     ...qOpts,
   });
-  const { data: rMemAvg, isLoading: lMemAvg } = useQuery({
+  const { data: rMemAvg } = useQuery({
     queryKey: ["d-memavg", idKey],
     queryFn: () => prometheusService.instant(PQ.memAvg(machineIds)),
     ...qOpts,
   });
-  const { data: rNetIn, isLoading: lNetIn } = useQuery({
+  const { data: rNetIn } = useQuery({
     queryKey: ["d-net-in", idKey],
     queryFn: () => prometheusService.instant(PQ.networkIn(machineIds)),
     ...qOpts,
   });
-  const { data: rNetOut, isLoading: lNetOut } = useQuery({
+  const { data: rNetOut } = useQuery({
     queryKey: ["d-net-out", idKey],
     queryFn: () => prometheusService.instant(PQ.networkOut(machineIds)),
     ...qOpts,
   });
-  const { data: rCpuHost, isLoading: lCpuHost } = useQuery({
+  const { data: rCpuHost } = useQuery({
     queryKey: ["d-cpuhost", idKey],
     queryFn: () => {
       const now = Math.floor(Date.now() / 1000);
       return prometheusService.range(PQ.cpuPerHost(machineIds), now - 60 * 60, now, 60);
     },
     ...qOpts,
+  });
+
+  // ── Dashboard stats (machines count + critical_last_hour) ─────────────────
+
+  const { data: stats } = useQuery({
+    queryKey: ["dashboard-stats", projectKey],
+    queryFn: () => dashboardService.getStats(projectKey!),
+    enabled: !!projectKey,
+    refetchInterval: 30_000,
+    staleTime: 0,
   });
 
   // ── Notifications ─────────────────────────────────────────────────────────
@@ -547,12 +527,7 @@ export function Dashboard() {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const criticalLastHour = useMemo(() => {
-    const cutoff = Date.now() - 60 * 60 * 1000;
-    return notifications.filter(
-      (n) => n.Level === 'critical' && new Date(n.CreatedAt).getTime() >= cutoff,
-    ).length;
-  }, [notifications]);
+  const criticalLastHour = stats?.critical_last_hour ?? 0;
   const throughputVal = scalar(rThroughput);
   const cpuAvgVal = scalar(rCpuAvg);
   const memAvgVal = scalar(rMemAvg);
@@ -582,11 +557,6 @@ export function Dashboard() {
     setDismissed((prev) => new Set([...prev, id]));
   }
 
-  // loading = only show spinner when Prometheus is enabled AND query is in-flight
-  function pl(l: boolean) {
-    return promEnabled && l;
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -614,12 +584,10 @@ export function Dashboard() {
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}
             sub='last 5 min'
-            loading={pl(lThroughput)}
           />
           <BandwidthCard
             inVal={netInVal}
             outVal={netOutVal}
-            loading={pl(lNetIn) || pl(lNetOut)}
           />
         </div>
 
@@ -631,8 +599,8 @@ export function Dashboard() {
               Capacity Overview
             </p>
             <div className='grid grid-cols-2 gap-2 flex-1'>
-              <RadialGauge label='CPU Avg' value={cpuAvgVal} loading={pl(lCpuAvg)} />
-              <RadialGauge label='Memory Avg' value={memAvgVal} loading={pl(lMemAvg)} />
+              <RadialGauge label='CPU Avg' value={cpuAvgVal} />
+              <RadialGauge label='Memory Avg' value={memAvgVal} />
             </div>
           </div>
 
@@ -641,7 +609,7 @@ export function Dashboard() {
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Host CPU %
             </p>
-            <HostCpuLineChart rows={hostPerfData.rows} keys={hostPerfData.keys} loading={pl(lCpuHost)} />
+            <HostCpuLineChart rows={hostPerfData.rows} keys={hostPerfData.keys} />
           </div>
         </div>
 

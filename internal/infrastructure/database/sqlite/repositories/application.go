@@ -72,6 +72,35 @@ func (r *applicationRepository) FindOneByID(id uint) (*application.Application, 
 	return &app, nil
 }
 
+func (r *applicationRepository) FindPoolCountsByApplicationIDs(appIDs []uint) (map[uint]application.PoolCounts, error) {
+	if len(appIDs) == 0 {
+		return map[uint]application.PoolCounts{}, nil
+	}
+	type row struct {
+		ApplicationID uint
+		Total         int64
+		Healthy       int64
+	}
+	var rows []row
+	err := r.db.Raw(`
+		SELECT aap.application_id,
+		       COUNT(ap.id)                                                        AS total,
+		       SUM(CASE WHEN ap.state = 'Started' THEN 1 ELSE 0 END)              AS healthy
+		FROM application_app_pools aap
+		JOIN app_pools ap ON ap.id = aap.app_pool_id AND ap.deleted_at IS NULL
+		WHERE aap.application_id IN ?
+		GROUP BY aap.application_id
+	`, appIDs).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uint]application.PoolCounts, len(rows))
+	for _, r := range rows {
+		out[r.ApplicationID] = application.PoolCounts{Total: r.Total, Healthy: r.Healthy}
+	}
+	return out, nil
+}
+
 func (r *applicationRepository) AddAppPool(rel *application.ApplicationAppPool) error {
 	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(rel).Error
 }

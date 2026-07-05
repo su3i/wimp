@@ -18,6 +18,7 @@ const (
 	CategoryIIS     Category = "iis"
 	CategoryAppPool Category = "apppool"
 	CategoryService Category = "service"
+	CategorySidecar Category = "sidecar"
 )
 
 type Notification struct {

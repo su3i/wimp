@@ -3,6 +3,7 @@ package notification
 import (
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/su3i/wimp/internal/application/alertmanager"
 	"github.com/su3i/wimp/internal/config"
@@ -75,4 +76,8 @@ func ActiveAlerts(cfg *config.DatabaseConfig) ([]notification.Notification, erro
 
 func AlertHistory(hours int, cfg *config.DatabaseConfig) ([]notification.HourCount, error) {
 	return database.NewNotificationRepository(cfg).CountByHour(hours)
+}
+
+func CriticalCount(since time.Time, projectKey string, cfg *config.DatabaseConfig) (int64, error) {
+	return database.NewNotificationRepository(cfg).CountCriticalSince(since, projectKey)
 }

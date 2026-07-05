@@ -82,6 +82,7 @@ func InitializeRouter() *gin.Engine {
 	router.POST("/projects/:key/machines/:machineId/restart", middleware.AuthMiddleware(), handlers.MachineCommand("restart"))
 	router.POST("/projects/:key/machines/:machineId/agent/update", middleware.AuthMiddleware(), handlers.UpdateAgentCommand)
 	router.GET("/projects/:key/machines/:machineId/logs/download", middleware.AuthMiddleware(), handlers.DownloadLogs)
+	router.GET("/downloads/:token", middleware.AuthMiddleware(), handlers.FetchStagedDownload)
 
 	// Applications (project-scoped)
 	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)

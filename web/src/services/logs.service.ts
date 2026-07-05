@@ -18,9 +18,15 @@ export const logsService = {
   listFiles: (projectKey: string, appId: number) =>
     api.get<{ message: string; files: string[] }>(`/projects/${projectKey}/applications/${appId}/files`),
 
-  downloadLogs: (projectKey: string, machineId: number, logPath: string) =>
-    api.get(`/projects/${projectKey}/machines/${machineId}/logs/download`, {
-      params: { path: logPath },
-      responseType: 'blob',
-    }),
+  // Stages the zipped logs on the control plane; server-side zip+transfer from the
+  // agent can take a while, so this gets a generous timeout independent of the
+  // client's default.
+  stageDownload: (projectKey: string, machineId: number, logPath: string) =>
+    api.get<{ message: string; token: string; file_name: string; file_size: number }>(
+      `/projects/${projectKey}/machines/${machineId}/logs/download`,
+      { params: { path: logPath }, timeout: 120_000 },
+    ),
+
+  fetchDownload: (token: string) =>
+    api.get(`/downloads/${token}`, { responseType: 'blob' }),
 }

@@ -174,6 +174,24 @@ func AgentWebSocket(c *gin.Context) {
 					"App pool started", name+" started on "+m.Hostname, cfg)
 			}
 
+			if prevWE, prevFB, known := cache.GetSidecarHealth(m.ID); known {
+				if prevWE && !hb.WindowsExporterHealthy {
+					go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategorySidecar,
+						"windows_exporter down", m.Hostname+" - windows_exporter service is not running", cfg)
+				} else if !prevWE && hb.WindowsExporterHealthy {
+					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategorySidecar,
+						"windows_exporter recovered", m.Hostname+" - windows_exporter service is running again", cfg)
+				}
+				if prevFB && !hb.FluentBitHealthy {
+					go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategorySidecar,
+						"fluent-bit down", m.Hostname+" - fluent-bit service is not running", cfg)
+				} else if !prevFB && hb.FluentBitHealthy {
+					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategorySidecar,
+						"fluent-bit recovered", m.Hostname+" - fluent-bit service is running again", cfg)
+				}
+			}
+			cache.SetSidecarHealth(m.ID, hb.WindowsExporterHealthy, hb.FluentBitHealthy)
+
 		case protocol.TypeCommandResult:
 			var result protocol.CommandResultPayload
 			if err := json.Unmarshal(msg.Payload, &result); err != nil {

@@ -104,11 +104,32 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
 `, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, tlsVerify, cfg.ApplicationID, cfg.PoolID, machineID)
 }
 
+// restartFluentBit force-kills the fluent-bit process (rather than a graceful
+// sc.exe stop, which only requests the stop and returns before it completes - a slow
+// shutdown then races the next start) and starts the service fresh.
 func restartFluentBit() error {
-	// Ignore stop failure - service may already be stopped.
-	exec.Command("sc.exe", "stop", "fluent-bit").Run()
+	if pid, err := servicePID("fluent-bit"); err == nil && pid != "" {
+		exec.Command("taskkill", "/F", "/T", "/PID", pid).Run() //nolint:errcheck
+	}
 	if out, err := exec.Command("sc.exe", "start", "fluent-bit").CombinedOutput(); err != nil {
 		return fmt.Errorf("start fluent-bit: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// servicePID resolves the PID of a running Windows service via sc.exe queryex.
+func servicePID(name string) (string, error) {
+	out, err := exec.Command("sc.exe", "queryex", name).Output()
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "PID") {
+			parts := strings.Fields(line)
+			if len(parts) > 0 {
+				return parts[len(parts)-1], nil
+			}
+		}
+	}
+	return "", fmt.Errorf("PID not found in queryex output")
 }

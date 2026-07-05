@@ -33,6 +33,12 @@ type ApplicationDetail struct {
 	AppPools []AppPoolWithDetails `json:"app_pools"`
 }
 
+type ApplicationListItem struct {
+	application.Application
+	PoolTotal   int64 `json:"pool_total"`
+	PoolHealthy int64 `json:"pool_healthy"`
+}
+
 func Create(name, projectKey string, cfg *config.DatabaseConfig) (*application.Application, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
@@ -46,12 +52,30 @@ func Create(name, projectKey string, cfg *config.DatabaseConfig) (*application.A
 	return database.NewApplicationRepository(cfg).Create(app)
 }
 
-func RetrieveAll(projectKey string, page, perPage int, cfg *config.DatabaseConfig) (*[]application.Application, int64, error) {
+func RetrieveAll(projectKey string, page, perPage int, cfg *config.DatabaseConfig) ([]ApplicationListItem, int64, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return nil, 0, errors.New("project not found")
 	}
-	return database.NewApplicationRepository(cfg).FindByProjectIDPaginated(proj.ID, page, perPage)
+	repo := database.NewApplicationRepository(cfg)
+	apps, total, err := repo.FindByProjectIDPaginated(proj.ID, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+	appIDs := make([]uint, 0, len(*apps))
+	for _, a := range *apps {
+		appIDs = append(appIDs, a.ID)
+	}
+	counts, err := repo.FindPoolCountsByApplicationIDs(appIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+	items := make([]ApplicationListItem, 0, len(*apps))
+	for _, a := range *apps {
+		c := counts[a.ID]
+		items = append(items, ApplicationListItem{Application: a, PoolTotal: c.Total, PoolHealthy: c.Healthy})
+	}
+	return items, total, nil
 }
 
 func ListAppPools(id uint, projectKey string, page, perPage int, state string, cfg *config.DatabaseConfig) ([]AppPoolWithDetails, int64, error) {

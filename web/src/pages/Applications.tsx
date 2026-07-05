@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Layers, AppWindow, RotateCw, RefreshCw, Trash2, AlertCircle, Boxes, Plus } from "lucide-react";
+import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -13,14 +13,12 @@ import { useProjectStore } from "@/store/project";
 import { applicationService } from "@/services/application.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
-import type { ApplicationDetail } from "@/types";
+import type { Application } from "@/types";
 
 // ── Health helpers ────────────────────────────────────────────────────────────
 
-function poolHealth(app: ApplicationDetail) {
-  const pools = app.app_pools ?? [];
-  const healthy = pools.filter((p) => p.State === "Started").length;
-  return { healthy, total: pools.length };
+function poolHealth(app: Application) {
+  return { healthy: app.pool_healthy ?? 0, total: app.pool_total ?? 0 };
 }
 
 function HealthStatus({ healthy, total }: { healthy: number; total: number }) {
@@ -116,36 +114,28 @@ function NoProjectSelected() {
 const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 const PAGE_SIZE = 20;
 
-type ActionState = Record<number, "restarting" | "recycling">;
-
 export function Applications() {
   usePageTitle("Applications");
   const { activeProject } = useProjectStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const [acting, setActing] = useState<ActionState>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [appName, setAppName] = useState("");
   const [creating, setCreating] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<ApplicationDetail | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const {
-    data: apps,
+    data: appsPage,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["applications", activeProject?.Key],
+    queryKey: ["applications", activeProject?.Key, page],
     enabled: !!activeProject,
     queryFn: async () => {
-      const { data: listData } = await applicationService.list(activeProject!.Key);
-      const list = listData.applications ?? [];
-      if (!list.length) return [];
-      // Hydrate with pool detail in parallel
-      return Promise.all(
-        list.map((app) => applicationService.get(activeProject!.Key, app.ID).then((r) => r.data.application))
-      );
+      const { data } = await applicationService.list(activeProject!.Key, { page, per_page: PAGE_SIZE });
+      return data;
     },
   });
 
@@ -182,34 +172,11 @@ export function Applications() {
     }
   }
 
-  async function runCommand(app: ApplicationDetail, cmd: "restart" | "recycle") {
-    const pools = app.app_pools ?? [];
-    if (!pools.length) return;
-    setActing((prev) => ({ ...prev, [app.ID]: cmd === "restart" ? "restarting" : "recycling" }));
-    try {
-      await Promise.all(
-        pools.map((pool) => applicationService.poolCommand(activeProject!.Key, pool.machine.ID, pool.ID, cmd))
-      );
-      queryClient.invalidateQueries({ queryKey: ["applications", activeProject!.Key] });
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "Command failed. Please try again.";
-      toast.error(msg, { description: `${app.Name} - ${cmd}` });
-    } finally {
-      setActing((prev) => {
-        const next = { ...prev };
-        delete next[app.ID];
-        return next;
-      });
-    }
-  }
-
   if (!activeProject) return <NoProjectSelected />;
 
-  const appTotal = apps?.length ?? 0;
-  const totalPages = Math.max(1, Math.ceil(appTotal / PAGE_SIZE));
-  const paginated = apps?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? [];
+  const apps = appsPage?.applications ?? [];
+  const totalPages = Math.max(1, Math.ceil((appsPage?.total ?? 0) / PAGE_SIZE));
+  const paginated = apps;
 
   return (
     <div className='space-y-5'>
@@ -248,7 +215,6 @@ export function Applications() {
           {/* Rows */}
           {paginated.map((app) => {
             const { healthy, total } = poolHealth(app);
-            const busy = acting[app.ID];
             return (
               <div
                 key={app.ID}
@@ -278,21 +244,7 @@ export function Applications() {
                 {/* Menu */}
                 <div className='flex items-center justify-center px-2 py-3'>
                   <RowMenu
-                    disabled={!!busy}
                     items={[
-                      {
-                        icon: RotateCw,
-                        label: "Restart All",
-                        disabled: total === 0,
-                        onClick: () => void runCommand(app, "restart"),
-                      },
-                      {
-                        icon: RefreshCw,
-                        label: "Recycle All",
-                        disabled: total === 0,
-                        onClick: () => void runCommand(app, "recycle"),
-                      },
-                      { type: "separator" },
                       {
                         icon: Trash2,
                         label: "Delete",

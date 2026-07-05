@@ -53,7 +53,7 @@ func RetrieveApplications(c *gin.Context) {
 	}
 
 	page, perPage, _ := utils.ParsePageQuery(c)
-	apps, total, err := applicationService.RetrieveAll(projectKey, page, perPage, config.Database())
+	items, total, err := applicationService.RetrieveAll(projectKey, page, perPage, config.Database())
 	if err != nil {
 		log.Printf("Error retrieving applications: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -62,7 +62,7 @@ func RetrieveApplications(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "success",
-		"applications": apps,
+		"applications": items,
 		"total":        total,
 		"page":         page,
 		"per_page":     perPage,

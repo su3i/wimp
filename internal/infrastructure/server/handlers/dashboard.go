@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	authorizationService "github.com/su3i/wimp/internal/application/authorization"
@@ -49,9 +50,16 @@ func DashboardStats(c *gin.Context) {
 		return
 	}
 
+	criticalLastHour, err := notificationService.CriticalCount(time.Now().Add(-time.Hour), projectKey, cfg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"machines_count":       machinesCount,
 		"applications_count":   applicationsCount,
 		"unread_notifications": unreadCount,
+		"critical_last_hour":   criticalLastHour,
 	})
 }

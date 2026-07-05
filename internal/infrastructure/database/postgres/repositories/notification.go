@@ -108,6 +108,15 @@ func (r *notificationRepository) CountByHour(hours int) ([]notification.HourCoun
 	return result, nil
 }
 
+func (r *notificationRepository) CountCriticalSince(since time.Time, projectKey string) (int64, error) {
+	var count int64
+	err := r.db.Model(&notification.Notification{}).
+		Where("level = ? AND created_at >= ? AND deleted_at IS NULL", notification.LevelCritical, since).
+		Where("machine_id IN (SELECT m.id FROM machines m JOIN projects p ON p.id = m.project_id WHERE p.key = ? AND m.deleted_at IS NULL)", projectKey).
+		Count(&count).Error
+	return count, err
+}
+
 func NewNotificationRepository(db *gorm.DB) notification.Repository {
 	return &notificationRepository{db: db}
 }

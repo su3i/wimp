@@ -85,11 +85,31 @@ func (a *Agent) dial(ctx context.Context) error {
 		return fmt.Errorf("registration send: %w", err)
 	}
 
+	if err := wc.writeJSON(protocol.Message{
+		Type:    protocol.TypeHeartbeat,
+		Payload: mustMarshal(a.buildHeartbeat()),
+	}); err != nil {
+		return fmt.Errorf("initial heartbeat send: %w", err)
+	}
+
 	hbCtx, cancelHB := context.WithCancel(ctx)
 	defer cancelHB()
 	go a.heartbeat(hbCtx, wc)
 
 	return a.readLoop(ctx, wc)
+}
+
+// buildHeartbeat gathers the current app pool/site/sidecar state. Used both right
+// after registering and on every heartbeat tick, so a freshly (re)connected agent
+// reports the same snapshot a periodic tick would.
+func (a *Agent) buildHeartbeat() protocol.HeartbeatPayload {
+	return protocol.HeartbeatPayload{
+		MachineId:              a.cfg.MachineId,
+		AppPools:               runningAppPools(),
+		Sites:                  runningSites(),
+		WindowsExporterHealthy: checkWindowsExporterHealthy(),
+		FluentBitHealthy:       checkFluentBitHealthy(),
+	}
 }
 
 // heartbeat sends a heartbeat message every heartbeatInterval.
@@ -103,12 +123,8 @@ func (a *Agent) heartbeat(ctx context.Context, wc *safeConn) {
 			return
 		case <-ticker.C:
 			err := wc.writeJSON(protocol.Message{
-				Type: protocol.TypeHeartbeat,
-				Payload: mustMarshal(protocol.HeartbeatPayload{
-					MachineId: a.cfg.MachineId,
-					AppPools:  runningAppPools(),
-					Sites:     runningSites(),
-				}),
+				Type:    protocol.TypeHeartbeat,
+				Payload: mustMarshal(a.buildHeartbeat()),
 			})
 			if err != nil {
 				a.logger().Errorf("heartbeat: %v", err)
@@ -226,7 +242,7 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 
 const (
 	maxFolderBytes int64 = 500 * 1024 * 1024 // 500 MB uncompressed
-	maxZipBytes    int   = 100 * 1024 * 1024  // 100 MB zipped
+	maxZipBytes    int   = 100 * 1024 * 1024 // 100 MB zipped
 )
 
 func zipLogFolder(logFilePath string) ([]byte, error) {
@@ -294,8 +310,8 @@ func listFiles(dirPath string) ([]string, error) {
 // safeConn wraps a WebSocket connection with a mutex so the heartbeat goroutine
 // and the read loop can both write without racing.
 type safeConn struct {
-	ws  *websocket.Conn
-	mu  sync.Mutex
+	ws *websocket.Conn
+	mu sync.Mutex
 }
 
 func (c *safeConn) writeJSON(msg protocol.Message) error {

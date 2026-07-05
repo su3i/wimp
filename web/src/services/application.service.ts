@@ -10,9 +10,10 @@ export const applicationService = {
       { name },
     ),
 
-  list: (projectKey: string) =>
-    api.get<{ message: string; applications: Application[] }>(
+  list: (projectKey: string, params?: { page?: number; per_page?: number }) =>
+    api.get<{ message: string; applications: Application[]; total: number; page: number; per_page: number }>(
       `/projects/${projectKey}/applications`,
+      { params },
     ),
 
   get: (projectKey: string, appId: number) =>

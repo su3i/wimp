@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Terminal, ChevronDown, Maximize2, Minimize2, Download } from "lucide-react";
+import { RefreshCw, Terminal, ChevronDown, Maximize2, Minimize2, Download, FileArchive } from "lucide-react";
 import { toast } from "sonner";
 import { logsService } from "@/services/logs.service";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/cn";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -54,6 +56,18 @@ function fmtLogTime(nanoTs: string): string {
 
 function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return `${value.toFixed(1)} ${units[i]}`;
 }
 
 function extractLogLine(raw: string): string {
@@ -124,7 +138,11 @@ export function LogsViewer({
   const [limit, setLimit] = useState<number>(100);
   const [atBottom, setAtBottom] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [staging, setStaging] = useState(false);
+  const [fetchingDownload, setFetchingDownload] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState<
+    { token: string; fileName: string; fileSize: number } | null
+  >(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // When machine changes, reset pool selection
@@ -226,29 +244,45 @@ export function LogsViewer({
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
   }
 
-  async function handleDownload() {
+  async function handleStageDownload() {
     if (!machineId || !filename) {
       toast.error("Select a host and log file before downloading.");
       return;
     }
-    setDownloading(true);
+    setStaging(true);
     try {
-      const resp = await logsService.downloadLogs(projectKey, Number(machineId), filename);
+      const { data } = await logsService.stageDownload(projectKey, Number(machineId), filename);
+      setPendingDownload({ token: data.token, fileName: data.file_name, fileSize: data.file_size });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Failed to prepare logs for download.";
+      toast.error(msg);
+    } finally {
+      setStaging(false);
+    }
+  }
+
+  async function handleConfirmDownload() {
+    if (!pendingDownload) return;
+    setFetchingDownload(true);
+    try {
+      const resp = await logsService.fetchDownload(pendingDownload.token);
       const blob = new Blob([resp.data as BlobPart], { type: "application/zip" });
       const url = URL.createObjectURL(blob);
-      const hostname = machines.find((m) => m.id === Number(machineId))?.hostname ?? String(machineId);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `logs-${hostname}.zip`;
+      a.download = pendingDownload.fileName;
       a.click();
       URL.revokeObjectURL(url);
+      setPendingDownload(null);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
         "Failed to download logs.";
       toast.error(msg);
     } finally {
-      setDownloading(false);
+      setFetchingDownload(false);
     }
   }
 
@@ -305,13 +339,13 @@ export function LogsViewer({
         <div className='ml-auto flex items-center gap-1.5'>
           <button
             type='button'
-            onClick={() => void handleDownload()}
-            disabled={downloading || !machineId || !filename}
+            onClick={() => void handleStageDownload()}
+            disabled={staging || !machineId || !filename}
             className='flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-rim bg-surface text-xs text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
             title='Download logs as zip'
           >
-            <Download className={cn("size-3", downloading && "animate-pulse")} />
-            {downloading ? "Downloading…" : "Download"}
+            <Download className={cn("size-3", staging && "animate-pulse")} />
+            {staging ? "Preparing…" : "Download"}
           </button>
           <button
             type='button'
@@ -366,6 +400,45 @@ export function LogsViewer({
           </div>
         )}
       </div>
+
+      <Modal
+        open={!!pendingDownload}
+        onClose={() => setPendingDownload(null)}
+        title='Download Logs'
+      >
+        <div className='space-y-4'>
+          <div className='rounded-lg border border-rim bg-surface-alt divide-y divide-rim text-xs'>
+            <div className='flex items-center gap-2.5 px-4 py-2.5'>
+              <FileArchive className='size-3.5 text-ink-faint shrink-0' />
+              <span className='font-mono text-ink truncate'>{pendingDownload?.fileName}</span>
+            </div>
+            <div className='flex items-center justify-between px-4 py-2.5'>
+              <span className='text-ink-faint'>Size</span>
+              <span className='font-mono text-ink'>
+                {pendingDownload ? formatBytes(pendingDownload.fileSize) : ""}
+              </span>
+            </div>
+          </div>
+
+          <div className='flex justify-end gap-2'>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => setPendingDownload(null)}
+              disabled={fetchingDownload}
+            >
+              Cancel
+            </Button>
+            <Button
+              type='button'
+              loading={fetchingDownload}
+              onClick={() => void handleConfirmDownload()}
+            >
+              Download
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

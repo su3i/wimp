@@ -198,16 +198,16 @@ export function Machines() {
   const [uninstallCmd, setUninstallCmd] = useState<string | null>(null);
 
   const {
-    data: machines,
+    data: machinesPage,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["machines", activeProject?.Key],
+    queryKey: ["machines", activeProject?.Key, page],
     enabled: !!activeProject,
     refetchInterval: 5_000,
     queryFn: async () => {
-      const { data } = await machineService.list(activeProject!.Key);
-      return data.machines ?? [];
+      const { data } = await machineService.list(activeProject!.Key, { page, per_page: PAGE_SIZE });
+      return data;
     },
   });
 
@@ -268,9 +268,9 @@ export function Machines() {
 
   if (!activeProject) return <NoProjectSelected />;
 
-  const total = machines?.length ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const paginated = machines?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? [];
+  const machines = machinesPage?.machines ?? [];
+  const totalPages = Math.max(1, Math.ceil((machinesPage?.total ?? 0) / PAGE_SIZE));
+  const paginated = machines;
 
   return (
     <div className='space-y-5'>
@@ -294,7 +294,7 @@ export function Machines() {
           <AlertCircle className='size-4 shrink-0' />
           Failed to load hosts. Check your connection and try again.
         </div>
-      ) : !machines?.length ? (
+      ) : !machines.length ? (
         <EmptyState onAdd={() => setConfirmOpen(true)} />
       ) : (
         <div className='rounded-lg border border-rim overflow-hidden'>
