@@ -45,7 +45,7 @@ func (a *Agent) Stop(svc service.Service) error {
 }
 
 func (a *Agent) run(ctx context.Context) {
-	a.logger().Info("wimp agent starting")
+	a.logger().Infof("wimp agent starting - version %s", Version)
 	a.logger().Infof("control plane: %s  machine_id: %d", a.cfg.ControlPlaneUrl, a.cfg.MachineId)
 
 	a.connect(ctx)

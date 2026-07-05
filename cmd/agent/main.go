@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"os"
 
 	"github.com/kardianos/service"
 	"github.com/su3i/wimp/internal/agent"
@@ -13,6 +15,13 @@ const (
 )
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-version" || arg == "-v" {
+			fmt.Println(agent.Version)
+			return
+		}
+	}
+
 	cfg, err := agent.LoadConfig()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
