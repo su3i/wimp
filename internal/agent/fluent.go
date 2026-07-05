@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/su3i/wimp/internal/domain/protocol"
 )
@@ -27,7 +26,6 @@ func applyFluentConfig(fbDir string, payload protocol.FluentConfigPayload) error
 		return fmt.Errorf("patch fluent-bit.conf: %w", err)
 	}
 
-	changed := false
 	activeFiles := map[string]bool{}
 	for _, cfg := range payload.Configs {
 		if cfg.LogPath == "" {
@@ -35,11 +33,7 @@ func applyFluentConfig(fbDir string, payload protocol.FluentConfigPayload) error
 		}
 		fname := fmt.Sprintf("wimp_pool_%d.conf", cfg.PoolID)
 		content := renderPoolConfig(fbDir, cfg, payload.LokiHost, payload.LokiPort, payload.LokiTlsEnabled, payload.LokiTlsSkipVerify, payload.MachineID)
-		path := filepath.Join(confD, fname)
-		if existing, err := os.ReadFile(path); err != nil || string(existing) != content {
-			changed = true
-		}
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(confD, fname), []byte(content), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", fname, err)
 		}
 		activeFiles[fname] = true
@@ -50,17 +44,9 @@ func applyFluentConfig(fbDir string, payload protocol.FluentConfigPayload) error
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "wimp_pool_") && !activeFiles[e.Name()] {
 			os.Remove(filepath.Join(confD, e.Name()))
-			changed = true
 		}
 	}
 
-	// Only restart if something actually changed - the control plane pushes this on
-	// every agent reconnect regardless of whether the config differs, and restarting
-	// fluent-bit unnecessarily on every reconnect is exactly the kind of churn that
-	// made it flaky in the first place.
-	if !changed {
-		return nil
-	}
 	return restartFluentBit()
 }
 
@@ -118,67 +104,14 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
 `, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, tlsVerify, cfg.ApplicationID, cfg.PoolID, machineID)
 }
 
-// restartFluentBit force-kills fluent-bit (rather than a graceful sc.exe stop, which
-// only requests the stop and returns before it completes - a slow or wedged shutdown
-// then races the next start) and starts the service fresh.
-//
-// Killing the process is not enough on its own: SCM doesn't instantly notice the
-// process is gone and can still reject an immediate start with "service is starting
-// or stopping" while it's mid-transition. So this waits for SCM to actually report
-// STOPPED before starting - and if fluent-bit is still wedged after the first kill
-// (observed happening after it's been running a while), kills it again and waits once
-// more rather than giving up.
+// restartFluentBit gets fluent-bit's PID, kills it, and starts the service again.
 func restartFluentBit() error {
-	killFluentBitProcess()
-
-	if !waitForServiceState("fluent-bit", "STOPPED", 10*time.Second) {
-		killFluentBitProcess()
-		waitForServiceState("fluent-bit", "STOPPED", 10*time.Second)
-	}
+	exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		`Stop-Process -Id (Get-CimInstance Win32_Service -Filter "Name='fluent-bit'").ProcessId -Force -ErrorAction SilentlyContinue`,
+	).Run() //nolint:errcheck
 
 	if out, err := exec.Command("sc.exe", "start", "fluent-bit").CombinedOutput(); err != nil {
 		return fmt.Errorf("start fluent-bit: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
-}
-
-// killFluentBitProcess force-kills fluent-bit by resolved PID (with its process tree)
-// and, as a backstop, by image name - fluent-bit has been observed getting stuck in
-// STOP_PENDING and not responding to graceful control at all, so this doesn't rely on
-// PID resolution having found the right (or any) process.
-func killFluentBitProcess() {
-	if pid, err := servicePID("fluent-bit"); err == nil && pid != "" {
-		exec.Command("taskkill", "/F", "/T", "/PID", pid).Run() //nolint:errcheck
-	}
-	exec.Command("taskkill", "/F", "/T", "/IM", "fluent-bit.exe").Run() //nolint:errcheck
-}
-
-// waitForServiceState polls until the named service reports the given state or the
-// timeout elapses, returning whether it got there in time.
-func waitForServiceState(name, want string, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if serviceState(name) == want {
-			return true
-		}
-		time.Sleep(300 * time.Millisecond)
-	}
-	return false
-}
-
-// servicePID resolves the PID of a running Windows service via sc.exe queryex.
-func servicePID(name string) (string, error) {
-	out, err := exec.Command("sc.exe", "queryex", name).Output()
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.Contains(line, "PID") {
-			parts := strings.Fields(line)
-			if len(parts) > 0 {
-				return parts[len(parts)-1], nil
-			}
-		}
-	}
-	return "", fmt.Errorf("PID not found in queryex output")
 }
