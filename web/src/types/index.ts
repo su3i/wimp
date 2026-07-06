@@ -79,6 +79,7 @@ export interface Machine {
   TokenExpiresAt: string
   LastSeenAt: string | null
   AgentVersion: string
+  WindowsVersion: string
   CreatedAt: string
   UpdatedAt: string
 }

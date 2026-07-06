@@ -27,10 +27,11 @@ type Message struct {
 
 // RegisterPayload is sent by the agent immediately after connecting.
 type RegisterPayload struct {
-	MachineId uint     `json:"machine_id"`
-	Hostname  string   `json:"hostname"`
-	IPs       []string `json:"ips"`
-	Version   string   `json:"version"`
+	MachineId      uint     `json:"machine_id"`
+	Hostname       string   `json:"hostname"`
+	IPs            []string `json:"ips"`
+	Version        string   `json:"version"`
+	WindowsVersion string   `json:"windows_version"`
 }
 
 // DiscoveryPayload is sent by the agent after RegisterAck with full IIS state.

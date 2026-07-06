@@ -76,10 +76,11 @@ func (a *Agent) dial(ctx context.Context) error {
 	if err := wc.writeJSON(protocol.Message{
 		Type: protocol.TypeRegister,
 		Payload: mustMarshal(protocol.RegisterPayload{
-			MachineId: a.cfg.MachineId,
-			Hostname:  hostname,
-			IPs:       localIPs(),
-			Version:   Version,
+			MachineId:      a.cfg.MachineId,
+			Hostname:       hostname,
+			IPs:            localIPs(),
+			Version:        Version,
+			WindowsVersion: windowsVersion(),
 		}),
 	}); err != nil {
 		return fmt.Errorf("registration send: %w", err)

@@ -115,6 +115,9 @@ func AgentWebSocket(c *gin.Context) {
 				m.Hostname = reg.Hostname
 				m.IPs = reg.IPs
 				m.AgentVersion = reg.Version
+				if reg.WindowsVersion != "" {
+					m.WindowsVersion = reg.WindowsVersion
+				}
 				if reg.Version != "" && reg.Version != "dev" && reg.Version != prevVersion {
 					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
 						"Agent updated", m.Hostname+" agent updated to "+reg.Version, cfg)

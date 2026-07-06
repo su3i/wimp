@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Clock, Power, RotateCw, Server } from 'lucide-react'
+import { ArrowLeft, Clock, Monitor, Power, RotateCw, Server } from 'lucide-react'
 import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
@@ -122,6 +122,12 @@ export function MachineDetail() {
               <div className="space-y-1.5">
                 {ipv4s.length > 0 && (
                   <p className="font-mono text-xs text-ink-faint">{ipv4s.join(' · ')}</p>
+                )}
+                {machine.WindowsVersion && (
+                  <p className="flex items-center gap-1.5 text-xs text-ink-faint">
+                    <Monitor className="size-3 shrink-0" />
+                    {machine.WindowsVersion}
+                  </p>
                 )}
                 <p className="flex items-center gap-1.5 text-xs text-ink-faint mt-3">
                   <Clock className="size-3 shrink-0" />

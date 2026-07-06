@@ -17,4 +17,5 @@ type Machine struct {
 	TokenExpiresAt time.Time
 	LastSeenAt     *time.Time
 	AgentVersion   string `gorm:"default:null"`
+	WindowsVersion string `gorm:"default:null"`
 }
