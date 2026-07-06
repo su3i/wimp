@@ -23,7 +23,9 @@ func NewApplication(c *gin.Context) {
 	}
 
 	var req struct {
-		Name string `json:"name" binding:"required"`
+		Name                       string  `json:"name" binding:"required"`
+		HealthCheckURL             *string `json:"health_check_url"`
+		HealthCheckIntervalSeconds int     `json:"health_check_interval_seconds"`
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -33,7 +35,7 @@ func NewApplication(c *gin.Context) {
 		return
 	}
 
-	app, err := applicationService.Create(req.Name, projectKey, config.Database())
+	app, err := applicationService.Create(req.Name, projectKey, req.HealthCheckURL, req.HealthCheckIntervalSeconds, config.Database())
 	if err != nil {
 		log.Printf("Error creating application: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -41,6 +43,44 @@ func NewApplication(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "success", "application": app})
+}
+
+func UpdateApplication(c *gin.Context) {
+	projectKey := c.Param("key")
+
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	var req struct {
+		Name                       string  `json:"name" binding:"required"`
+		HealthCheckURL             *string `json:"health_check_url"`
+		HealthCheckIntervalSeconds int     `json:"health_check_interval_seconds"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"message": "Validation failed.",
+			"errors":  utils.FormatValidationErrors(err),
+		})
+		return
+	}
+
+	app, err := applicationService.Update(uint(id), projectKey, req.Name, req.HealthCheckURL, req.HealthCheckIntervalSeconds, config.Database())
+	if err != nil {
+		log.Printf("Error updating application: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success", "application": app})
 }
 
 func RetrieveApplications(c *gin.Context) {

@@ -11,6 +11,9 @@ type ApplicationRepository interface {
 	FindByProjectIDPaginated(projectID uint, page, perPage int) (*[]Application, int64, error)
 	FindPoolCountsByApplicationIDs(appIDs []uint) (map[uint]PoolCounts, error)
 	FindOneByID(id uint) (*Application, error)
+	Update(app *Application) error
+	UpdateCheckState(id uint, consecutiveFailures int, alertFired bool) error
+	FindAllWithHealthCheck() ([]Application, error)
 	AddAppPool(rel *ApplicationAppPool) error
 	RemoveAppPool(applicationID, appPoolID uint) error
 	FindAppPoolRelations(applicationID uint) (*[]ApplicationAppPool, error)

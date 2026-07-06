@@ -152,6 +152,25 @@ func (r *applicationRepository) FindAppPoolRelationsByPoolIDs(poolIDs []uint) (*
 	return &relations, nil
 }
 
+func (r *applicationRepository) Update(app *application.Application) error {
+	return r.db.Model(app).Select("name", "health_check_url", "health_check_interval_seconds").Updates(app).Error
+}
+
+func (r *applicationRepository) UpdateCheckState(id uint, consecutiveFailures int, alertFired bool) error {
+	return r.db.Model(&application.Application{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"consecutive_failures": consecutiveFailures,
+		"alert_fired":          alertFired,
+	}).Error
+}
+
+func (r *applicationRepository) FindAllWithHealthCheck() ([]application.Application, error) {
+	var apps []application.Application
+	if err := r.db.Where("health_check_url IS NOT NULL AND health_check_url != ''").Find(&apps).Error; err != nil {
+		return nil, err
+	}
+	return apps, nil
+}
+
 func (r *applicationRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Unscoped().Where("application_id = ?", id).Delete(&application.ApplicationAppPool{}).Error; err != nil {

@@ -39,17 +39,47 @@ type ApplicationListItem struct {
 	PoolHealthy int64 `json:"pool_healthy"`
 }
 
-func Create(name, projectKey string, cfg *config.DatabaseConfig) (*application.Application, error) {
+func Create(name, projectKey string, healthCheckURL *string, intervalSeconds int, cfg *config.DatabaseConfig) (*application.Application, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return nil, errors.New("project not found")
 	}
 
+	interval := intervalSeconds
+	if interval <= 0 {
+		interval = 60
+	}
+
 	app := &application.Application{
-		ProjectID: proj.ID,
-		Name:      name,
+		ProjectID:                  proj.ID,
+		Name:                       name,
+		HealthCheckURL:             healthCheckURL,
+		HealthCheckIntervalSeconds: interval,
 	}
 	return database.NewApplicationRepository(cfg).Create(app)
+}
+
+func Update(id uint, projectKey string, name string, healthCheckURL *string, intervalSeconds int, cfg *config.DatabaseConfig) (*application.Application, error) {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return nil, errors.New("project not found")
+	}
+	repo := database.NewApplicationRepository(cfg)
+	app, err := repo.FindOneByID(id)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return nil, errors.New("application not found")
+	}
+	app.Name = name
+	app.HealthCheckURL = healthCheckURL
+	interval := intervalSeconds
+	if interval <= 0 {
+		interval = 60
+	}
+	app.HealthCheckIntervalSeconds = interval
+	if err := repo.Update(app); err != nil {
+		return nil, err
+	}
+	return app, nil
 }
 
 func RetrieveAll(projectKey string, page, perPage int, cfg *config.DatabaseConfig) ([]ApplicationListItem, int64, error) {

@@ -51,6 +51,22 @@ function fmtLogTime(nanoTs: string): string {
   return `${hh}:${mm}:${ss}.${ms3}`;
 }
 
+function highlight(text: string, query: string): React.ReactNode {
+  const esc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${esc})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-[#f5c842]/35 text-inherit rounded-[2px]">{part}</mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
 function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
@@ -91,7 +107,7 @@ function extractEntries(data: { result?: { values: [string, string][] }[] } | un
   return out;
 }
 
-const FAR_BACK = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString();
+const FAR_BACK = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 const FETCH_LIMIT = 1000;
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -279,12 +295,12 @@ export function LogsViewer({
     };
   }, [readyToFetch, machineId, poolId, filename, projectKey, appId, fetchKey]);
 
-  // Auto-scroll to bottom after initial load
+  // Scroll to bottom after initial load and whenever the viewer is expanded/collapsed
   useEffect(() => {
     if (initialLoaded && !fetchError && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [initialLoaded, fetchError]);
+  }, [initialLoaded, fetchError, expanded]);
 
   // Restore scroll position after prepending older entries
   useLayoutEffect(() => {
@@ -341,11 +357,14 @@ export function LogsViewer({
 
   // ── Search ─────────────────────────────────────────────────────────────────
 
-  const filtered = useMemo(() => {
-    if (!searchText.trim()) return entries;
-    const q = searchText.toLowerCase();
-    return entries.filter((e) => e.content.toLowerCase().includes(q));
-  }, [entries, searchText]);
+  const searchQuery = searchText.trim();
+
+  const matchCount = useMemo(() => {
+    if (!searchQuery) return 0;
+    const esc = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(esc, 'gi');
+    return entries.reduce((n, e) => n + (e.content.match(re)?.length ?? 0), 0);
+  }, [entries, searchQuery]);
 
   // ── Download ───────────────────────────────────────────────────────────────
 
@@ -454,6 +473,11 @@ export function LogsViewer({
           placeholder='Search…'
           className='h-7 pl-6 pr-2.5 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent w-36'
         />
+        {searchQuery && (
+          <span className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] text-ink-faint'>
+            {matchCount}
+          </span>
+        )}
       </div>
 
       <div className='ml-auto flex items-center gap-1'>
@@ -510,7 +534,7 @@ export function LogsViewer({
       {/* Load more indicator at the top */}
       {loadingMore && (
         <div className='sticky top-0 flex items-center justify-center py-2 bg-surface-alt/80 backdrop-blur-sm text-xs text-ink-faint border-b border-rim z-10'>
-          Loading more…
+          Loading…
         </div>
       )}
       {!hasMore && initialLoaded && entries.length > 0 && (
@@ -532,22 +556,32 @@ export function LogsViewer({
         <div className='flex items-center justify-center h-full text-danger text-xs'>
           Failed to load logs.
         </div>
-      ) : !filtered.length ? (
+      ) : !entries.length ? (
         <div className='flex flex-col items-center justify-center h-full gap-2 text-ink-faint text-xs'>
           <Terminal className='size-5 opacity-30' />
-          <span>{searchText ? "No matching log entries." : "No log entries found."}</span>
+          <span>No log entries found.</span>
         </div>
       ) : (
         <div className='p-2'>
-          {filtered.map((entry, i) => (
-            <div
-              key={i}
-              className='flex items-baseline gap-1.5 px-2 py-[2px] rounded hover:bg-surface-high/50 leading-relaxed'
-            >
-              <span className='shrink-0 text-ink-faint w-24'>{fmtLogTime(entry.nanoTs)}</span>
-              <span className='text-ink-dim break-all flex-1'>{entry.content}</span>
-            </div>
-          ))}
+          {entries.map((entry, i) => {
+            const hasMatch = searchQuery
+              ? entry.content.toLowerCase().includes(searchQuery.toLowerCase())
+              : true;
+            return (
+              <div
+                key={i}
+                className={cn(
+                  'flex items-baseline gap-1.5 px-2 py-[2px] rounded hover:bg-surface-high/50 leading-relaxed transition-opacity duration-75',
+                  searchQuery && !hasMatch ? 'opacity-25' : '',
+                )}
+              >
+                <span className='shrink-0 text-ink-faint w-24'>{fmtLogTime(entry.nanoTs)}</span>
+                <span className='text-ink-dim break-all flex-1'>
+                  {searchQuery ? highlight(entry.content, searchQuery) : entry.content}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

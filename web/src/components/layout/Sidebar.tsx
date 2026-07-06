@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Boxes, HardDrive, Bell, Activity, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+import { LayoutDashboard, Boxes, HardDrive, Bell, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/auth'
 import { useUIStore } from '@/store/ui'
@@ -12,7 +12,6 @@ const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/applications', icon: Boxes, label: 'Applications' },
   { to: '/machines', icon: HardDrive, label: 'Hosts' },
-  { to: '/monitors', icon: Activity, label: 'Uptime Monitor' },
   { to: '/alerts', icon: Bell, label: 'Alerts' },
 ]
 

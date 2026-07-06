@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus } from "lucide-react";
+import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -109,6 +109,103 @@ function NoProjectSelected() {
   );
 }
 
+// ── Edit Application Modal ────────────────────────────────────────────────────
+
+function EditApplicationModal({
+  open,
+  onClose,
+  app,
+  projectKey,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  app: Application;
+  projectKey: string;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState(app.Name);
+  const [hcUrl, setHcUrl] = useState(app.HealthCheckURL ?? "");
+  const [hcInterval, setHcInterval] = useState(app.HealthCheckIntervalSeconds ?? 60);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await applicationService.update(projectKey, app.ID, {
+        name: name.trim(),
+        health_check_url: hcUrl.trim() || null,
+        health_check_interval_seconds: hcUrl.trim() ? hcInterval : 60,
+      });
+      toast.success("Application updated.");
+      onSuccess();
+      onClose();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Failed to update application.";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Application">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            className="w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint">
+            Health Check URL <span className="normal-case font-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={hcUrl}
+            onChange={(e) => setHcUrl(e.target.value)}
+            placeholder="https://example.com/health"
+            className="w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-accent"
+          />
+        </div>
+
+        {hcUrl.trim() && (
+          <div className="space-y-1.5">
+            <label className="text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint">Health Check Interval</label>
+            <select
+              value={hcInterval}
+              onChange={(e) => setHcInterval(Number(e.target.value))}
+              className="w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink focus:outline-none focus:border-accent"
+            >
+              <option value={30}>30 seconds</option>
+              <option value={60}>1 minute</option>
+              <option value={120}>2 minutes</option>
+              <option value={300}>5 minutes</option>
+              <option value={600}>10 minutes</option>
+            </select>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="button" loading={saving} disabled={saving || !name.trim()} onClick={() => void handleSave()}>
+            Save
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
@@ -122,9 +219,12 @@ export function Applications() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [appName, setAppName] = useState("");
+  const [appHcUrl, setAppHcUrl] = useState("");
+  const [appHcInterval, setAppHcInterval] = useState(60);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editTarget, setEditTarget] = useState<Application | null>(null);
 
   const {
     data: appsPage,
@@ -139,14 +239,25 @@ export function Applications() {
     },
   });
 
+  function resetCreateForm() {
+    setAppName("");
+    setAppHcUrl("");
+    setAppHcInterval(60);
+  }
+
   async function handleCreate() {
     if (!appName.trim()) return;
     setCreating(true);
     try {
-      await applicationService.create(activeProject!.Key, appName.trim());
+      await applicationService.create(
+        activeProject!.Key,
+        appName.trim(),
+        appHcUrl.trim() || null,
+        appHcUrl.trim() ? appHcInterval : undefined,
+      );
       queryClient.invalidateQueries({ queryKey: ["applications", activeProject!.Key] });
       setCreateOpen(false);
-      setAppName("");
+      resetCreateForm();
     } catch {
       toast.error("Failed to create application.");
     } finally {
@@ -246,6 +357,12 @@ export function Applications() {
                   <RowMenu
                     items={[
                       {
+                        icon: Pencil,
+                        label: "Edit",
+                        onClick: () => setEditTarget(app),
+                      },
+                      { type: "separator" },
+                      {
                         icon: Trash2,
                         label: "Delete",
                         variant: "danger",
@@ -278,43 +395,71 @@ export function Applications() {
 
       <Modal
         open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          setAppName("");
-        }}
+        onClose={() => { setCreateOpen(false); resetCreateForm(); }}
         title='New Application'
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleCreate();
-          }}
+          onSubmit={(e) => { e.preventDefault(); void handleCreate(); }}
           className='space-y-4'
         >
-          <Input
-            placeholder='Application name'
-            value={appName}
-            onChange={(e) => setAppName(e.target.value)}
-            autoFocus
-          />
+          <div className='space-y-1.5'>
+            <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>Name</label>
+            <Input
+              placeholder='e.g. My Web App'
+              value={appName}
+              onChange={(e) => setAppName(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className='space-y-1.5'>
+            <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+              Health Check URL <span className='normal-case font-normal'>(optional)</span>
+            </label>
+            <Input
+              placeholder='https://example.com/health'
+              value={appHcUrl}
+              onChange={(e) => setAppHcUrl(e.target.value)}
+            />
+          </div>
+
+          {appHcUrl.trim() && (
+            <div className='space-y-1.5'>
+              <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>Health Check Interval</label>
+              <select
+                value={appHcInterval}
+                onChange={(e) => setAppHcInterval(Number(e.target.value))}
+                className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink focus:outline-none focus:border-accent'
+              >
+                <option value={30}>30 seconds</option>
+                <option value={60}>1 minute</option>
+                <option value={120}>2 minutes</option>
+                <option value={300}>5 minutes</option>
+                <option value={600}>10 minutes</option>
+              </select>
+            </div>
+          )}
+
           <div className='flex justify-end gap-2'>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => {
-                setCreateOpen(false);
-                setAppName("");
-              }}
-              disabled={creating}
-            >
+            <Button type='button' variant='outline' onClick={() => { setCreateOpen(false); resetCreateForm(); }} disabled={creating}>
               Cancel
             </Button>
             <Button type='submit' loading={creating} disabled={!appName.trim()}>
-              Proceed
+              Create
             </Button>
           </div>
         </form>
       </Modal>
+
+      {editTarget && activeProject && (
+        <EditApplicationModal
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          app={editTarget}
+          projectKey={activeProject.Key}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["applications", activeProject.Key] })}
+        />
+      )}
     </div>
   );
 }

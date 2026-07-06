@@ -129,6 +129,10 @@ export interface Application {
   ID: number
   ProjectID: number
   Name: string
+  HealthCheckURL?: string | null
+  HealthCheckIntervalSeconds?: number
+  ConsecutiveFailures?: number
+  AlertFired?: boolean
   CreatedAt: string
   UpdatedAt: string
   pool_total?: number

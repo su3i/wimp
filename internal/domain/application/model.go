@@ -5,8 +5,12 @@ import "gorm.io/gorm"
 type Application struct {
 	gorm.Model
 
-	ProjectID uint   `gorm:"not null;index"`
-	Name      string `gorm:"not null"`
+	ProjectID                  uint    `gorm:"not null;index"`
+	Name                       string  `gorm:"not null"`
+	HealthCheckURL             *string `gorm:"type:text"`
+	HealthCheckIntervalSeconds int     `gorm:"not null;default:60"`
+	ConsecutiveFailures        int     `gorm:"not null;default:0"`
+	AlertFired                 bool    `gorm:"not null;default:false"`
 }
 
 type ApplicationAppPool struct {

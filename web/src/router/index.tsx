@@ -8,7 +8,6 @@ import { ApplicationDetail } from '@/pages/ApplicationDetail'
 import { Machines } from '@/pages/Machines'
 import { MachineDetail } from '@/pages/MachineDetail'
 import { Alerts } from '@/pages/Alerts'
-import { Monitors } from '@/pages/Monitors'
 
 export const router = createBrowserRouter([
   {
@@ -26,7 +25,6 @@ export const router = createBrowserRouter([
           { path: '/applications/:appId', element: <ApplicationDetail /> },
           { path: '/machines', element: <Machines /> },
           { path: '/machines/:machineId', element: <MachineDetail /> },
-          { path: '/monitors', element: <Monitors /> },
           { path: '/alerts', element: <Alerts /> },
         ],
       },

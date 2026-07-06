@@ -19,6 +19,9 @@ import {
   RefreshCw,
   Pencil,
   Trash2,
+  ShieldCheck,
+  ShieldAlert,
+  ExternalLink,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { RowMenu } from "@/components/ui/RowMenu";
@@ -30,9 +33,10 @@ import { LogsViewer } from "@/components/application/LogsViewer";
 import { applicationService } from "@/services/application.service";
 import { appPoolService } from "@/services/appPool.service";
 import { machineService } from "@/services/machine.service";
+import { prometheusService } from "@/services/prometheus.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
-import type { AppPoolWithDetails, MachineWithPools } from "@/types";
+import type { AppPoolWithDetails, ApplicationDetail as AppDetailType, MachineWithPools } from "@/types";
 
 // ── Shared helpers (mirror AppPoolsTab) ───────────────────────────────────────
 
@@ -51,6 +55,227 @@ function PoolStatus({ state }: { state: string }) {
     <div className='flex items-center gap-2'>
       <span className={cn("size-1.5 rounded-full shrink-0", cfg.dot)} />
       <span className={cn("text-xs", cfg.text)}>{state}</span>
+    </div>
+  );
+}
+
+// ── Edit Application Modal ────────────────────────────────────────────────────
+
+function EditApplicationModal({
+  open,
+  onClose,
+  app,
+  projectKey,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  app: AppDetailType;
+  projectKey: string;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState(app.Name);
+  const [hcUrl, setHcUrl] = useState(app.HealthCheckURL ?? "");
+  const [hcInterval, setHcInterval] = useState(app.HealthCheckIntervalSeconds ?? 60);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await applicationService.update(projectKey, app.ID, {
+        name: name.trim(),
+        health_check_url: hcUrl.trim() || null,
+        health_check_interval_seconds: hcUrl.trim() ? hcInterval : 60,
+      });
+      toast.success("Application updated.");
+      onSuccess();
+      onClose();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Failed to update application.";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title='Edit Application'>
+      <div className='space-y-4'>
+        <div className='space-y-1.5'>
+          <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>Name</label>
+          <input
+            type='text'
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent'
+          />
+        </div>
+
+        <div className='space-y-1.5'>
+          <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+            Health Check URL <span className='normal-case font-normal'>(optional)</span>
+          </label>
+          <input
+            type='text'
+            value={hcUrl}
+            onChange={(e) => setHcUrl(e.target.value)}
+            placeholder='https://example.com/health'
+            className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-accent'
+          />
+        </div>
+
+        {hcUrl.trim() && (
+          <div className='space-y-1.5'>
+            <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>Health Check Interval</label>
+            <select
+              value={hcInterval}
+              onChange={(e) => setHcInterval(Number(e.target.value))}
+              className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink focus:outline-none focus:border-accent'
+            >
+              <option value={30}>30 seconds</option>
+              <option value={60}>1 minute</option>
+              <option value={120}>2 minutes</option>
+              <option value={300}>5 minutes</option>
+              <option value={600}>10 minutes</option>
+            </select>
+          </div>
+        )}
+
+        <div className='flex justify-end gap-2'>
+          <Button type='button' variant='outline' onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type='button' loading={saving} disabled={saving || !name.trim()} onClick={() => void handleSave()}>
+            Save
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Health Monitor section ────────────────────────────────────────────────────
+
+function fmtInterval(s: number) {
+  if (s < 60) return `${s}s`;
+  return `${Math.round(s / 60)}m`;
+}
+
+function sslDaysLeft(unixTs: number) {
+  return Math.floor((unixTs - Date.now() / 1000) / 86400);
+}
+
+function SslBadge({ days }: { days: number | null }) {
+  if (days == null) return <span className='text-xs text-ink-faint'>--</span>;
+  if (days < 0) return (
+    <span className='flex items-center gap-1 text-danger text-xs font-medium'>
+      <ShieldAlert className='size-3' /> Expired
+    </span>
+  );
+  if (days <= 14) return (
+    <span className='flex items-center gap-1 text-[#d29922] text-xs font-medium'>
+      <ShieldAlert className='size-3' /> {days}d
+    </span>
+  );
+  return (
+    <span className='flex items-center gap-1 text-success text-xs font-medium'>
+      <ShieldCheck className='size-3' /> {days}d
+    </span>
+  );
+}
+
+function HealthMonitor({ app }: { app: AppDetailType }) {
+  const url = app.HealthCheckURL;
+  const interval = app.HealthCheckIntervalSeconds ?? 60;
+  const appId = String(app.ID);
+  const isHttps = url?.toLowerCase().startsWith("https://");
+  const promEnabled = prometheusService.isConfigured();
+
+  const idFilter = `job="blackbox_http", application_id="${appId}"`;
+
+  const { data: statusData } = useQuery({
+    queryKey: ["hc-status", appId],
+    enabled: promEnabled,
+    refetchInterval: 30_000,
+    queryFn: () => prometheusService.instant(`probe_success{${idFilter}}`),
+  });
+
+  const { data: uptimeData } = useQuery({
+    queryKey: ["hc-uptime", appId],
+    enabled: promEnabled,
+    refetchInterval: 60_000,
+    queryFn: () => prometheusService.instant(`avg_over_time(probe_success{${idFilter}}[30d])`),
+  });
+
+  const { data: sslData } = useQuery({
+    queryKey: ["hc-ssl", appId],
+    enabled: promEnabled && !!isHttps,
+    refetchInterval: 60_000,
+    queryFn: () => prometheusService.instant(`probe_ssl_earliest_cert_expiry{${idFilter}}`),
+  });
+
+  const statusVal = statusData?.[0]?.value[1];
+  const status: "up" | "down" | "unknown" =
+    statusVal === "1" ? "up" : statusVal === "0" ? "down" : "unknown";
+
+  const uptimeRatio = uptimeData?.[0]?.value[1];
+  const uptimePct = uptimeRatio != null ? `${(Number(uptimeRatio) * 100).toFixed(2)}%` : "--";
+
+  const sslTs = sslData?.[0]?.value[1];
+  const sslDays = sslTs != null ? sslDaysLeft(Number(sslTs)) : null;
+
+  const statusColor =
+    status === "up" ? "text-success" : status === "down" ? "text-danger" : "text-ink-faint";
+  const statusDot =
+    status === "up" ? "bg-success" : status === "down" ? "bg-danger animate-pulse" : "bg-ink-faint/40";
+
+  return (
+    <div className='rounded-lg border border-rim bg-surface overflow-hidden'>
+      <div className='flex items-center justify-between px-4 py-3 border-b border-rim bg-surface-alt'>
+        <span className='text-xs font-semibold text-ink'>Health Monitor</span>
+        {url && (
+          <a
+            href={url}
+            target='_blank'
+            rel='noopener noreferrer'
+            className='flex items-center gap-1 text-[0.625rem] text-ink-faint hover:text-ink transition-colors'
+          >
+            <span className='font-mono truncate max-w-[240px]'>{url}</span>
+            <ExternalLink className='size-3 shrink-0' />
+          </a>
+        )}
+      </div>
+
+      <div className='grid grid-cols-2 sm:grid-cols-4 divide-x divide-rim'>
+        <div className='px-4 py-3.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>Status</p>
+          {promEnabled ? (
+            <div className={cn('flex items-center gap-1.5 text-xs font-medium', statusColor)}>
+              <span className={cn('size-2 rounded-full shrink-0', statusDot)} />
+              {status === "up" ? "Up" : status === "down" ? "Down" : "No data"}
+            </div>
+          ) : (
+            <span className='text-xs text-ink-faint'>No Prometheus</span>
+          )}
+        </div>
+
+        <div className='px-4 py-3.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>30d Uptime</p>
+          <span className='text-xs font-medium text-ink'>{promEnabled ? uptimePct : "--"}</span>
+        </div>
+
+        <div className='px-4 py-3.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>SSL Cert</p>
+          {promEnabled && isHttps ? <SslBadge days={sslDays} /> : <span className='text-xs text-ink-faint'>--</span>}
+        </div>
+
+        <div className='px-4 py-3.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>Interval</p>
+          <span className='text-xs font-medium text-ink'>{fmtInterval(interval)}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -502,6 +727,7 @@ export function ApplicationDetail() {
   const { activeProject } = useProjectStore();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [bulkActing, setBulkActing] = useState<"restart" | "recycle" | null>(null);
 
   const numericId = Number(appId);
@@ -655,6 +881,10 @@ export function ApplicationDetail() {
                       </Button>
                     </>
                   )}
+                  <Button size='sm' variant='outline' onClick={() => setEditOpen(true)}>
+                    <Pencil className='size-3' />
+                    Edit
+                  </Button>
                   <Button size='sm' onClick={() => setModalOpen(true)}>
                     <Plus className='size-3.5' />
                     Add App Pools
@@ -663,6 +893,9 @@ export function ApplicationDetail() {
               </div>
             );
           })()}
+
+          {/* Health monitor - shown when health check URL is configured */}
+          {app.HealthCheckURL && <HealthMonitor app={app} />}
 
           {/* Pool list - capped height, sticky header */}
           {!app.app_pools?.length ? (
@@ -709,6 +942,16 @@ export function ApplicationDetail() {
           projectKey={activeProject.Key}
           appId={numericId}
           assignedPoolIds={assignedPoolIds}
+          onSuccess={handleSuccess}
+        />
+      )}
+
+      {activeProject && app && (
+        <EditApplicationModal
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          app={app}
+          projectKey={activeProject.Key}
           onSuccess={handleSuccess}
         />
       )}

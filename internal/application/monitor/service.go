@@ -17,6 +17,8 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
+// ── Application health checker ────────────────────────────────────────────────
+
 func Create(projectID uint, name, rawURL string, intervalSeconds int, cfg *config.DatabaseConfig) (*monitor.Monitor, error) {
 	m := &monitor.Monitor{
 		ProjectID:       projectID,
@@ -110,10 +112,10 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 		return
 	}
 
-	repo := database.NewMonitorRepository(dbCfg)
+	appRepo := database.NewApplicationRepository(dbCfg)
 
 	for _, r := range pr.Data.Result {
-		idStr, ok := r.Metric["monitor_id"]
+		idStr, ok := r.Metric["application_id"]
 		if !ok {
 			continue
 		}
@@ -128,38 +130,38 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 		}
 		val, _ := strconv.ParseFloat(valStr, 64)
 
-		m, err := repo.FindByID(uint(id))
-		if err != nil || !m.Enabled {
+		app, err := appRepo.FindOneByID(uint(id))
+		if err != nil || app == nil || app.HealthCheckURL == nil {
 			continue
 		}
 
 		if val == 0 {
-			failures := m.ConsecutiveFailures + 1
-			alertFired := m.AlertFired
+			failures := app.ConsecutiveFailures + 1
+			alertFired := app.AlertFired
 			if failures >= 2 && !alertFired {
 				notification.Emit(
 					0,
 					notificationDomain.LevelCritical,
 					notificationDomain.CategoryService,
-					fmt.Sprintf("Monitor Down: %s", m.Name),
-					fmt.Sprintf("Endpoint %s is not responding", m.URL),
+					fmt.Sprintf("Health Check Down: %s", app.Name),
+					fmt.Sprintf("Endpoint %s is not responding", *app.HealthCheckURL),
 					dbCfg,
 				)
 				alertFired = true
 			}
-			_ = repo.UpdateCheckState(uint(id), failures, alertFired)
+			_ = appRepo.UpdateCheckState(uint(id), failures, alertFired)
 		} else {
-			if m.AlertFired {
+			if app.AlertFired {
 				notification.Emit(
 					0,
 					notificationDomain.LevelInfo,
 					notificationDomain.CategoryService,
-					fmt.Sprintf("Monitor Recovered: %s", m.Name),
-					fmt.Sprintf("Endpoint %s is responding again", m.URL),
+					fmt.Sprintf("Health Check Recovered: %s", app.Name),
+					fmt.Sprintf("Endpoint %s is responding again", *app.HealthCheckURL),
 					dbCfg,
 				)
 			}
-			_ = repo.UpdateCheckState(uint(id), 0, false)
+			_ = appRepo.UpdateCheckState(uint(id), 0, false)
 		}
 	}
 }

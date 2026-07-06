@@ -4,10 +4,16 @@ import type { Application, ApplicationDetail } from '@/types'
 type PoolCommand = 'start' | 'stop' | 'restart' | 'recycle'
 
 export const applicationService = {
-  create: (projectKey: string, name: string) =>
+  create: (projectKey: string, name: string, healthCheckURL?: string | null, healthCheckIntervalSeconds?: number) =>
     api.post<{ message: string; application: Application }>(
       `/projects/${projectKey}/applications`,
-      { name },
+      { name, health_check_url: healthCheckURL ?? null, health_check_interval_seconds: healthCheckIntervalSeconds ?? 60 },
+    ),
+
+  update: (projectKey: string, appId: number, data: { name: string; health_check_url?: string | null; health_check_interval_seconds?: number }) =>
+    api.put<{ message: string; application: Application }>(
+      `/projects/${projectKey}/applications/${appId}`,
+      data,
     ),
 
   list: (projectKey: string, params?: { page?: number; per_page?: number }) =>

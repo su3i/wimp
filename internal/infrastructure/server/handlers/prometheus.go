@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	monitorService "github.com/su3i/wimp/internal/application/monitor"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
@@ -59,26 +58,30 @@ func firstIPv4(ips []string) string {
 }
 
 // PrometheusMonitorTargets returns blackbox_exporter HTTP SD targets for all
-// configured monitors. Prometheus polls this to discover what URLs to probe.
+// applications that have a health check URL configured.
 func PrometheusMonitorTargets(c *gin.Context) {
-	monitors, err := monitorService.AllForSD(config.Database())
+	apps, err := database.NewApplicationRepository(config.Database()).FindAllWithHealthCheck()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	targets := make([]prometheusTarget, 0, len(monitors))
-	for _, m := range monitors {
-		if !m.Enabled {
+	targets := make([]prometheusTarget, 0, len(apps))
+	for _, app := range apps {
+		if app.HealthCheckURL == nil || *app.HealthCheckURL == "" {
 			continue
 		}
+		interval := app.HealthCheckIntervalSeconds
+		if interval <= 0 {
+			interval = 60
+		}
 		targets = append(targets, prometheusTarget{
-			Targets: []string{m.URL},
+			Targets: []string{*app.HealthCheckURL},
 			Labels: map[string]string{
-				"monitor_id":            strconv.Itoa(int(m.ID)),
-				"monitor_name":          m.Name,
-				"__scrape_interval__":   fmt.Sprintf("%ds", m.IntervalSeconds),
-				"__scrape_timeout__":    "10s",
+				"application_id":      strconv.Itoa(int(app.ID)),
+				"application_name":    app.Name,
+				"__scrape_interval__": fmt.Sprintf("%ds", interval),
+				"__scrape_timeout__":  "10s",
 			},
 		})
 	}

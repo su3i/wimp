@@ -88,6 +88,7 @@ func InitializeRouter() *gin.Engine {
 	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)
 	router.GET("/projects/:key/applications", middleware.AuthMiddleware(), handlers.RetrieveApplications)
 	router.GET("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.RetrieveApplication)
+	router.PUT("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.UpdateApplication)
 	router.GET("/projects/:key/applications/:appId/app-pools", middleware.AuthMiddleware(), handlers.ListApplicationAppPools)
 	router.POST("/projects/:key/applications/:appId/app-pools", middleware.AuthMiddleware(), handlers.AddAppPoolToApplication)
 	router.DELETE("/projects/:key/applications/:appId/app-pools/:poolId", middleware.AuthMiddleware(), handlers.RemoveAppPoolFromApplication)
@@ -119,12 +120,6 @@ func InitializeRouter() *gin.Engine {
 	router.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MarkNotificationRead)
 	router.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MarkAllNotificationsRead)
 	router.GET("/projects/:key/notifications", middleware.AuthMiddleware(), handlers.ListProjectNotifications)
-
-	// Monitors (project-scoped)
-	router.GET("/projects/:key/monitors", middleware.AuthMiddleware(), handlers.ListMonitors)
-	router.POST("/projects/:key/monitors", middleware.AuthMiddleware(), handlers.CreateMonitor)
-	router.PUT("/projects/:key/monitors/:id", middleware.AuthMiddleware(), handlers.UpdateMonitor)
-	router.DELETE("/projects/:key/monitors/:id", middleware.AuthMiddleware(), handlers.DeleteMonitor)
 
 	// Metrics
 	handlers.MetricsHandler(router)
