@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   ExternalLink,
+  CheckCircle2,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { RowMenu } from "@/components/ui/RowMenu";
@@ -176,12 +177,12 @@ function SslBadge({ days }: { days: number | null }) {
   );
   if (days <= 14) return (
     <span className='flex items-center gap-1 text-[#d29922] text-xs font-medium'>
-      <ShieldAlert className='size-3' /> {days}d
+      <ShieldAlert className='size-3' /> {days} Days
     </span>
   );
   return (
     <span className='flex items-center gap-1 text-success text-xs font-medium'>
-      <ShieldCheck className='size-3' /> {days}d
+      <ShieldCheck className='size-3' /> {days} Days
     </span>
   );
 }
@@ -248,11 +249,13 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
       )}
 
       <div className='grid grid-cols-2 sm:grid-cols-4 divide-x divide-rim'>
-        <div className='px-4 py-3.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>Status</p>
+        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>Status</p>
           {promEnabled ? (
             <div className={cn('flex items-center gap-1.5 text-xs font-medium', statusColor)}>
-              <span className={cn('size-2 rounded-full shrink-0', statusDot)} />
+              {status === "up"
+                ? <CheckCircle2 className='size-3 shrink-0' />
+                : <span className={cn('size-2 rounded-full shrink-0', statusDot)} />}
               {status === "up" ? "Up" : status === "down" ? "Down" : "No data"}
             </div>
           ) : (
@@ -260,18 +263,18 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
           )}
         </div>
 
-        <div className='px-4 py-3.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>30d Uptime</p>
+        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>Uptime (30d)</p>
           <span className='text-xs font-medium text-ink'>{promEnabled ? uptimePct : "--"}</span>
         </div>
 
-        <div className='px-4 py-3.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>SSL Cert</p>
+        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>SSL Expiry</p>
           {promEnabled && isHttps ? <SslBadge days={sslDays} /> : <span className='text-xs text-ink-faint'>--</span>}
         </div>
 
-        <div className='px-4 py-3.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-1.5'>Interval</p>
+        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
+          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>Interval</p>
           <span className='text-xs font-medium text-ink'>{fmtInterval(interval)}</span>
         </div>
       </div>
