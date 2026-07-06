@@ -14,7 +14,7 @@ export interface LoginMfaResponse {
 
 export interface TokenPayload {
   sub: string
-  email: string
+  username: string
   roles: string[]
   exp: number
   iat: number
@@ -27,7 +27,7 @@ export type AccountRole = 'SUPERADMIN' | 'ADMIN' | 'GUEST'
 export interface AccountDTO {
   ID: number
   Name: string
-  Email: string
+  Username: string
   Role: AccountRole
   MFAEnabled: boolean
   CreatedAt: string

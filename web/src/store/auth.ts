@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export interface AuthUser {
   id: string
-  email: string
+  username: string
   roles: string[]
 }
 
@@ -20,11 +20,11 @@ function parseJwt(token: string): AuthUser {
     const payload = JSON.parse(atob(b64))
     return {
       id: String(payload.sub ?? ''),
-      email: payload.email ?? '',
+      username: payload.username ?? '',
       roles: Array.isArray(payload.roles) ? payload.roles : [],
     }
   } catch {
-    return { id: '', email: '', roles: [] }
+    return { id: '', username: '', roles: [] }
   }
 }
 

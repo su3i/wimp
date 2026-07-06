@@ -44,16 +44,16 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		email, ok := claims["email"]
+		username, ok := claims["username"]
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing email claim"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing username claim"})
 			return
 		}
 
 		roles, _ := claims["roles"].([]interface{})
 
 		c.Set("userID", userID)
-		c.Set("email", email)
+		c.Set("username", username)
 		c.Set("roles", roles)
 
 		c.Next()

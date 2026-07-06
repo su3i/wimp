@@ -6,18 +6,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetUserEmailFromContext(c *gin.Context) (*string, error) {
-	val, exists := c.Get("email")
+func GetUsernameFromContext(c *gin.Context) (*string, error) {
+	val, exists := c.Get("username")
 
 	if !exists {
-		return nil, errors.New("failed to retrieve email from context")
+		return nil, errors.New("failed to retrieve username from context")
 	}
 
-	email, ok := val.(string)
+	username, ok := val.(string)
 
 	if !ok {
-		return nil, errors.New("invalid email type")
+		return nil, errors.New("invalid username type")
 	}
 
-	return &email, nil
+	return &username, nil
 }

@@ -3,7 +3,7 @@ package account
 type AccountDTO struct {
 	ID         uint       `json:"ID"`
 	Name       string     `json:"Name"`
-	Email      string     `json:"Email"`
+	Username   string     `json:"Username"`
 	Role       AccountRole `json:"Role"`
 	MFAEnabled bool       `json:"MFAEnabled"`
 	CreatedAt  string	  `json:"CreatedAt"`
@@ -14,7 +14,7 @@ func ToAccountDTO(acc *Account) *AccountDTO {
 	return &AccountDTO{
 		ID: acc.ID,
 		Name: acc.Name,
-		Email: acc.Email,
+		Username: acc.Username,
 		Role: acc.Role,
 		MFAEnabled: acc.MFAEnabled,
 		CreatedAt: acc.CreatedAt.String(),
@@ -32,7 +32,7 @@ func ToAccountDTOs(accounts *[]Account) *[]AccountDTO {
 		dtos[i] = AccountDTO{
 			ID:         acc.ID,
 			Name:       acc.Name,
-			Email:      acc.Email,
+			Username:   acc.Username,
 			Role:       acc.Role,
 			MFAEnabled: acc.MFAEnabled,
 			CreatedAt: acc.CreatedAt.String(),

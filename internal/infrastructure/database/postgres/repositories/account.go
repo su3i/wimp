@@ -25,11 +25,11 @@ func (r *accountRepository) Find() (*[]account.Account, error) {
 	return &_accounts, nil
 }
 
-func (r *accountRepository) FindOneByEmail(email string) (*account.Account, error) {
+func (r *accountRepository) FindOneByUsername(username string) (*account.Account, error) {
 	var _account account.Account
 
 	query := map[string]interface{}{
-		"email": email,
+		"username": username,
 	}
 
 	if err := r.db.Unscoped().Where(query).First(&_account).Error; err != nil {
@@ -44,13 +44,13 @@ func (r *accountRepository) FindOneByEmail(email string) (*account.Account, erro
 
 func (r *accountRepository) Create(payload *account.Account) (*account.Account, error) {
 	_account := account.Account{
-		Name: payload.Name, 
-		Email: payload.Email, 
-		Role: payload.Role,
+		Name:          payload.Name,
+		Username:      payload.Username,
+		Role:          payload.Role,
 		InternalRoles: payload.InternalRoles,
-		PasswordEnc: payload.PasswordEnc, 
-		MFAEnabled: payload.MFAEnabled, 
-		MFASecret: payload.MFASecret,
+		PasswordEnc:   payload.PasswordEnc,
+		MFAEnabled:    payload.MFAEnabled,
+		MFASecret:     payload.MFASecret,
 	}
 
 	err := r.db.Create(&_account).Error

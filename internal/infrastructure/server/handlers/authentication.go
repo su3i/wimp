@@ -19,25 +19,24 @@ import (
 )
 
 func Login(c *gin.Context) {
-	// Parse the request body
 	var req struct {
-		Email string `json:"email" binding:"required"`
+		Username string `json:"username" binding:"required"`
 		Password string `json:"password" binding:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
 
-	_account, err := account.RetrieveAccountWithPassword(req.Email, req.Password, config.Database())
+	_account, err := account.RetrieveAccountWithPassword(req.Username, req.Password, config.Database())
 
 	if err != nil || _account == nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid email or password",
+			"error": "Invalid username or password",
 		})
 		return
 	}
@@ -47,24 +46,24 @@ func Login(c *gin.Context) {
 
 		challengeKey := fmt.Sprintf("challenge-id-%s", challengeID)
 
-		err = cache.GetCache().Set(challengeKey, req.Email, time.Hour)
-	
+		err = cache.GetCache().Set(challengeKey, req.Username, time.Hour)
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
-	
+
 		c.JSON(http.StatusOK, gin.H{
-			"message": "success",
+			"message":      "success",
 			"mfa_required": _account.MFAEnabled,
 			"challenge_id": challengeID,
 		})
 		return
 	}
 
-	auth, err := authentication.Login(req.Email, req.Password, config.Common(), config.Database())
+	auth, err := authentication.Login(req.Username, req.Password, config.Common(), config.Database())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -74,31 +73,30 @@ func Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"access_token": auth.AccessToken,
+		"message":       "success",
+		"access_token":  auth.AccessToken,
 		"refresh_token": auth.RefreshToken,
 	})
 	return
 }
 
 func MFA(c *gin.Context) {
-	// Parse the request body
 	var req struct {
 		ChallengeID string `json:"challenge_id" binding:"required"`
-		Code string `json:"code" binding:"required"`
+		Code        string `json:"code" binding:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
 
 	challengeKey := fmt.Sprintf("challenge-id-%s", req.ChallengeID)
 
-	email, err := cache.GetCache().Get(challengeKey)
+	username, err := cache.GetCache().Get(challengeKey)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -107,8 +105,7 @@ func MFA(c *gin.Context) {
 		return
 	}
 
-	// Retrieve account
-	_account, err := accountService.RetrieveAccount(email, config.Database())
+	_account, err := accountService.RetrieveAccount(username, config.Database())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -132,7 +129,6 @@ func MFA(c *gin.Context) {
 
 	code := uint32(codeUint64)
 
-	// Confirm and enable MFA
 	isCodeValid := mfa.VerifyTOTP(_account.MFASecret, code, time.Now())
 
 	if !isCodeValid {
@@ -146,7 +142,7 @@ func MFA(c *gin.Context) {
 		_ = cache.GetCache().Delete(challengeKey)
 	}()
 
-	auth, err := authentication.LoginWithoutPassword(email, config.Common(), config.Database())
+	auth, err := authentication.LoginWithoutPassword(username, config.Common(), config.Database())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -156,8 +152,8 @@ func MFA(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"access_token": auth.AccessToken,
+		"message":       "success",
+		"access_token":  auth.AccessToken,
 		"refresh_token": auth.RefreshToken,
 	})
 	return
@@ -171,7 +167,7 @@ func RevokeToken(c *gin.Context) {
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
@@ -199,7 +195,7 @@ func RefreshToken(c *gin.Context) {
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
@@ -213,7 +209,7 @@ func RefreshToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
+		"message":       "success",
 		"access_token":  authTokens.AccessToken,
 		"refresh_token": authTokens.RefreshToken,
 	})

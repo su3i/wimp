@@ -86,9 +86,9 @@ export function Sidebar() {
             {/* Email row */}
             <div className='flex items-center gap-2.5 px-3 h-8 mb-2'>
               <div className='flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none'>
-                {user?.email?.[0] ?? '?'}
+                {user?.username?.[0] ?? '?'}
               </div>
-              <span className='text-xs text-ink-faint truncate flex-1'>{user?.email ?? 'Unknown'}</span>
+              <span className='text-xs text-ink-faint truncate flex-1'>{user?.username ?? 'Unknown'}</span>
             </div>
 
             {/* Expand + Logout as a paired icon row */}
@@ -115,9 +115,9 @@ export function Sidebar() {
             {/* User avatar */}
             <div className='relative group flex items-center justify-center h-8 w-full'>
               <div className='flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none'>
-                {user?.email?.[0] ?? '?'}
+                {user?.username?.[0] ?? '?'}
               </div>
-              <span className={cn(tooltip, 'text-xs font-normal')}>{user?.email ?? 'Unknown'}</span>
+              <span className={cn(tooltip, 'text-xs font-normal')}>{user?.username ?? 'Unknown'}</span>
             </div>
 
             {/* Expand */}

@@ -17,7 +17,7 @@ type CommonConfig struct {
 	AutoUpdateAgentProject string `required:"false"`
 	EnforceMfa           bool   `required:"false"`
 	JWTSecret            string `required:"true"`
-	DefaultAdminEmail    string `required:"true"`
+	DefaultAdminUsername string `required:"true"`
 	DefaultAdminPassword string `required:"true"`
 	AlertmanagerUrl      string `required:"false"`
 	PrometheusUrl        string `required:"false"`

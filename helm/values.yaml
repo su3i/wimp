@@ -44,7 +44,7 @@ config:
   jwtSecret: ""       # e.g. openssl rand -hex 32
   bootstrapToken: ""  # e.g. openssl rand -hex 16
 
-  defaultAdminEmail: "admin@example.com"
+  defaultAdminUsername: "admin"
   defaultAdminPassword: ""  # REQUIRED
 
   # Alertmanager webhook URL - leave empty to disable external alerting.

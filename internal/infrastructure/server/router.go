@@ -51,7 +51,7 @@ func InitializeRouter() *gin.Engine {
 
 	// Account
 	router.POST("/account", handlers.NewAccount)
-	router.GET("/account", handlers.RetrieveAccountByEmail)
+	router.GET("/account", handlers.RetrieveAccountByUsername)
 	router.PUT("/account", handlers.UpdateAccount)
 	router.GET("/accounts", middleware.AuthMiddleware(), handlers.RetrieveAccounts)
 

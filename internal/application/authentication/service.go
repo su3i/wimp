@@ -11,11 +11,11 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/cache"
 )
 
-func Login(email string, password string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
-	_account, err := account.RetrieveAccountWithPassword(email, password, databaseCfg)
+func Login(username string, password string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
+	_account, err := account.RetrieveAccountWithPassword(username, password, databaseCfg)
 
 	if err != nil || _account == nil {
-		return nil, errors.New("Invalid email or password")
+		return nil, errors.New("Invalid username or password")
 	}
 
 	internalRoles := make([]string, 0, len(_account.InternalRoles))
@@ -26,12 +26,12 @@ func Login(email string, password string, commonCfg *config.CommonConfig, databa
 
 	accessToken, err := authentication.GenerateJWT(authentication.JWTParams{
 		Subject:   _account.ID,
-		Email:     _account.Email,
-		Roles:	   internalRoles,
+		Username:  _account.Username,
+		Roles:     internalRoles,
 		TTL:       time.Hour,
 		SecretKey: []byte(commonCfg.JWTSecret),
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func Login(email string, password string, commonCfg *config.CommonConfig, databa
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), email, 7*24*time.Hour); err != nil {
+	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), username, 7*24*time.Hour); err != nil {
 		return nil, errors.New("Failed to store refresh token")
 	}
 
@@ -51,11 +51,11 @@ func Login(email string, password string, commonCfg *config.CommonConfig, databa
 	}, nil
 }
 
-func LoginWithoutPassword(email string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
-	_account, err := account.RetrieveAccount(email, databaseCfg)
+func LoginWithoutPassword(username string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
+	_account, err := account.RetrieveAccount(username, databaseCfg)
 
 	if err != nil || _account == nil {
-		return nil, errors.New("Invalid email or password")
+		return nil, errors.New("Invalid username or password")
 	}
 
 	internalRoles := make([]string, 0, len(_account.InternalRoles))
@@ -66,12 +66,12 @@ func LoginWithoutPassword(email string, commonCfg *config.CommonConfig, database
 
 	accessToken, err := authentication.GenerateJWT(authentication.JWTParams{
 		Subject:   _account.ID,
-		Email:     _account.Email,
-		Roles:	   internalRoles,
+		Username:  _account.Username,
+		Roles:     internalRoles,
 		TTL:       time.Hour,
 		SecretKey: []byte(commonCfg.JWTSecret),
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func LoginWithoutPassword(email string, commonCfg *config.CommonConfig, database
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), email, 7*24*time.Hour); err != nil {
+	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), username, 7*24*time.Hour); err != nil {
 		return nil, errors.New("Failed to store refresh token")
 	}
 
@@ -92,16 +92,16 @@ func LoginWithoutPassword(email string, commonCfg *config.CommonConfig, database
 }
 
 func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
-	// 1. Get refresh token from repository
+	// 1. Get refresh token from cache
 	oldRefreshTokenKey := fmt.Sprintf("refresh-token-%s", authentication.HashRefreshToken(rawRefresh))
-	email, err := cache.GetCache().Get(oldRefreshTokenKey)
+	username, err := cache.GetCache().Get(oldRefreshTokenKey)
 
 	if err != nil {
 		return nil, errors.New("Invalid refresh token")
 	}
 
 	// 2. Get account
-	_account, err := account.RetrieveAccount(email, databaseCfg)
+	_account, err := account.RetrieveAccount(username, databaseCfg)
 
 	if err != nil {
 		return nil, errors.New("Invalid account")
@@ -112,12 +112,12 @@ func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *con
 	for _, v := range _account.InternalRoles {
 		internalRoles = append(internalRoles, v)
 	}
-	
+
 	// 3. Issue new access token
 	accessToken, _ := authentication.GenerateJWT(authentication.JWTParams{
 		Subject:   _account.ID,
-		Email:     _account.Email,
-		Roles:	   internalRoles,
+		Username:  _account.Username,
+		Roles:     internalRoles,
 		TTL:       time.Hour,
 		SecretKey: []byte(commonCfg.JWTSecret),
 	})
@@ -133,8 +133,8 @@ func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *con
 	if err != nil {
 		return nil, errors.New("Failed to revoke refresh token")
 	}
-	
-	err = cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", newHash), email, 7*24*time.Hour)
+
+	err = cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", newHash), username, 7*24*time.Hour)
 
 	if err != nil {
 		return nil, errors.New("Failed to rotate refresh token")

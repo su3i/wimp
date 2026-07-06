@@ -27,9 +27,9 @@ func NewProject(c *gin.Context) {
 		return
 	}
 
-	createdByEmail, err := utils.GetUserEmailFromContext(c)
+	createdByUsername, err := utils.GetUsernameFromContext(c)
 
-	if err != nil || createdByEmail == nil{
+	if err != nil || createdByUsername == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to get account",
 		})
@@ -47,7 +47,7 @@ func NewProject(c *gin.Context) {
 	}
 
 	// Create project
-	_project, err := project.NewProject(req.Name, req.Key, *createdByEmail, config.Database())
+	_project, err := project.NewProject(req.Name, req.Key, *createdByUsername, config.Database())
 
 	if err != nil {
 		log.Printf("Error creating project: %v", err)

@@ -15,18 +15,17 @@ import (
 )
 
 func NewAccount(c *gin.Context) {
-	// Parse the request body
 	var req struct {
-		Name string `json:"name" binding:"required"`
-		Email string `json:"email" binding:"required"`
+		Name     string `json:"name" binding:"required"`
+		Username string `json:"username" binding:"required"`
 		Password string `json:"password" binding:"required"`
-		Role string `json:"role" binding:"required"`
+		Role     string `json:"role" binding:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
@@ -39,8 +38,7 @@ func NewAccount(c *gin.Context) {
 		return
 	}
 
-	// Create account
-	_account, err := accountService.NewAccount(req.Name, req.Email, req.Password, role, config.Database())
+	_account, err := accountService.NewAccount(req.Name, req.Username, req.Password, role, config.Database())
 
 	if err != nil {
 		log.Printf("Error creating account: %v", err)
@@ -53,7 +51,7 @@ func NewAccount(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "success",
 		"account": accountDomain.ToAccountDTO(_account),
-	  })
+	})
 }
 
 func RetrieveAccounts(c *gin.Context) {
@@ -66,7 +64,6 @@ func RetrieveAccounts(c *gin.Context) {
 		return
 	}
 
-	// Retrieve accounts
 	_accounts, err := accountService.RetrieveAccounts(config.Database())
 
 	if err != nil {
@@ -78,23 +75,21 @@ func RetrieveAccounts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
+		"message":  "success",
 		"accounts": accountDomain.ToAccountDTOs(_accounts),
 	})
 }
 
-func RetrieveAccountByEmail(c *gin.Context) {
-	// Get email from query params
-	email := c.Query("email")
-	if email == "" {
+func RetrieveAccountByUsername(c *gin.Context) {
+	username := c.Query("username")
+	if username == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Missing required query parameter: email",
+			"error": "Missing required query parameter: username",
 		})
 		return
 	}
 
-	// Retrieve account
-	_account, err := accountService.RetrieveAccount(email, config.Database())
+	_account, err := accountService.RetrieveAccount(username, config.Database())
 
 	if err != nil {
 		log.Printf("Error retrieving account: %v", err)
@@ -112,35 +107,35 @@ func RetrieveAccountByEmail(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"account": accountDomain.ToAccountDTO(_account),
+		"message":        "success",
+		"account":        accountDomain.ToAccountDTO(_account),
 		"security_level": accountDomain.GetSecurityLevel(*_account),
 	})
 }
 
 func UpdateAccount(c *gin.Context) {
-	email := c.Query("email")
-	if email == "" {
+	username := c.Query("username")
+	if username == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Missing required query parameter: email",
+			"error": "Missing required query parameter: username",
 		})
 		return
 	}
 
 	var req struct {
-		Name  string `json:"name,omitempty"`
-		Email string `json:"email,omitempty"`
+		Name     string `json:"name,omitempty"`
+		Username string `json:"username,omitempty"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
 
-	_account, err := accountService.UpdateAccount(email, &req.Name, &req.Email, config.Database())
+	_account, err := accountService.UpdateAccount(username, &req.Name, &req.Username, config.Database())
 
 	if err != nil {
 		log.Printf("Error updating account: %v", err)
@@ -151,8 +146,8 @@ func UpdateAccount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"account": _account,
+		"message":        "success",
+		"account":        _account,
 		"security_level": accountDomain.GetSecurityLevel(*_account),
 	})
 }

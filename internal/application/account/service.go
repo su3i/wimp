@@ -10,14 +10,14 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
-func NewAccount(name string, email string, password string, role account.AccountRole, cfg *config.DatabaseConfig) (*account.Account, error) {
+func NewAccount(name string, username string, password string, role account.AccountRole, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	// Check if email already exists - Fail fast
-	_account, err := _accountRepository.FindOneByEmail(email)
-	
+	// Check if username already exists - Fail fast
+	_account, err := _accountRepository.FindOneByUsername(username)
+
 	if err != nil || _account != nil {
-		return nil, errors.New("Email already registered.")
+		return nil, errors.New("Username already registered.")
 	}
 
 	// Check password against password requirements
@@ -48,13 +48,13 @@ func NewAccount(name string, email string, password string, role account.Account
 
 	// Create account
 	_account = &account.Account{
-		Name: name,
-		Email: email,
-		Role: role,
+		Name:          name,
+		Username:      username,
+		Role:          role,
 		InternalRoles: internalRoleJson,
-		PasswordEnc: passwordEnc,
-		MFAEnabled: false,
-		MFASecret: mfaSecret,
+		PasswordEnc:   passwordEnc,
+		MFAEnabled:    false,
+		MFASecret:     mfaSecret,
 	}
 
 	return _accountRepository.Create(_account)
@@ -66,16 +66,16 @@ func RetrieveAccounts(cfg *config.DatabaseConfig) (*[]account.Account, error) {
 	return _accountRepository.Find()
 }
 
-func RetrieveAccount(email string, cfg *config.DatabaseConfig) (*account.Account, error) {
+func RetrieveAccount(username string, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	return _accountRepository.FindOneByEmail(email)
+	return _accountRepository.FindOneByUsername(username)
 }
 
-func RetrieveAccountWithPassword(email string, password string, cfg *config.DatabaseConfig) (*account.Account, error) {
+func RetrieveAccountWithPassword(username string, password string, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	_account, err := _accountRepository.FindOneByEmail(email)
+	_account, err := _accountRepository.FindOneByUsername(username)
 
 	if err != nil {
 		return nil, err
@@ -94,10 +94,10 @@ func RetrieveAccountWithPassword(email string, password string, cfg *config.Data
 	return _account, nil
 }
 
-func EnableTOTP(email string, cfg *config.DatabaseConfig) error {
+func EnableTOTP(username string, cfg *config.DatabaseConfig) error {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	_account, err := _accountRepository.FindOneByEmail(email)
+	_account, err := _accountRepository.FindOneByUsername(username)
 
 	if err != nil {
 		return err
@@ -112,22 +112,22 @@ func EnableTOTP(email string, cfg *config.DatabaseConfig) error {
 	return _accountRepository.Update(_account)
 }
 
-func UpdateAccount(oldEmail string, name *string, email *string, cfg *config.DatabaseConfig) (*account.Account, error) {
+func UpdateAccount(oldUsername string, name *string, username *string, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	// Check if email doesnt exist - Fail fast
-	_account, err := _accountRepository.FindOneByEmail(oldEmail)
-	
+	// Check if username exists - Fail fast
+	_account, err := _accountRepository.FindOneByUsername(oldUsername)
+
 	if err != nil || _account == nil {
-		return nil, errors.New("Inavlid account.")
+		return nil, errors.New("Invalid account.")
 	}
 
 	if name != nil {
 		_account.Name = *name
 	}
 
-	if email != nil {
-		_account.Email = *email
+	if username != nil {
+		_account.Username = *username
 	}
 
 	// Save updated account

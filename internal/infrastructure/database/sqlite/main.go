@@ -55,6 +55,13 @@ func Migrate() {
 		log.Fatalf("failed to migrate sqlite database (account): %v", err)
 	}
 
+	// Drop legacy email column if it still exists (migrated to username)
+	if DB.Migrator().HasColumn(&account.Account{}, "email") {
+		if err := DB.Migrator().DropColumn(&account.Account{}, "email"); err != nil {
+			log.Printf("failed to drop accounts.email column: %v", err)
+		}
+	}
+
 	err = DB.AutoMigrate(&metadata.Metadata{})
 	if err != nil {
 		log.Fatalf("failed to migrate sqlite database (metadata): %v", err)

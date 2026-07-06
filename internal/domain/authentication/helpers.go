@@ -15,7 +15,7 @@ func GenerateJWT(p JWTParams) (string, error) {
 
 	claims := jwt.MapClaims{
 		"sub":   p.Subject,
-		"email": p.Email,
+		"username": p.Username,
 		"roles": p.Roles,
 		"iss":   "https://wimp.suei.io/",
 		"iat":   now.Unix(),

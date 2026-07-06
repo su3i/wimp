@@ -10,7 +10,7 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
-func NewProject(name string, key string, createdByEmail string, cfg *config.DatabaseConfig) (*project.Project, error) {
+func NewProject(name string, key string, createdByUsername string, cfg *config.DatabaseConfig) (*project.Project, error) {
 	_projectRepository := database.NewProjectRepository(cfg)
 
 	_project, err := _projectRepository.FindOneByKey(key)
@@ -28,15 +28,15 @@ func NewProject(name string, key string, createdByEmail string, cfg *config.Data
 		return nil, errors.New("Organization not found")
 	}
 
-	createdByAccount, err := account.RetrieveAccount(createdByEmail, cfg)
+	createdByAccount, err := account.RetrieveAccount(createdByUsername, cfg)
 
 	if err != nil {
 		return nil, errors.New("Failed to get account")
 	}
 
 	createdBy := map[string]string{
-		"Email": createdByEmail,
-		"Name":  createdByAccount.Name,
+		"Username": createdByUsername,
+		"Name":     createdByAccount.Name,
 	}
 
 	_project = &project.Project{

@@ -4,7 +4,7 @@ import "time"
 
 type JWTParams struct {
 	Subject   uint
-	Email     string
+	Username  string
 	Roles     []string
 	Issuer    string
 	Audience  string

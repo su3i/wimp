@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, User, Lock, ArrowLeft } from "lucide-react";
 import iconSrc from "@/assets/icon.svg";
 import { authService } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth";
@@ -14,7 +14,7 @@ export function Login() {
   const { setAuth } = useAuthStore();
 
   const [phase, setPhase] = useState<Phase>("credentials");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
@@ -27,7 +27,7 @@ export function Login() {
     setLoading(true);
 
     try {
-      const { data } = await authService.login(email, password);
+      const { data } = await authService.login(username, password);
 
       if ("mfa_required" in data && data.mfa_required) {
         setChallengeId(data.challenge_id);
@@ -39,7 +39,7 @@ export function Login() {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "Invalid email or password.";
+        "Invalid username or password.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -86,13 +86,13 @@ export function Login() {
               </div>
 
               <Input
-                label='Email'
-                type='email'
-                placeholder='admin@company.com'
-                autoComplete='email'
-                leftIcon={<Mail className='size-3.5' />}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                label='Username'
+                type='text'
+                placeholder='admin'
+                autoComplete='username'
+                leftIcon={<User className='size-3.5' />}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
 

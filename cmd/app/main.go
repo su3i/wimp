@@ -45,7 +45,7 @@ func main() {
 	metadata.LoadBootstrapToken(config.Common().BootstrapToken, config.Database())
 
 	// Seed default account
-	if _, err := accountService.NewAccount("Administrator", config.Common().DefaultAdminEmail, config.Common().DefaultAdminPassword, account.SuperAdmin, config.Database()); err != nil {
+	if _, err := accountService.NewAccount("Administrator", config.Common().DefaultAdminUsername, config.Common().DefaultAdminPassword, account.SuperAdmin, config.Database()); err != nil {
 		log.Printf("Seed account: %v", err)
 	}
 
@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// Seed default project
-	if _, err := projectService.NewProject("Default", "default", config.Common().DefaultAdminEmail, config.Database()); err != nil {
+	if _, err := projectService.NewProject("Default", "default", config.Common().DefaultAdminUsername, config.Database()); err != nil {
 		log.Printf("Seed project: %v", err)
 	}
 
