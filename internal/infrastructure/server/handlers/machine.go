@@ -17,7 +17,6 @@ import (
 	authorizationDomain "github.com/su3i/wimp/internal/domain/authorization"
 	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/hub"
-	"github.com/su3i/wimp/internal/infrastructure/database"
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
 )
 
@@ -237,19 +236,9 @@ func MachineCommand(action string) gin.HandlerFunc {
 	}
 }
 
-// shouldAutoUpdate reports whether a machine in the given project should receive an
-// automatic agent update. Returns true when AUTOUPDATEAGENT is globally enabled, or
-// when AUTOUPDATEAGENTPROJECT matches the project key (useful for staging/test projects).
-func shouldAutoUpdate(projectID uint) bool {
-	cfg := config.Common()
-	if cfg.AutoUpdateAgent {
-		return true
-	}
-	if cfg.AutoUpdateAgentProject == "" {
-		return false
-	}
-	proj, err := database.NewProjectRepository(config.Database()).FindOneByKey(cfg.AutoUpdateAgentProject)
-	return err == nil && proj != nil && proj.ID == projectID
+// shouldAutoUpdate reports whether a machine should receive an automatic agent update.
+func shouldAutoUpdate(_ uint) bool {
+	return config.Common().AutoUpdateAgent
 }
 
 // agentDownloadURL builds the download URL for the currently-configured agent release.

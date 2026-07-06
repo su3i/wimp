@@ -33,8 +33,6 @@ func msgForTag(fe validator.FieldError) string {
 		return fmt.Sprintf("%s must be at least %s.", fe.Field(), fe.Param())
 	case "max":
 		return fmt.Sprintf("%s must be at most %s.", fe.Field(), fe.Param())
-	case "email":
-		return fmt.Sprintf("%s must be a valid email.", fe.Field())
 	case "oneof":
 		return fmt.Sprintf("%s must be one of: %s.", fe.Field(), fe.Param())
 	default:

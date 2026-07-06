@@ -47,8 +47,6 @@ spec:
               value: {{ .Values.config.agentVersion | quote }}
             - name: AUTOUPDATEAGENT
               value: {{ .Values.config.autoUpdateAgent | toString | quote }}
-            - name: AUTOUPDATEAGENTPROJECT
-              value: {{ .Values.config.autoUpdateAgentProject | default "" | quote }}
             - name: ENFORCEMFA
               value: {{ .Values.config.enforceMfa | toString | quote }}
 

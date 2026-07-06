@@ -109,6 +109,18 @@ services:
     networks:
       - wimp
 
+  # ── Blackbox exporter ────────────────────────────────────────
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    profiles: [observability]
+    restart: unless-stopped
+    volumes:
+      - ./deploy/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "9115:9115"
+    networks:
+      - wimp
+
   # ── Alertmanager ─────────────────────────────────────────────
   alertmanager:
     image: prom/alertmanager:v0.27.0

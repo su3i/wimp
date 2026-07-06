@@ -233,20 +233,19 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
 
   return (
     <div className='rounded-lg border border-rim bg-surface overflow-hidden'>
-      <div className='flex items-center justify-between px-4 py-3 border-b border-rim bg-surface-alt'>
-        <span className='text-xs font-semibold text-ink'>Health Monitor</span>
-        {url && (
+      {url && (
+        <div className='flex items-center px-4 py-3 border-b border-rim bg-surface-alt'>
           <a
             href={url}
             target='_blank'
             rel='noopener noreferrer'
-            className='flex items-center gap-1 text-[0.625rem] text-ink-faint hover:text-ink transition-colors'
+            className='flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink transition-colors'
           >
-            <span className='font-mono truncate max-w-[240px]'>{url}</span>
+            <span className='font-mono truncate max-w-[360px]'>{url}</span>
             <ExternalLink className='size-3 shrink-0' />
           </a>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className='grid grid-cols-2 sm:grid-cols-4 divide-x divide-rim'>
         <div className='px-4 py-3.5'>

@@ -13,8 +13,7 @@ type CommonConfig struct {
 	LokiTlsSkipVerify    bool   `required:"false"`
 	BootstrapToken       string `required:"true"`
 	AgentVersion         string `required:"true"`
-	AutoUpdateAgent        bool   `required:"false"`
-	AutoUpdateAgentProject string `required:"false"`
+	AutoUpdateAgent bool `required:"false"`
 	EnforceMfa           bool   `required:"false"`
 	JWTSecret            string `required:"true"`
 	DefaultAdminUsername string `required:"true"`

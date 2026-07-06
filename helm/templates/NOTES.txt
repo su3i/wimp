@@ -27,5 +27,5 @@ Web UI ({{ include "wimp.webFullname" . }}):
 {{- end }}
 
 Default admin login:
-  Email:    {{ .Values.config.defaultAdminEmail }}
+  Username:    {{ .Values.config.defaultAdminUsername }}
   Password: {{ .Values.config.defaultAdminPassword }}

@@ -37,7 +37,6 @@ config:
   appEnv: production
   agentVersion: "0.0.5"
   autoUpdateAgent: false
-  autoUpdateAgentProject: "test-environment"  # project key that gets auto-updates even when autoUpdateAgent is false
   enforceMfa: false
 
   # REQUIRED - generate strong random values before deploying
@@ -258,8 +257,29 @@ kube-prometheus-stack:
             - source_labels: [__address__]
               target_label: instance
 
+        - job_name: blackbox_http
+          metrics_path: /probe
+          params:
+            module: [http_2xx]
+          http_sd_configs:
+            - url: http://wimp-control-plane/prometheus/monitors
+              refresh_interval: 60s
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: wimp-prometheus-blackbox-exporter:9115
+
   kube-state-metrics:
     enabled: false
 
   nodeExporter:
     enabled: false
+
+# ──────────────────────────────────────────────────────────────
+# Blackbox exporter - HTTP endpoint health probing
+# ──────────────────────────────────────────────────────────────
+prometheus-blackbox-exporter:
+  enabled: true

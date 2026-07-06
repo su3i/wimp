@@ -534,12 +534,12 @@ export function LogsViewer({
       {/* Load more indicator at the top */}
       {loadingMore && (
         <div className='sticky top-0 flex items-center justify-center py-2 bg-surface-alt/80 backdrop-blur-sm text-xs text-ink-faint border-b border-rim z-10'>
-          Loading…
+          Loading logs…
         </div>
       )}
       {!hasMore && initialLoaded && entries.length > 0 && (
         <div className='flex items-center justify-center py-2 text-[0.625rem] text-ink-faint/50'>
-          — beginning of logs —
+          — No more logs to show —
         </div>
       )}
 
