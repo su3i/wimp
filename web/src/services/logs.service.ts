@@ -15,8 +15,10 @@ export const logsService = {
   query: (projectKey: string, appId: number, params: LogQueryParams) =>
     api.get<LokiResponse>(`/projects/${projectKey}/applications/${appId}/logs`, { params }),
 
-  listFiles: (projectKey: string, appId: number) =>
-    api.get<{ message: string; files: string[] }>(`/projects/${projectKey}/applications/${appId}/files`),
+  listFiles: (projectKey: string, appId: number, machineId?: number) =>
+    api.get<{ message: string; files: string[] }>(`/projects/${projectKey}/applications/${appId}/files`, {
+      params: machineId ? { machine_id: machineId } : undefined,
+    }),
 
   // Stages the zipped logs on the control plane; server-side zip+transfer from the
   // agent can take a while, so this gets a generous timeout independent of the
@@ -29,4 +31,7 @@ export const logsService = {
 
   fetchDownload: (token: string) =>
     api.get(`/downloads/${token}`, { responseType: 'blob' }),
+
+  clear: (projectKey: string, appId: number, params: Pick<LogQueryParams, 'machine_id' | 'pool_id' | 'filename'>) =>
+    api.delete(`/projects/${projectKey}/applications/${appId}/logs`, { params }),
 }

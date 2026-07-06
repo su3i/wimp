@@ -94,6 +94,7 @@ func InitializeRouter() *gin.Engine {
 	router.PUT("/projects/:key/applications/:appId/app-pools/:poolId", middleware.AuthMiddleware(), handlers.UpdateAppPoolInApplication)
 	router.GET("/projects/:key/applications/:appId/files", middleware.AuthMiddleware(), handlers.ListApplicationFiles)
 	router.GET("/projects/:key/applications/:appId/logs", middleware.AuthMiddleware(), handlers.QueryLogs)
+	router.DELETE("/projects/:key/applications/:appId/logs", middleware.AuthMiddleware(), handlers.ClearLogs)
 	router.DELETE("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.DeleteApplication)
 
 	// App Pools (machine-scoped)

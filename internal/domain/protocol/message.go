@@ -15,6 +15,8 @@ const (
 	TypeListFilesResult    = "list_files_result"
 	TypeDownloadLogs       = "download_logs"
 	TypeDownloadLogsResult = "download_logs_result"
+	TypeClearLogs          = "clear_logs"
+	TypeClearLogsResult    = "clear_logs_result"
 )
 
 // Message is the envelope for every WebSocket frame.
@@ -125,6 +127,19 @@ type DownloadLogsPayload struct {
 // DownloadLogsResultPayload is sent by the agent with the base64-encoded zip archive.
 type DownloadLogsResultPayload struct {
 	RequestID string `json:"request_id"`
-	Data      string `json:"data,omitempty"`  // base64-encoded zip bytes
+	Data      string `json:"data,omitempty"` // base64-encoded zip bytes
+	Error     string `json:"error,omitempty"`
+}
+
+// ClearLogsPayload is sent by the control plane to delete all files in a log directory.
+type ClearLogsPayload struct {
+	RequestID string `json:"request_id"`
+	LogPath   string `json:"log_path"` // directory path
+}
+
+// ClearLogsResultPayload is sent by the agent after deleting log files.
+type ClearLogsResultPayload struct {
+	RequestID string `json:"request_id"`
+	Deleted   int    `json:"deleted"`
 	Error     string `json:"error,omitempty"`
 }

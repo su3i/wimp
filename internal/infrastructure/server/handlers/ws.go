@@ -225,6 +225,16 @@ func AgentWebSocket(c *gin.Context) {
 				Output:  result.Data,
 				Error:   result.Error,
 			})
+
+		case protocol.TypeClearLogsResult:
+			var result protocol.ClearLogsResultPayload
+			if err := json.Unmarshal(msg.Payload, &result); err != nil {
+				continue
+			}
+			hub.ResolveCommand(result.RequestID, hub.CommandResult{
+				Success: result.Error == "",
+				Error:   result.Error,
+			})
 		}
 	}
 }

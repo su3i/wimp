@@ -143,7 +143,11 @@ func ListApplicationFiles(c *gin.Context) {
 		return
 	}
 
-	files, err := applicationService.ListApplicationFiles(c.Request.Context(), uint(id), projectKey, config.Database())
+	var filterMachineID uint
+	if mid, err2 := strconv.ParseUint(c.Query("machine_id"), 10, 64); err2 == nil && mid > 0 {
+		filterMachineID = uint(mid)
+	}
+	files, err := applicationService.ListApplicationFiles(c.Request.Context(), uint(id), filterMachineID, projectKey, config.Database())
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

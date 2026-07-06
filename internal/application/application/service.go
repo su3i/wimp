@@ -302,7 +302,7 @@ func UpdateAppPoolLogPath(applicationID, appPoolID uint, logPath string, project
 	return nil
 }
 
-func ListApplicationFiles(ctx context.Context, applicationID uint, projectKey string, cfg *config.DatabaseConfig) ([]string, error) {
+func ListApplicationFiles(ctx context.Context, applicationID uint, filterMachineID uint, projectKey string, cfg *config.DatabaseConfig) ([]string, error) {
 	detail, err := GetDetail(applicationID, projectKey, cfg)
 	if err != nil {
 		return nil, err
@@ -315,6 +315,9 @@ func ListApplicationFiles(ctx context.Context, applicationID uint, projectKey st
 	seen := map[string]bool{}
 	var pairs []pair
 	for _, pool := range detail.AppPools {
+		if filterMachineID > 0 && pool.Machine.ID != filterMachineID {
+			continue
+		}
 		if pool.LogPath == nil || *pool.LogPath == "" {
 			continue
 		}

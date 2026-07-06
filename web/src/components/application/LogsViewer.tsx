@@ -1,8 +1,21 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Terminal, ChevronDown, Maximize2, Minimize2, Download, FileArchive } from "lucide-react";
+import {
+  RefreshCw,
+  Terminal,
+  ChevronDown,
+  Maximize2,
+  Minimize2,
+  Download,
+  FileArchive,
+  Trash2,
+  X,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { logsService } from "@/services/logs.service";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/cn";
@@ -21,28 +34,12 @@ interface Pool {
 }
 
 interface LogEntry {
-  ts: number;
+  ts: number;    // milliseconds
+  nanoTs: string; // original nanosecond string, used for pagination
   content: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const TIME_RANGES = [
-  { label: "Last 1h", value: "1h", ms: 3_600_000 },
-  { label: "Last 6h", value: "6h", ms: 21_600_000 },
-  { label: "Last 24h", value: "24h", ms: 86_400_000 },
-  { label: "Last 7d", value: "7d", ms: 604_800_000 },
-] as const;
-
-type TimeRange = (typeof TIME_RANGES)[number]["value"];
-
-const LIMITS = [50, 100, 500, 1000] as const;
-
-function getRangeParams(range: TimeRange) {
-  const now = new Date();
-  const ms = TIME_RANGES.find((r) => r.value === range)!.ms;
-  return { end: now.toISOString(), start: new Date(now.getTime() - ms).toISOString() };
-}
 
 function fmtLogTime(nanoTs: string): string {
   const ms = Number(BigInt(nanoTs) / 1_000_000n);
@@ -75,9 +72,39 @@ function extractLogLine(raw: string): string {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed.log === "string") return parsed.log;
   } catch {
-    // not JSON - use raw
+    // not JSON — use raw
   }
   return raw;
+}
+
+function extractEntries(data: { result?: { values: [string, string][] }[] } | undefined): LogEntry[] {
+  const out: LogEntry[] = [];
+  for (const stream of data?.result ?? []) {
+    for (const [nanoTs, content] of stream.values) {
+      out.push({
+        ts: Number(BigInt(nanoTs) / 1_000_000n),
+        nanoTs,
+        content: extractLogLine(content),
+      });
+    }
+  }
+  return out;
+}
+
+const FAR_BACK = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString();
+const FETCH_LIMIT = 1000;
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+
+function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className='relative group/tip'>
+      {children}
+      <div className='pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2 py-1 rounded border border-rim bg-surface-highest text-[0.625rem] text-ink whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-md'>
+        {label}
+      </div>
+    </div>
+  );
 }
 
 // ── Select ────────────────────────────────────────────────────────────────────
@@ -125,56 +152,65 @@ export function LogsViewer({
   machines: Machine[];
   pools: Pool[];
 }) {
-  const [machineId, setMachineId] = useState<string>(() =>
-    machines.length > 0 ? String(machines[0].id) : "",
-  );
-  const [poolId, setPoolId] = useState<string>(() => {
-    if (machines.length === 0) return "";
-    const firstPool = pools.find((p) => p.machineId === machines[0].id);
-    return firstPool ? String(firstPool.id) : "";
-  });
-  const [filename, setFilename] = useState<string>("");
-  const [timeRange, setTimeRange] = useState<TimeRange>("1h");
-  const [limit, setLimit] = useState<number>(100);
-  const [atBottom, setAtBottom] = useState(true);
+  const [machineId, setMachineId] = useState("");
+  const [poolId, setPoolId] = useState("");
+  const [filename, setFilename] = useState("");
+  const [searchText, setSearchText] = useState("");
   const [expanded, setExpanded] = useState(false);
+
+  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+  const [fetchKey, setFetchKey] = useState(0);
+
   const [staging, setStaging] = useState(false);
   const [fetchingDownload, setFetchingDownload] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<
     { token: string; fileName: string; fileSize: number } | null
   >(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
-  // When machine changes, reset pool selection
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+
+  // ── Selectors ───────────────────────────────────────────────────────────────
+
   function handleMachineChange(v: string) {
     setMachineId(v);
     setPoolId("");
+    setFilename("");
   }
-
-  // Pool options filtered by selected machine
-  const poolOptions = useMemo(() => {
-    const filtered = machineId ? pools.filter((p) => p.machineId === Number(machineId)) : pools;
-    return [
-      { label: "App Pool…", value: "" },
-      ...filtered.map((p) => ({ label: p.name, value: String(p.id) })),
-    ];
-  }, [pools, machineId]);
 
   const machineOptions = useMemo(
     () => [
-      { label: "Host…", value: "" },
+      { label: "Select host…", value: "" },
       ...machines.map((m) => ({ label: m.hostname, value: String(m.id) })),
     ],
     [machines],
   );
 
-  // Fetch available log files
+  const poolOptions = useMemo(() => {
+    const filtered = machineId ? pools.filter((p) => p.machineId === Number(machineId)) : pools;
+    return [
+      { label: "Select app pool…", value: "" },
+      ...filtered.map((p) => ({ label: p.name, value: String(p.id) })),
+    ];
+  }, [pools, machineId]);
+
+  // ── Files (machine-scoped) ─────────────────────────────────────────────────
+
   const { data: filesData, isLoading: filesLoading } = useQuery({
-    queryKey: ["app-files", projectKey, appId],
+    queryKey: ["app-files", projectKey, appId, machineId],
     queryFn: async () => {
-      const resp = await logsService.listFiles(projectKey, appId);
+      const resp = await logsService.listFiles(projectKey, appId, Number(machineId));
       return resp.data.files ?? [];
     },
+    enabled: !!machineId,
     staleTime: 30_000,
   });
 
@@ -183,66 +219,135 @@ export function LogsViewer({
     [filesData],
   );
 
-  // Auto-select first file on initial load
-  useEffect(() => {
-    if (!filename && fileOptions.length > 0) {
-      setFilename(fileOptions[0].value);
-    }
-  }, [filename, fileOptions]);
-
-  // Clear filename if it's been removed from the available list
+  // Clear filename if it disappeared from the available list
   useEffect(() => {
     if (filename && filesData && !filesData.includes(filename)) {
       setFilename("");
     }
   }, [filesData, filename]);
 
-  const params = useMemo(() => {
-    const { start, end } = getRangeParams(timeRange);
-    return {
-      start,
-      end,
-      limit,
-      direction: "backward" as const,
-      ...(machineId ? { machine_id: Number(machineId) } : {}),
-      ...(poolId ? { pool_id: Number(poolId) } : {}),
-      ...(filename ? { filename } : {}),
-    };
-  }, [machineId, poolId, filename, timeRange, limit]);
+  // ── Log fetching ───────────────────────────────────────────────────────────
 
-  const { data, isLoading, isError, isFetching, refetch } = useQuery({
-    queryKey: ["logs", projectKey, appId, params],
-    queryFn: async () => {
-      const resp = await logsService.query(projectKey, appId, params);
-      return resp.data;
-    },
-    staleTime: 0,
-  });
-
-  const entries = useMemo<LogEntry[]>(() => {
-    const result: LogEntry[] = [];
-    for (const stream of data?.data?.result ?? []) {
-      for (const [nanoTs, content] of stream.values) {
-        result.push({
-          ts: Number(BigInt(nanoTs) / 1_000_000n),
-          content: extractLogLine(content),
-        });
-      }
-    }
-    return result.sort((a, b) => a.ts - b.ts);
-  }, [data]);
+  const readyToFetch = !!machineId && !!poolId;
 
   useEffect(() => {
-    if (atBottom && scrollRef.current) {
+    if (!readyToFetch) {
+      setEntries([]);
+      setHasMore(false);
+      setInitialLoaded(false);
+      setIsInitialLoading(false);
+      setFetchError(false);
+      return;
+    }
+
+    let cancelled = false;
+    setEntries([]);
+    setHasMore(false);
+    setInitialLoaded(false);
+    setFetchError(false);
+    setIsInitialLoading(true);
+
+    void (async () => {
+      try {
+        const resp = await logsService.query(projectKey, appId, {
+          start: FAR_BACK,
+          end: new Date().toISOString(),
+          limit: FETCH_LIMIT,
+          direction: "backward",
+          machine_id: Number(machineId),
+          pool_id: Number(poolId),
+          ...(filename ? { filename } : {}),
+        });
+        if (cancelled) return;
+        const result = extractEntries(resp.data.data);
+        result.sort((a, b) => a.ts - b.ts);
+        setEntries(result);
+        setHasMore(result.length === FETCH_LIMIT);
+        setInitialLoaded(true);
+      } catch {
+        if (!cancelled) {
+          setFetchError(true);
+          setInitialLoaded(true);
+        }
+      } finally {
+        if (!cancelled) setIsInitialLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [readyToFetch, machineId, poolId, filename, projectKey, appId, fetchKey]);
+
+  // Auto-scroll to bottom after initial load
+  useEffect(() => {
+    if (initialLoaded && !fetchError && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [entries, atBottom]);
+  }, [initialLoaded, fetchError]);
+
+  // Restore scroll position after prepending older entries
+  useLayoutEffect(() => {
+    if (prevScrollHeightRef.current > 0 && scrollRef.current) {
+      scrollRef.current.scrollTop += scrollRef.current.scrollHeight - prevScrollHeightRef.current;
+      prevScrollHeightRef.current = 0;
+    }
+  }, [entries]);
+
+  async function loadMore() {
+    if (loadingMoreRef.current || !hasMore || entries.length === 0) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    prevScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0;
+
+    const oldestNano = entries[0].nanoTs;
+    const endNs = BigInt(oldestNano) - 1n;
+    const endMs = Number(endNs / 1_000_000n);
+
+    try {
+      const resp = await logsService.query(projectKey, appId, {
+        start: FAR_BACK,
+        end: new Date(endMs).toISOString(),
+        limit: FETCH_LIMIT,
+        direction: "backward",
+        machine_id: Number(machineId),
+        pool_id: Number(poolId),
+        ...(filename ? { filename } : {}),
+      });
+      const result = extractEntries(resp.data.data);
+      result.sort((a, b) => a.ts - b.ts);
+      if (result.length === 0) {
+        setHasMore(false);
+        prevScrollHeightRef.current = 0;
+      } else {
+        setEntries((prev) => [...result, ...prev]);
+        setHasMore(result.length === FETCH_LIMIT);
+      }
+    } catch {
+      prevScrollHeightRef.current = 0;
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }
 
   function handleScroll() {
     const el = scrollRef.current;
     if (!el) return;
-    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+    if (el.scrollTop < 120 && hasMore && !loadingMoreRef.current && initialLoaded) {
+      void loadMore();
+    }
   }
+
+  // ── Search ─────────────────────────────────────────────────────────────────
+
+  const filtered = useMemo(() => {
+    if (!searchText.trim()) return entries;
+    const q = searchText.toLowerCase();
+    return entries.filter((e) => e.content.toLowerCase().includes(q));
+  }, [entries, searchText]);
+
+  // ── Download ───────────────────────────────────────────────────────────────
 
   async function handleStageDownload() {
     if (!machineId || !filename) {
@@ -286,126 +391,181 @@ export function LogsViewer({
     }
   }
 
-  return (
-    <div
-      className={cn(
-        "flex flex-col rounded-lg border border-rim overflow-hidden",
-        expanded ? "fixed left-14 inset-y-0 right-0 z-[9999]" : "h-[50vh]",
-      )}
-    >
-      {/* Filter bar */}
-      <div className='flex items-center gap-2 px-4 py-2.5 border-b border-rim bg-surface-alt shrink-0 flex-wrap'>
-        <Terminal className='size-3.5 text-ink-faint shrink-0' />
-        <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mr-1'>Logs</span>
+  // ── Clear ──────────────────────────────────────────────────────────────────
 
-        <FilterSelect
-          value={machineId}
-          onChange={(v) => handleMachineChange(String(v))}
-          options={machineOptions}
+  async function handleClear() {
+    setClearing(true);
+    try {
+      await logsService.clear(projectKey, appId, {
+        ...(machineId ? { machine_id: Number(machineId) } : {}),
+        ...(poolId ? { pool_id: Number(poolId) } : {}),
+        ...(filename ? { filename } : {}),
+      });
+      toast.success("Logs cleared. They may take a moment to disappear.");
+      setClearConfirmOpen(false);
+      setFetchKey((k) => k + 1);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Failed to clear logs.";
+      toast.error(msg);
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  // ── Render pieces ──────────────────────────────────────────────────────────
+
+  const filterBar = (
+    <div className='flex items-center gap-2 px-4 py-2.5 border-b border-rim bg-surface-alt shrink-0 flex-wrap'>
+      <Terminal className='size-3.5 text-ink-faint shrink-0' />
+      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mr-1'>Logs</span>
+
+      <FilterSelect
+        value={machineId}
+        onChange={(v) => handleMachineChange(String(v))}
+        options={machineOptions}
+      />
+
+      <FilterSelect
+        value={poolId}
+        onChange={(v) => setPoolId(String(v))}
+        options={poolOptions}
+        disabled={!machineId || !poolOptions.length}
+      />
+
+      <FilterSelect
+        value={filename}
+        onChange={(v) => setFilename(String(v))}
+        disabled={!machineId || filesLoading || !fileOptions.length}
+        options={[
+          { label: filesLoading ? "Loading files…" : !fileOptions.length ? "No files" : "All files", value: "" },
+          ...fileOptions,
+        ]}
+      />
+
+      {/* Search */}
+      <div className='relative'>
+        <Search className='pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 size-3 text-ink-faint' />
+        <input
+          type='text'
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder='Search…'
+          className='h-7 pl-6 pr-2.5 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent w-36'
         />
+      </div>
 
-        <FilterSelect
-          value={poolId}
-          onChange={(v) => setPoolId(String(v))}
-          options={poolOptions}
-          disabled={!pools.length}
-        />
-
-        <FilterSelect
-          value={filename}
-          onChange={(v) => setFilename(String(v))}
-          disabled={filesLoading || !fileOptions.length}
-          options={
-            filesLoading
-              ? [{ label: "Loading files…", value: "" }]
-              : !fileOptions.length
-                ? [{ label: "No files configured", value: "" }]
-                : fileOptions
-          }
-        />
-
-        <FilterSelect
-          value={timeRange}
-          onChange={(v) => setTimeRange(v as TimeRange)}
-          options={TIME_RANGES.map((r) => ({ label: r.label, value: r.value }))}
-        />
-
-        <FilterSelect
-          value={limit}
-          onChange={(v) => setLimit(Number(v))}
-          options={LIMITS.map((l) => ({ label: String(l), value: l }))}
-        />
-
-        <div className='ml-auto flex items-center gap-1.5'>
+      <div className='ml-auto flex items-center gap-1'>
+        <Tooltip label={staging ? "Preparing…" : "Download logs"}>
           <button
             type='button'
             onClick={() => void handleStageDownload()}
             disabled={staging || !machineId || !filename}
-            className='flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-rim bg-surface text-xs text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
-            title='Download logs as zip'
+            className='flex items-center justify-center h-7 w-7 rounded-md border border-rim bg-surface text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
           >
-            <Download className={cn("size-3", staging && "animate-pulse")} />
-            {staging ? "Preparing…" : "Download"}
+            <Download className={cn("size-3.5", staging && "animate-pulse")} />
           </button>
+        </Tooltip>
+        <Tooltip label="Clear logs">
           <button
             type='button'
-            onClick={() => void refetch()}
-            className='flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-rim bg-surface text-xs text-ink-faint hover:text-ink transition-colors cursor-pointer'
+            onClick={() => setClearConfirmOpen(true)}
+            disabled={!machineId}
+            className='flex items-center justify-center h-7 w-7 rounded-md border border-rim bg-surface text-ink-faint hover:text-danger transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
           >
-            <RefreshCw className={cn("size-3", isFetching && "animate-spin")} />
-            Refresh
+            <Trash2 className='size-3.5' />
           </button>
+        </Tooltip>
+        <Tooltip label="Refresh">
+          <button
+            type='button'
+            onClick={() => setFetchKey((k) => k + 1)}
+            disabled={!readyToFetch}
+            className='flex items-center justify-center h-7 w-7 rounded-md border border-rim bg-surface text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+          >
+            <RefreshCw className={cn("size-3.5", isInitialLoading && "animate-spin")} />
+          </button>
+        </Tooltip>
+        <Tooltip label={expanded ? "Collapse" : "Expand"}>
           <button
             type='button'
             onClick={() => setExpanded((v) => !v)}
             className='flex items-center justify-center h-7 w-7 rounded-md border border-rim bg-surface text-ink-faint hover:text-ink transition-colors cursor-pointer'
-            title={expanded ? "Collapse" : "Expand"}
           >
             {expanded ? <Minimize2 className='size-3.5' /> : <Maximize2 className='size-3.5' />}
           </button>
+        </Tooltip>
+      </div>
+    </div>
+  );
+
+  const logArea = (
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className='flex-1 overflow-y-auto bg-canvas relative'
+      style={{ fontFamily: "ui-monospace, 'SF Mono', Menlo, Monaco, monospace", fontSize: "11px" }}
+    >
+      {/* Load more indicator at the top */}
+      {loadingMore && (
+        <div className='sticky top-0 flex items-center justify-center py-2 bg-surface-alt/80 backdrop-blur-sm text-xs text-ink-faint border-b border-rim z-10'>
+          Loading more…
         </div>
-      </div>
+      )}
+      {!hasMore && initialLoaded && entries.length > 0 && (
+        <div className='flex items-center justify-center py-2 text-[0.625rem] text-ink-faint/50'>
+          — beginning of logs —
+        </div>
+      )}
 
-      {/* Log area */}
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className='flex-1 overflow-y-auto bg-canvas relative'
-        style={{ fontFamily: "ui-monospace, 'SF Mono', Menlo, Monaco, monospace", fontSize: "11px" }}
-      >
-        {isLoading ? (
-          <div className='flex items-center justify-center h-full text-ink-faint text-xs'>Loading logs…</div>
-        ) : isError ? (
-          <div className='flex items-center justify-center h-full text-danger text-xs'>
-            Failed to load logs.
-          </div>
-        ) : !entries.length ? (
-          <div className='flex flex-col items-center justify-center h-full gap-2 text-ink-faint text-xs'>
-            <Terminal className='size-5 opacity-30' />
-            <span>No log entries found for the selected filters.</span>
-          </div>
-        ) : (
-          <div className='p-2'>
-            {entries.map((entry, i) => (
-              <div
-                key={i}
-                className='flex items-baseline gap-1.5 px-2 py-[2px] rounded hover:bg-surface-high/50 leading-relaxed'
-              >
-                <span className='shrink-0 text-ink-faint w-24'>
-                  {fmtLogTime(String(BigInt(entry.ts) * 1_000_000n))}
-                </span>
-                <span className='text-ink-dim break-all flex-1'>{entry.content}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {isInitialLoading ? (
+        <div className='flex items-center justify-center h-full text-ink-faint text-xs'>
+          Loading logs…
+        </div>
+      ) : !readyToFetch ? (
+        <div className='flex flex-col items-center justify-center h-full gap-2 text-ink-faint text-xs'>
+          <Terminal className='size-5 opacity-30' />
+          <span>Select a host and app pool to view logs.</span>
+        </div>
+      ) : fetchError ? (
+        <div className='flex items-center justify-center h-full text-danger text-xs'>
+          Failed to load logs.
+        </div>
+      ) : !filtered.length ? (
+        <div className='flex flex-col items-center justify-center h-full gap-2 text-ink-faint text-xs'>
+          <Terminal className='size-5 opacity-30' />
+          <span>{searchText ? "No matching log entries." : "No log entries found."}</span>
+        </div>
+      ) : (
+        <div className='p-2'>
+          {filtered.map((entry, i) => (
+            <div
+              key={i}
+              className='flex items-baseline gap-1.5 px-2 py-[2px] rounded hover:bg-surface-high/50 leading-relaxed'
+            >
+              <span className='shrink-0 text-ink-faint w-24'>{fmtLogTime(entry.nanoTs)}</span>
+              <span className='text-ink-dim break-all flex-1'>{entry.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
-      <Modal
-        open={!!pendingDownload}
-        onClose={() => setPendingDownload(null)}
-        title='Download Logs'
-      >
+  const modals = (
+    <>
+      <ConfirmModal
+        open={clearConfirmOpen}
+        title='Clear Logs'
+        description='This permanently deletes all log files from disk on the selected host and removes the corresponding entries from the log index. This cannot be undone.'
+        confirmLabel='Clear Logs'
+        loading={clearing}
+        onClose={() => setClearConfirmOpen(false)}
+        onConfirm={() => void handleClear()}
+      />
+
+      <Modal open={!!pendingDownload} onClose={() => setPendingDownload(null)} title='Download Logs'>
         <div className='space-y-4'>
           <div className='rounded-lg border border-rim bg-surface-alt divide-y divide-rim text-xs'>
             <div className='flex items-center gap-2.5 px-4 py-2.5'>
@@ -419,7 +579,6 @@ export function LogsViewer({
               </span>
             </div>
           </div>
-
           <div className='flex justify-end gap-2'>
             <Button
               type='button'
@@ -429,16 +588,64 @@ export function LogsViewer({
             >
               Cancel
             </Button>
-            <Button
-              type='button'
-              loading={fetchingDownload}
-              onClick={() => void handleConfirmDownload()}
-            >
+            <Button type='button' loading={fetchingDownload} onClick={() => void handleConfirmDownload()}>
               Download
             </Button>
           </div>
         </div>
       </Modal>
-    </div>
+    </>
+  );
+
+  // ── Expanded modal (portal) ────────────────────────────────────────────────
+
+  if (expanded) {
+    return (
+      <>
+        {/* Collapsed placeholder so the page doesn't reflow */}
+        <div className='h-[50vh] rounded-lg border border-rim bg-canvas flex items-center justify-center text-xs text-ink-faint gap-2'>
+          <Maximize2 className='size-3.5 opacity-40' />
+          <span>Log viewer is open in expanded view</span>
+        </div>
+
+        {createPortal(
+          <div className='fixed inset-0 z-[9999] flex items-center justify-center p-4'>
+            <div className='absolute inset-0 bg-black/80' onClick={() => setExpanded(false)} />
+            <div className='relative z-10 w-full h-full max-w-[95vw] max-h-[95vh] rounded-xl border border-rim bg-canvas shadow-2xl flex flex-col overflow-hidden'>
+              {/* Modal header with close */}
+              <div className='flex items-center justify-between px-4 py-2 border-b border-rim bg-surface-alt shrink-0'>
+                <div className='flex items-center gap-2'>
+                  <Terminal className='size-3.5 text-ink-faint' />
+                  <span className='text-xs font-semibold text-ink'>Logs Explorer</span>
+                </div>
+                <button
+                  type='button'
+                  onClick={() => setExpanded(false)}
+                  className='cursor-pointer rounded p-0.5 text-ink-faint hover:text-ink hover:bg-surface-high transition-colors'
+                >
+                  <X className='size-4' />
+                </button>
+              </div>
+              {filterBar}
+              {logArea}
+            </div>
+            {modals}
+          </div>,
+          document.body,
+        )}
+      </>
+    );
+  }
+
+  // ── Normal embedded view ───────────────────────────────────────────────────
+
+  return (
+    <>
+      <div className='flex flex-col rounded-lg border border-rim overflow-hidden h-[50vh]'>
+        {filterBar}
+        {logArea}
+      </div>
+      {modals}
+    </>
   );
 }

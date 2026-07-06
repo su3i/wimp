@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, Boxes, HardDrive, Bell, Activity, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/auth'
+import { useUIStore } from '@/store/ui'
 import { authService } from '@/services/auth.service'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import iconSrc from '@/assets/icon.svg'
@@ -27,11 +28,12 @@ export function Sidebar() {
   const { user, refreshToken, clearAuth } = useAuthStore()
   const navigate = useNavigate()
 
-  const [expanded, setExpanded] = useState(() => localStorage.getItem('wimp_sidebar_expanded') === 'true')
+  const { sidebarExpanded: expanded, setSidebarExpanded } = useUIStore()
 
-  useEffect(() => {
-    localStorage.setItem('wimp_sidebar_expanded', String(expanded))
-  }, [expanded])
+  function setExpanded(v: boolean) {
+    localStorage.setItem('wimp_sidebar_expanded', String(v))
+    setSidebarExpanded(v)
+  }
 
   async function handleLogout() {
     if (refreshToken) {

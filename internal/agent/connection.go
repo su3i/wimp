@@ -236,6 +236,24 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 					Payload: mustMarshal(result),
 				})
 			}(req)
+
+		case protocol.TypeClearLogs:
+			var req protocol.ClearLogsPayload
+			if err := json.Unmarshal(msg.Payload, &req); err != nil {
+				continue
+			}
+			go func(r protocol.ClearLogsPayload) {
+				result := protocol.ClearLogsResultPayload{RequestID: r.RequestID}
+				deleted, err := clearLogDir(r.LogPath)
+				if err != nil {
+					result.Error = err.Error()
+				}
+				result.Deleted = deleted
+				wc.writeJSON(protocol.Message{ //nolint:errcheck
+					Type:    protocol.TypeClearLogsResult,
+					Payload: mustMarshal(result),
+				})
+			}(req)
 		}
 	}
 }
@@ -291,6 +309,22 @@ func zipLogFolder(logFilePath string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func clearLogDir(dirPath string) (int, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return 0, err
+	}
+	var deleted int
+	for _, e := range entries {
+		if !e.IsDir() {
+			if os.Remove(filepath.Join(dirPath, e.Name())) == nil {
+				deleted++
+			}
+		}
+	}
+	return deleted, nil
 }
 
 func listFiles(dirPath string) ([]string, error) {
