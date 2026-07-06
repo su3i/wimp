@@ -27,4 +27,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/wimp:0.0.40
+          tags: ${{ secrets.DOCKER_USERNAME }}/wimp:0.0.41
