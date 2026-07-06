@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Layers, HardDrive, Server, AlertCircle, Monitor, Plus, Copy, Check, Trash2, Power, RotateCw } from "lucide-react";
+import { Layers, HardDrive, Server, AlertCircle, Plus, Copy, Check, Trash2, Power, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -34,16 +34,16 @@ function filterIPv4(ips: string[]) {
   return (ips ?? []).filter((ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip));
 }
 
-function formatLastPing(lastSeenAt: string | null) {
-  if (!lastSeenAt) return "Never";
-  const diff = Date.now() - new Date(lastSeenAt).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
+// function formatLastPing(lastSeenAt: string | null) {
+//   if (!lastSeenAt) return "Never";
+//   const diff = Date.now() - new Date(lastSeenAt).getTime();
+//   const mins = Math.floor(diff / 60_000);
+//   if (mins < 1) return "Just now";
+//   if (mins < 60) return `${mins}m ago`;
+//   const hrs = Math.floor(mins / 60);
+//   if (hrs < 24) return `${hrs}h ago`;
+//   return `${Math.floor(hrs / 24)}d ago`;
+// }
 
 const statusConfig: Record<string, { dot: string; text: string; label: string }> = {
   online: { dot: "bg-success", text: "text-success", label: "Online" },
