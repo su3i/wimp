@@ -96,8 +96,29 @@ func (r *siteRepository) SyncFromDiscovery(machineID uint, sites []site.Site) er
 	})
 }
 
-func (r *siteRepository) SyncStates(machineID uint, runningNames []string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+func (r *siteRepository) SyncStates(machineID uint, runningNames []string) ([]string, []string, error) {
+	var stopped, started []string
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var existing []site.Site
+		if err := tx.Where("machine_id = ?", machineID).Find(&existing).Error; err != nil {
+			return err
+		}
+
+		runningSet := make(map[string]bool, len(runningNames))
+		for _, n := range runningNames {
+			runningSet[n] = true
+		}
+
+		for _, s := range existing {
+			wasRunning := s.State == "Started"
+			nowRunning := runningSet[s.Name]
+			if wasRunning && !nowRunning {
+				stopped = append(stopped, s.Name)
+			} else if !wasRunning && nowRunning {
+				started = append(started, s.Name)
+			}
+		}
+
 		if err := tx.Model(&site.Site{}).Where("machine_id = ?", machineID).Update("state", "Stopped").Error; err != nil {
 			return err
 		}
@@ -108,6 +129,7 @@ func (r *siteRepository) SyncStates(machineID uint, runningNames []string) error
 			Where("machine_id = ? AND name IN ?", machineID, runningNames).
 			Update("state", "Started").Error
 	})
+	return stopped, started, err
 }
 
 func NewSiteRepository(db *gorm.DB) site.SiteRepository {

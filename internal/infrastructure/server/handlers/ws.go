@@ -26,6 +26,13 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// wsReadTimeout bounds how long a machine can go silent before it's treated as
+// disconnected - 3x the agent's 30s heartbeat interval, refreshed on every received
+// message. Without this, a hard crash/network black-hole is only ever detected
+// whenever the raw OS/network layer itself notices the TCP connection is dead, which
+// is unbounded (can take minutes to hours).
+const wsReadTimeout = 90 * time.Second
+
 func AgentWebSocket(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
@@ -52,6 +59,7 @@ func AgentWebSocket(c *gin.Context) {
 		return
 	}
 	defer conn.Close()
+	conn.SetReadDeadline(time.Now().Add(wsReadTimeout)) //nolint:errcheck
 
 	// Mark online and extend token validity so reconnects always work.
 	now := time.Now()
@@ -67,8 +75,8 @@ func AgentWebSocket(c *gin.Context) {
 	log.Printf("machine (%d) agent connected", m.ID)
 
 	cfg := config.Database()
-	go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
-		"Machine connected", m.Hostname+" came online", cfg)
+	go notificationService.EmitAlert(notification.AlertMachineConnected, m.ProjectID, m.ID, m.Hostname,
+		m.Hostname+" — Machine Online", m.Hostname+" came online", cfg)
 
 	defer func() {
 		hub.Get().Deregister(m.ID)
@@ -84,15 +92,15 @@ func AgentWebSocket(c *gin.Context) {
 		if action, ok := cache.GetMachineActionPending(m.ID); ok {
 			cache.ClearMachineActionPending(m.ID)
 			if action == "shutdown" {
-				go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
-					"Machine shutdown", m.Hostname+" was shut down", cfg)
+				go notificationService.EmitAlert(notification.AlertMachineShutdown, m.ProjectID, m.ID, m.Hostname,
+					m.Hostname+" — Machine Shut Down", m.Hostname+" was shut down", cfg)
 			} else {
-				go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
-					"Machine restarting", m.Hostname+" is restarting", cfg)
+				go notificationService.EmitAlert(notification.AlertMachineRestarting, m.ProjectID, m.ID, m.Hostname,
+					m.Hostname+" — Machine Restarting", m.Hostname+" is restarting", cfg)
 			}
 		} else {
-			go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryMachine,
-				"Machine disconnected", m.Hostname+" went offline", cfg)
+			go notificationService.EmitAlert(notification.AlertMachineDisconnected, m.ProjectID, m.ID, m.Hostname,
+				m.Hostname+" — Machine Offline", m.Hostname+" went offline unexpectedly", cfg)
 		}
 	}()
 
@@ -101,6 +109,7 @@ func AgentWebSocket(c *gin.Context) {
 		if err != nil {
 			break
 		}
+		conn.SetReadDeadline(time.Now().Add(wsReadTimeout)) //nolint:errcheck
 
 		var msg protocol.Message
 		if err := json.Unmarshal(raw, &msg); err != nil {
@@ -119,8 +128,8 @@ func AgentWebSocket(c *gin.Context) {
 					m.WindowsVersion = reg.WindowsVersion
 				}
 				if reg.Version != "" && reg.Version != "dev" && reg.Version != prevVersion {
-					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryMachine,
-						"Agent updated", m.Hostname+" agent updated to "+reg.Version, cfg)
+					go notificationService.EmitAlert(notification.AlertAgentUpdated, m.ProjectID, m.ID, m.Hostname,
+						m.Hostname+" — Agent Updated", m.Hostname+" agent updated to "+reg.Version, cfg)
 				}
 			}
 			repo.Update(m)
@@ -166,31 +175,39 @@ func AgentWebSocket(c *gin.Context) {
 			repo.Update(m)
 			stoppedPools, startedPools, _ := appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
 			cache.InvalidatePoolsByMachine(m.ID)
-			siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
+			stoppedSites, startedSites, _ := siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
 			cache.InvalidateSitesByMachine(m.ID)
 			for _, name := range stoppedPools {
-				go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategoryAppPool,
-					"App pool stopped", name+" stopped on "+m.Hostname, cfg)
+				go notificationService.EmitAlert(notification.AlertAppPoolStopped, m.ProjectID, m.ID, m.Hostname,
+					m.Hostname+" — App Pool Stopped: "+name, name+" stopped on "+m.Hostname, cfg)
 			}
 			for _, name := range startedPools {
-				go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategoryAppPool,
-					"App pool started", name+" started on "+m.Hostname, cfg)
+				go notificationService.EmitAlert(notification.AlertAppPoolStarted, m.ProjectID, m.ID, m.Hostname,
+					m.Hostname+" — App Pool Started: "+name, name+" started on "+m.Hostname, cfg)
+			}
+			for _, name := range stoppedSites {
+				go notificationService.EmitAlert(notification.AlertSiteStopped, m.ProjectID, m.ID, m.Hostname,
+					m.Hostname+" — Site Stopped: "+name, name+" stopped on "+m.Hostname, cfg)
+			}
+			for _, name := range startedSites {
+				go notificationService.EmitAlert(notification.AlertSiteStarted, m.ProjectID, m.ID, m.Hostname,
+					m.Hostname+" — Site Started: "+name, name+" started on "+m.Hostname, cfg)
 			}
 
 			if prevWE, prevFB, known := cache.GetSidecarHealth(m.ID); known {
 				if prevWE && !hb.WindowsExporterHealthy {
-					go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategorySidecar,
-						"windows_exporter down", m.Hostname+" - windows_exporter service is not running", cfg)
+					go notificationService.EmitAlert(notification.AlertWindowsExporterDown, m.ProjectID, m.ID, m.Hostname,
+						m.Hostname+" — windows_exporter Down", "windows_exporter service is not running on "+m.Hostname, cfg)
 				} else if !prevWE && hb.WindowsExporterHealthy {
-					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategorySidecar,
-						"windows_exporter recovered", m.Hostname+" - windows_exporter service is running again", cfg)
+					go notificationService.EmitAlert(notification.AlertWindowsExporterUp, m.ProjectID, m.ID, m.Hostname,
+						m.Hostname+" — windows_exporter Recovered", "windows_exporter service is running again on "+m.Hostname, cfg)
 				}
 				if prevFB && !hb.FluentBitHealthy {
-					go notificationService.Emit(m.ID, notification.LevelCritical, notification.CategorySidecar,
-						"fluent-bit down", m.Hostname+" - fluent-bit service is not running", cfg)
+					go notificationService.EmitAlert(notification.AlertFluentBitDown, m.ProjectID, m.ID, m.Hostname,
+						m.Hostname+" — fluent-bit Down", "fluent-bit service is not running on "+m.Hostname, cfg)
 				} else if !prevFB && hb.FluentBitHealthy {
-					go notificationService.Emit(m.ID, notification.LevelInfo, notification.CategorySidecar,
-						"fluent-bit recovered", m.Hostname+" - fluent-bit service is running again", cfg)
+					go notificationService.EmitAlert(notification.AlertFluentBitUp, m.ProjectID, m.ID, m.Hostname,
+						m.Hostname+" — fluent-bit Recovered", "fluent-bit service is running again on "+m.Hostname, cfg)
 				}
 			}
 			cache.SetSidecarHealth(m.ID, hb.WindowsExporterHealthy, hb.FluentBitHealthy)

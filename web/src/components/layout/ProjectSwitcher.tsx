@@ -172,7 +172,7 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
           onMouseDown={e => e.stopPropagation()}
           style={{ position: 'fixed', top: pos.top, left: pos.left }}
           className={cn(
-            'z-[9999] rounded-md border border-rim bg-surface-highest shadow-[0_8px_24px_rgba(1,4,9,0.7)] overflow-hidden',
+            'z-[9999] rounded-md border border-rim bg-surface shadow-[0_8px_28px_rgba(1,4,9,0.85)] overflow-hidden',
             expanded ? 'w-52' : 'w-64',
           )}
         >
@@ -217,11 +217,11 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
                         isActive ? 'text-ink' : 'text-ink-dim',
                       )}
                     >
-                      <span className='size-4 flex items-center justify-center shrink-0'>
-                        {isActive && <Check className='size-3 text-primary' />}
-                      </span>
                       <span className='flex-1 min-w-0 text-xs font-medium truncate'>
                         {project.Name}
+                      </span>
+                      <span className='size-4 flex items-center justify-center shrink-0'>
+                        {isActive && <Check className='size-3 text-primary' />}
                       </span>
                     </button>
                     <button

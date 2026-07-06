@@ -31,7 +31,7 @@ func (r *notificationRepository) FindPaginated(f notification.Filter) ([]notific
 		q = q.Where("machine_id = ?", *f.MachineID)
 	}
 	if f.ProjectKey != nil {
-		q = q.Where("machine_id IN (SELECT m.id FROM machines m JOIN projects p ON p.id = m.project_id WHERE p.key = ? AND m.deleted_at IS NULL)", *f.ProjectKey)
+		q = q.Where("project_id = (SELECT id FROM projects WHERE key = ?)", *f.ProjectKey)
 	}
 	if f.UnreadOnly {
 		q = q.Where("read_at IS NULL")
@@ -77,7 +77,7 @@ func (r *notificationRepository) MarkAllRead() error {
 
 func (r *notificationRepository) FindActiveAlerts() ([]notification.Notification, error) {
 	var results []notification.Notification
-	err := r.db.Where("level = ? AND read_at IS NULL", notification.LevelCritical).
+	err := r.db.Where("level IN (?, ?) AND read_at IS NULL", notification.LevelCritical, notification.LevelSev).
 		Order("created_at DESC").
 		Find(&results).Error
 	return results, err
@@ -108,11 +108,11 @@ func (r *notificationRepository) CountByHour(hours int) ([]notification.HourCoun
 	return result, nil
 }
 
-func (r *notificationRepository) CountCriticalSince(since time.Time, projectKey string) (int64, error) {
+func (r *notificationRepository) CountSevSince(since time.Time, projectKey string) (int64, error) {
 	var count int64
 	err := r.db.Model(&notification.Notification{}).
-		Where("level = ? AND created_at >= ? AND deleted_at IS NULL", notification.LevelCritical, since).
-		Where("machine_id IN (SELECT m.id FROM machines m JOIN projects p ON p.id = m.project_id WHERE p.key = ? AND m.deleted_at IS NULL)", projectKey).
+		Where("level = ? AND created_at >= ? AND deleted_at IS NULL", notification.LevelSev, since).
+		Where("project_id = (SELECT id FROM projects WHERE key = ?)", projectKey).
 		Count(&count).Error
 	return count, err
 }

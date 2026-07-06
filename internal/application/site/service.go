@@ -34,7 +34,7 @@ func UpsertFromDiscovery(machineID uint, sites []protocol.SiteInfo, cfg *config.
 	return database.NewSiteRepository(cfg).SyncFromDiscovery(machineID, records)
 }
 
-func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseConfig) error {
+func SyncHeartbeat(machineID uint, runningNames []string, cfg *config.DatabaseConfig) (stoppedNames []string, startedNames []string, err error) {
 	return database.NewSiteRepository(cfg).SyncStates(machineID, runningNames)
 }
 

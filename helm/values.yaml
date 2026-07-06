@@ -8,6 +8,13 @@
 # e.g. http://1.2.3.4:80
 appUrl: ""
 
+# Public URL of the web frontend (browser-facing) - NOT the same as appUrl above, since
+# frontend and control plane commonly live behind different LoadBalancers/ingresses.
+# Used to build deep links in outbound alerts (e.g. Telegram). Leave empty to omit
+# links from alerts. Find it the same way as appUrl, but for the web service:
+#   kubectl get svc wimp-web -n <namespace>
+webUrl: ""
+
 image:
   repository: darksueii/wimp
   tag: "0.0.30"
@@ -51,10 +58,49 @@ config:
   #   http://<release>-kube-prometheus-stack-alertmanager.<namespace>.svc:9093
   alertmanagerUrl: ""
 
-  # Prometheus URL used by the monitor uptime checker - leave empty to disable.
+  # Prometheus URL used by the monitor uptime checker and the CPU/memory/disk metrics
+  # checker - leave empty to disable both.
   # When kube-prometheus-stack.enabled=true (below), use the cluster-internal address:
   #   http://<release>-kube-prometheus-stack-prometheus.<namespace>.svc:9090
   prometheusUrl: ""
+
+  alerts:
+    # Per-alert-type severity override. Values: info | warning | critical | sev | disabled
+    # ("disabled" = the event is never even created). Pre-filled with the built-in
+    # default from internal/domain/notification/alert_types.go - edit any line to change it.
+    severity:
+      machineConnected: info
+      machineDisconnected: sev
+      machineShutdown: info
+      machineRestarting: info
+      agentUpdated: info
+      appPoolStopped: critical
+      appPoolStarted: info
+      siteStopped: critical
+      siteStarted: info
+      windowsExporterDown: critical
+      windowsExporterUp: info
+      fluentBitDown: critical
+      fluentBitUp: info
+      healthCheckDown: critical
+      healthCheckUp: info
+      highCpu: sev
+      highCpuRecovered: info
+      highMemory: sev
+      highMemoryRecovered: info
+      lowDisk: sev
+      lowDiskRecovered: info
+
+    # Numeric thresholds for the metric-based alerts, pre-filled with the hardcoded
+    # default from internal/application/metrics/checker.go.
+    threshold:
+      highCpuPercent: 90
+      highMemoryPercent: 90
+      lowDiskPercent: 10  # alert fires when free space drops BELOW this
+
+    # Only alerts at or above this severity are forwarded to Alertmanager (everything
+    # non-disabled is still stored/shown in-app regardless).
+    receiverMinSeverity: critical
 
   database:
     type: postgres  # "sqlite" | "postgres"
@@ -230,9 +276,12 @@ kube-prometheus-stack:
         #       chat_id: YOUR_CHAT_ID  # supergroup ID (negative, prefixed with -100)
         #       parse_mode: HTML
         #       message: |
-        #         ‼️ <b>{{ .GroupLabels.alertname }}</b> ‼️
+        #         {{ if eq .CommonLabels.severity "sev" }}🆘 SEV{{ else if eq .CommonLabels.severity "critical" }}🔴 CRITICAL{{ else if eq .CommonLabels.severity "warning" }}🟡 WARNING{{ else }}🔵 INFO{{ end }} — <b>{{ .GroupLabels.alertname }}</b>
+        #         <b>Category:</b> {{ .CommonLabels.category | default "unknown" }}
         #         {{ range .Alerts }}
+        #         <b>Instance:</b> {{ or .Labels.instance "Unknown" }}
         #         <b>Summary:</b> {{ or .Annotations.summary "No summary" }}
+        #         {{ if .GeneratorURL }}<a href="{{ .GeneratorURL }}">View in WIMP</a>{{ end }}
         #         {{ end }}
 
   prometheus:

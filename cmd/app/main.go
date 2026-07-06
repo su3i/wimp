@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/su3i/wimp/internal/application/authorization"
+	metricsService "github.com/su3i/wimp/internal/application/metrics"
 	monitorService "github.com/su3i/wimp/internal/application/monitor"
 	"github.com/su3i/wimp/internal/application/metadata"
 	"github.com/su3i/wimp/internal/config"
@@ -64,6 +65,9 @@ func main() {
 
 	// Start monitor alert checker
 	monitorService.StartChecker(config.Database(), config.Common().PrometheusUrl)
+
+	// Start metrics threshold checker (CPU/memory/disk/thread count)
+	metricsService.StartChecker(config.Database(), config.Common().PrometheusUrl)
 
 	// Initialize router
 	router := server.InitializeRouter()

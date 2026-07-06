@@ -25,5 +25,5 @@ type Repository interface {
 	MarkAllRead() error
 	FindActiveAlerts() ([]Notification, error)
 	CountByHour(hours int) ([]HourCount, error)
-	CountCriticalSince(since time.Time, projectKey string) (int64, error)
+	CountSevSince(since time.Time, projectKey string) (int64, error)
 }

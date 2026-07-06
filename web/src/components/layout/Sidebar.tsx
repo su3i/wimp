@@ -9,10 +9,10 @@ import { ProjectSwitcher } from './ProjectSwitcher'
 import iconSrc from '@/assets/icon.svg'
 
 const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/', icon: LayoutDashboard, label: 'Overview', end: true },
   { to: '/applications', icon: Boxes, label: 'Applications' },
   { to: '/machines', icon: HardDrive, label: 'Hosts' },
-  { to: '/alerts', icon: Bell, label: 'Alerts' },
+  { to: '/activity', icon: Bell, label: 'Activity' },
 ]
 
 const tooltip = cn(
@@ -49,7 +49,7 @@ export function Sidebar() {
     )}>
       {/* Brand - icon only, always centered */}
       <div className='flex h-14 items-center justify-center border-b border-rim shrink-0'>
-        <img src={iconSrc} alt='wimp' className='size-8 rounded-lg' />
+        <img src={iconSrc} alt='wimp' className='size-[38px] rounded-lg' />
       </div>
 
       {/* Project switcher */}
@@ -70,9 +70,9 @@ export function Sidebar() {
               isActive ? 'bg-primary/10 text-primary' : 'text-ink-dim hover:bg-surface-high hover:text-ink',
             )}
           >
-            <Icon className='size-4 shrink-0' />
+            <Icon className='size-3.5 shrink-0' />
             {expanded
-              ? <span className='text-sm font-medium truncate'>{label}</span>
+              ? <span className='text-xs font-medium truncate'>{label}</span>
               : <span className={tooltip}>{label}</span>
             }
           </NavLink>
@@ -83,31 +83,33 @@ export function Sidebar() {
       <div className='shrink-0 border-t border-rim px-2 py-3'>
         {expanded ? (
           <>
-            {/* Email row */}
-            <div className='flex items-center gap-2.5 px-3 h-8 mb-2'>
-              <div className='flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold text-primary uppercase select-none'>
-                {user?.username?.[0] ?? '?'}
+            {/* Avatar + actions in one row */}
+            <div className='flex items-center h-7'>
+              <div className='flex-1 flex items-center justify-center'>
+                <div className='flex size-6 items-center justify-center rounded-full bg-primary/20 text-[0.625rem] font-semibold leading-none text-primary uppercase select-none'>
+                  {user?.username?.[0] ?? '?'}
+                </div>
               </div>
-              <span className='text-xs text-ink-faint truncate flex-1'>{user?.username ?? 'Unknown'}</span>
-            </div>
-
-            {/* Expand + Logout as a paired icon row */}
-            <div className='flex items-center gap-1.5'>
-              <button
-                onClick={() => setExpanded(false)}
-                title='Collapse sidebar'
-                className='flex-1 h-9 flex items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-ink transition-colors cursor-pointer'
-              >
-                <PanelLeftClose className='size-4' />
-              </button>
-              <div className='w-px h-5 bg-rim shrink-0' />
-              <button
-                onClick={handleLogout}
-                title='Sign out'
-                className='flex-1 h-9 flex items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-danger transition-colors cursor-pointer'
-              >
-                <LogOut className='size-4' />
-              </button>
+              <div className='w-px h-4 bg-rim shrink-0' />
+              <div className='flex-1 flex items-center justify-center'>
+                <button
+                  onClick={() => setExpanded(false)}
+                  title='Collapse sidebar'
+                  className='h-7 w-7 flex items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-ink transition-colors cursor-pointer'
+                >
+                  <PanelLeftClose className='size-3.5' />
+                </button>
+              </div>
+              <div className='w-px h-4 bg-rim shrink-0' />
+              <div className='flex-1 flex items-center justify-center'>
+                <button
+                  onClick={handleLogout}
+                  title='Sign out'
+                  className='h-7 w-7 flex items-center justify-center rounded-md text-ink-faint hover:bg-surface-high hover:text-danger transition-colors cursor-pointer'
+                >
+                  <LogOut className='size-3.5' />
+                </button>
+              </div>
             </div>
           </>
         ) : (

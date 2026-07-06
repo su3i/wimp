@@ -6,7 +6,7 @@ export interface DashboardStats {
   machines_count: number;
   applications_count: number;
   unread_notifications: number;
-  critical_last_24h: number;
+  sev_last_24h: number;
 }
 
 export interface ActiveAlert {

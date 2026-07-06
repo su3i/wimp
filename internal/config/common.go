@@ -20,4 +20,9 @@ type CommonConfig struct {
 	DefaultAdminPassword string `required:"true"`
 	AlertmanagerUrl      string `required:"false"`
 	PrometheusUrl        string `required:"false"`
+	// WebUrl is the public URL of the web frontend (as reachable from a user's browser),
+	// used to build deep links in outbound alerts (e.g. Telegram). Not the same as
+	// AppUrl, which is the control plane's own address - frontend and backend commonly
+	// live on different hosts/ingresses. Leave empty to omit links from alerts.
+	WebUrl string `required:"false"`
 }

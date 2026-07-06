@@ -41,6 +41,8 @@ spec:
               value: {{ .Values.config.appEnv | quote }}
             - name: APPURL
               value: {{ .Values.appUrl | quote }}
+            - name: WEBURL
+              value: {{ .Values.webUrl | default "" | quote }}
             - name: APPPORT
               value: {{ .Values.service.port | toString | quote }}
             - name: AGENTVERSION
@@ -100,6 +102,58 @@ spec:
             # ── Prometheus ───────────────────────────────────
             - name: PROMETHEUSURL
               value: {{ .Values.config.prometheusUrl | default "" | quote }}
+
+            # ── Alerts ───────────────────────────────────────
+            - name: ALERTSEVERITY_MACHINECONNECTED
+              value: {{ .Values.config.alerts.severity.machineConnected | quote }}
+            - name: ALERTSEVERITY_MACHINEDISCONNECTED
+              value: {{ .Values.config.alerts.severity.machineDisconnected | quote }}
+            - name: ALERTSEVERITY_MACHINESHUTDOWN
+              value: {{ .Values.config.alerts.severity.machineShutdown | quote }}
+            - name: ALERTSEVERITY_MACHINERESTARTING
+              value: {{ .Values.config.alerts.severity.machineRestarting | quote }}
+            - name: ALERTSEVERITY_AGENTUPDATED
+              value: {{ .Values.config.alerts.severity.agentUpdated | quote }}
+            - name: ALERTSEVERITY_APPPOOLSTOPPED
+              value: {{ .Values.config.alerts.severity.appPoolStopped | quote }}
+            - name: ALERTSEVERITY_APPPOOLSTARTED
+              value: {{ .Values.config.alerts.severity.appPoolStarted | quote }}
+            - name: ALERTSEVERITY_SITESTOPPED
+              value: {{ .Values.config.alerts.severity.siteStopped | quote }}
+            - name: ALERTSEVERITY_SITESTARTED
+              value: {{ .Values.config.alerts.severity.siteStarted | quote }}
+            - name: ALERTSEVERITY_WINDOWSEXPORTERDOWN
+              value: {{ .Values.config.alerts.severity.windowsExporterDown | quote }}
+            - name: ALERTSEVERITY_WINDOWSEXPORTERUP
+              value: {{ .Values.config.alerts.severity.windowsExporterUp | quote }}
+            - name: ALERTSEVERITY_FLUENTBITDOWN
+              value: {{ .Values.config.alerts.severity.fluentBitDown | quote }}
+            - name: ALERTSEVERITY_FLUENTBITUP
+              value: {{ .Values.config.alerts.severity.fluentBitUp | quote }}
+            - name: ALERTSEVERITY_HEALTHCHECKDOWN
+              value: {{ .Values.config.alerts.severity.healthCheckDown | quote }}
+            - name: ALERTSEVERITY_HEALTHCHECKUP
+              value: {{ .Values.config.alerts.severity.healthCheckUp | quote }}
+            - name: ALERTSEVERITY_HIGHCPU
+              value: {{ .Values.config.alerts.severity.highCpu | quote }}
+            - name: ALERTSEVERITY_HIGHCPURECOVERED
+              value: {{ .Values.config.alerts.severity.highCpuRecovered | quote }}
+            - name: ALERTSEVERITY_HIGHMEMORY
+              value: {{ .Values.config.alerts.severity.highMemory | quote }}
+            - name: ALERTSEVERITY_HIGHMEMORYRECOVERED
+              value: {{ .Values.config.alerts.severity.highMemoryRecovered | quote }}
+            - name: ALERTSEVERITY_LOWDISK
+              value: {{ .Values.config.alerts.severity.lowDisk | quote }}
+            - name: ALERTSEVERITY_LOWDISKRECOVERED
+              value: {{ .Values.config.alerts.severity.lowDiskRecovered | quote }}
+            - name: THRESHOLD_HIGHCPU_PERCENT
+              value: {{ .Values.config.alerts.threshold.highCpuPercent | toString | quote }}
+            - name: THRESHOLD_HIGHMEMORY_PERCENT
+              value: {{ .Values.config.alerts.threshold.highMemoryPercent | toString | quote }}
+            - name: THRESHOLD_LOWDISK_PERCENT
+              value: {{ .Values.config.alerts.threshold.lowDiskPercent | toString | quote }}
+            - name: ALERTRECEIVERMINSEVERITY
+              value: {{ .Values.config.alerts.receiverMinSeverity | quote }}
 
             # ── Loki ─────────────────────────────────────────
             - name: LOKIHOST

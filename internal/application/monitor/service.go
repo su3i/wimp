@@ -3,10 +3,7 @@ package monitor
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -15,6 +12,7 @@ import (
 	"github.com/su3i/wimp/internal/domain/monitor"
 	notificationDomain "github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/infrastructure/database"
+	"github.com/su3i/wimp/internal/infrastructure/prometheus"
 )
 
 // ── Application health checker ────────────────────────────────────────────────
@@ -59,34 +57,6 @@ func AllForSD(cfg *config.DatabaseConfig) ([]monitor.Monitor, error) {
 
 // ── Alert checker ─────────────────────────────────────────────────────────────
 
-type promResponse struct {
-	Status string `json:"status"`
-	Data   struct {
-		Result []struct {
-			Metric map[string]string `json:"metric"`
-			Value  [2]json.RawMessage `json:"value"`
-		} `json:"result"`
-	} `json:"data"`
-}
-
-func queryInstant(prometheusUrl, query string) (*promResponse, error) {
-	u := fmt.Sprintf("%s/api/v1/query?query=%s", prometheusUrl, url.QueryEscape(query))
-	resp, err := http.Get(u) //nolint:gosec
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	var pr promResponse
-	if err := json.Unmarshal(body, &pr); err != nil {
-		return nil, err
-	}
-	return &pr, nil
-}
-
 func StartChecker(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 	if prometheusUrl == "" {
 		log.Println("monitor checker: PROMETHEUSURL not set, alert checking disabled")
@@ -103,7 +73,7 @@ func StartChecker(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 }
 
 func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
-	pr, err := queryInstant(prometheusUrl, `probe_success{job="blackbox_http"}`)
+	pr, err := prometheus.QueryInstant(prometheusUrl, `probe_success{job="blackbox_http"}`)
 	if err != nil {
 		log.Printf("monitor checker: prometheus query failed: %v", err)
 		return
@@ -139,11 +109,10 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 			failures := app.ConsecutiveFailures + 1
 			alertFired := app.AlertFired
 			if failures >= 2 && !alertFired {
-				notification.Emit(
-					0,
-					notificationDomain.LevelCritical,
-					notificationDomain.CategoryService,
-					fmt.Sprintf("Health Check Down: %s", app.Name),
+				notification.EmitAlert(
+					notificationDomain.AlertHealthCheckDown,
+					app.ProjectID, 0, app.Name,
+					fmt.Sprintf("%s — Health Check Failing", app.Name),
 					fmt.Sprintf("Endpoint %s is not responding", *app.HealthCheckURL),
 					dbCfg,
 				)
@@ -152,11 +121,10 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 			_ = appRepo.UpdateCheckState(uint(id), failures, alertFired)
 		} else {
 			if app.AlertFired {
-				notification.Emit(
-					0,
-					notificationDomain.LevelInfo,
-					notificationDomain.CategoryService,
-					fmt.Sprintf("Health Check Recovered: %s", app.Name),
+				notification.EmitAlert(
+					notificationDomain.AlertHealthCheckUp,
+					app.ProjectID, 0, app.Name,
+					fmt.Sprintf("%s — Health Check Recovered", app.Name),
 					fmt.Sprintf("Endpoint %s is responding again", *app.HealthCheckURL),
 					dbCfg,
 				)

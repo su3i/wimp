@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Monitor, Layers, Bell, X, ChevronRight } from "lucide-react";
+import { AlertTriangle, Monitor, Layers, X, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   LineChart,
@@ -20,6 +20,7 @@ import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
+import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
 import { machineService } from "@/services/machine.service";
 import { prometheusService, type PromInstantResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
@@ -99,15 +100,9 @@ function timeAgo(dateStr: string | null | undefined): string {
 
 // ── Icon helpers ──────────────────────────────────────────────────────────────
 
-function categoryIcon(cat: string | null | undefined): LucideIcon {
-  if (cat === "machine") return Monitor;
-  if (cat === "app_pool") return Layers;
-  return Bell;
-}
-
 function alertIcon(cat: string | null | undefined): LucideIcon {
   if (cat === "machine") return Monitor;
-  if (cat === "app_pool") return Layers;
+  if (cat === "apppool" || cat === "app_pool") return Layers;
   return AlertTriangle;
 }
 
@@ -119,7 +114,7 @@ function AlertRow({ alert, onDismiss }: { alert: ActiveAlert; onDismiss: () => v
     <div className='flex items-center gap-3 px-4 py-2.5 bg-danger text-white border-b border-red-700/40 last:border-0'>
       <span className='shrink-0 text-base'>🚨</span>
       <Icon className='size-4 shrink-0 opacity-75' />
-      <span className='flex-1 text-sm'>{alert.message ?? "Alert"}</span>
+      <span className='flex-1 text-sm'>{alert.message ?? "System event"}</span>
       <span className='text-xs opacity-60 shrink-0 whitespace-nowrap'>{timeAgo(alert.fired_at)}</span>
       <button
         type='button'
@@ -145,11 +140,11 @@ function MetricCard({
   sub?: string;
 }) {
   return (
-    <div className='rounded-lg border border-rim bg-surface px-5 py-5 flex flex-col gap-3'>
+    <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         {label}
       </span>
-      <span className='text-3xl font-semibold font-mono leading-none text-ink'>
+      <span className='text-[27px] font-semibold font-mono leading-none text-ink'>
         {value ?? "N/A"}
       </span>
       {sub && <span className='text-[0.625rem] text-ink-faint'>{sub}</span>}
@@ -157,18 +152,18 @@ function MetricCard({
   );
 }
 
-// ── Critical events card ──────────────────────────────────────────────────────
+// ── Sev events card ───────────────────────────────────────────────────────────
 
-function CriticalEventsCard({ count }: { count: number }) {
+function SevEventsCard({ count }: { count: number }) {
   const hot = count > 0;
   return (
     <div className={cn(
-      'rounded-lg border bg-surface px-5 py-5 flex flex-col gap-3 transition-colors border-rim',
+      'rounded-lg border bg-surface px-[18px] py-[18px] flex flex-col gap-3 transition-colors border-rim',
     )}>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
-        Critical Events
+        Sev Events
       </span>
-      <span className={cn('text-3xl font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
+      <span className={cn('text-[27px] font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
         {count}
       </span>
       <span className='text-[0.625rem] text-ink-faint'>last 24h</span>
@@ -180,17 +175,17 @@ function CriticalEventsCard({ count }: { count: number }) {
 
 function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number | null }) {
   return (
-    <div className='rounded-lg border border-rim bg-surface px-5 py-5 flex flex-col gap-3'>
+    <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Bandwidth
       </span>
       <div className='flex items-end gap-4'>
-        <span className='text-2xl font-semibold font-mono leading-none text-ink'>
+        <span className='text-[22px] font-semibold font-mono leading-none text-ink'>
           {inVal != null ? fmtBytes(inVal) : 'N/A'}
           <span className='ml-1.5 text-[0.625rem] text-ink-faint'>IN</span>
         </span>
-        <span className='text-ink-faint/40 text-lg font-light mb-0.5'>/</span>
-        <span className='text-2xl font-semibold font-mono leading-none text-ink'>
+        <span className='text-ink-faint/40 text-base font-light mb-0.5'>/</span>
+        <span className='text-[22px] font-semibold font-mono leading-none text-ink'>
           {outVal != null ? fmtBytes(outVal) : 'N/A'}
           <span className='ml-1.5 text-[0.625rem] text-ink-faint'>OUT</span>
         </span>
@@ -209,7 +204,7 @@ function RadialGauge({ label, value }: { label: string; value: number | null }) 
 
   return (
     <div className='flex flex-col items-center'>
-      <div className='relative w-full' style={{ height: 180 }}>
+      <div className='relative w-full' style={{ height: 162 }}>
         <ResponsiveContainer width='100%' height='100%'>
           <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
             <Pie
@@ -230,7 +225,7 @@ function RadialGauge({ label, value }: { label: string; value: number | null }) 
           </PieChart>
         </ResponsiveContainer>
         <div className='absolute inset-0 flex items-center justify-center' style={{ paddingTop: "10%" }}>
-          <span className='text-2xl font-semibold font-mono text-ink leading-none'>
+          <span className='text-[22px] font-semibold font-mono text-ink leading-none'>
             {value != null ? fmtPct(value) : "N/A"}
           </span>
         </div>
@@ -279,7 +274,7 @@ function HostCpuLineChart({
   }
 
   return (
-    <ResponsiveContainer width='100%' height={260}>
+    <ResponsiveContainer width='100%' height={234}>
       <LineChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
         <CartesianGrid stroke='#30363d' strokeDasharray='3 3' vertical={false} />
         <XAxis
@@ -317,23 +312,8 @@ function HostCpuLineChart({
 
 // ── Recent alerts table ───────────────────────────────────────────────────────
 
-const LEVEL_CFG: Record<string, { label: string; cls: string }> = {
-  critical: {
-    label: "Critical",
-    cls: "bg-danger/10 text-danger border border-danger/20",
-  },
-  warning: {
-    label: "Warning",
-    cls: "bg-[#d29922]/10 text-[#d29922] border border-[#d29922]/20",
-  },
-  info: {
-    label: "Info",
-    cls: "bg-surface-high text-ink-faint border border-rim",
-  },
-};
-
 function LevelBadge({ level }: { level: string }) {
-  const cfg = LEVEL_CFG[level] ?? { label: level, cls: "bg-surface-high text-ink-faint border border-rim" };
+  const cfg = levelConfig(level);
   return (
     <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide whitespace-nowrap", cfg.cls)}>
       {cfg.label}
@@ -341,32 +321,27 @@ function LevelBadge({ level }: { level: string }) {
   );
 }
 
-function categoryLabel(cat: string | null | undefined): string {
-  if (cat === "machine") return "Machine";
-  if (cat === "apppool" || cat === "app_pool") return "App Pool";
-  if (cat === "iis") return "IIS";
-  if (cat === "service") return "Service";
-  return cat ?? "System";
-}
-
 function NotifRow({ notif }: { notif: DashboardNotification }) {
   const CatIcon = categoryIcon(notif.Category);
   return (
     <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100'>
-      <div className='px-4 py-2.5'>
+      <div className='px-4 py-[9px]'>
         <LevelBadge level={notif.Level ?? "info"} />
       </div>
-      <div className='px-4 py-2.5 min-w-0'>
-        <p className='text-xs font-medium text-ink truncate'>{notif.Title ?? ""}</p>
-        {notif.Detail ? (
-          <p className='mt-0.5 text-[0.6875rem] text-ink-faint truncate'>{notif.Detail}</p>
-        ) : null}
+      <div className='px-4 py-[9px] min-w-0 flex items-center gap-1.5 overflow-hidden'>
+        <span className='text-xs font-medium text-ink shrink-0 truncate'>{notif.Title ?? ""}</span>
+        {notif.Detail && (
+          <>
+            <span className='text-ink-faint/40 text-sm shrink-0'>/</span>
+            <span className='text-xs text-ink-dim truncate'>{notif.Detail.toLowerCase()}</span>
+          </>
+        )}
       </div>
-      <div className='flex items-center gap-1.5 px-4 py-2.5'>
+      <div className='flex items-center gap-1.5 px-4 py-[9px]'>
         <CatIcon className='size-3 text-ink-faint shrink-0' />
         <span className='text-xs text-ink-dim'>{categoryLabel(notif.Category)}</span>
       </div>
-      <div className='px-4 py-2.5 text-right'>
+      <div className='px-4 py-[9px] text-right'>
         <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt)}</span>
       </div>
     </div>
@@ -376,7 +351,7 @@ function NotifRow({ notif }: { notif: DashboardNotification }) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export function Dashboard() {
-  usePageTitle("Dashboard");
+  usePageTitle("Overview");
   const queryClient = useQueryClient();
   const { activeProject } = useProjectStore();
   const projectKey = activeProject?.Key ?? "";
@@ -454,7 +429,7 @@ export function Dashboard() {
     ...qOpts,
   });
 
-  // ── Dashboard stats (machines count + critical_last_24h) ──────────────────
+  // ── Dashboard stats (machines count + sev_last_24h) ────────────────────────
 
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats", projectKey],
@@ -527,7 +502,7 @@ export function Dashboard() {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const criticalLast24h = stats?.critical_last_24h ?? 0;
+  const sevLast24h = stats?.sev_last_24h ?? 0;
   const throughputVal = scalar(rThroughput);
   const cpuAvgVal = scalar(rCpuAvg);
   const memAvgVal = scalar(rMemAvg);
@@ -571,15 +546,15 @@ export function Dashboard() {
       )}
 
       {/* Header */}
-      <div className='mb-6'>
+      <div className='mb-[22px]'>
         <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-2'>Overview</p>
-        <h1 className='text-2xl font-semibold text-ink tracking-tight'>{activeProject?.Name ?? "Dashboard"}</h1>
+        <h1 className='text-[22px] font-semibold text-ink tracking-tight'>{activeProject?.Name ?? "Overview"}</h1>
       </div>
 
-      <div className='space-y-4'>
+      <div className='space-y-[14px]'>
         {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
-        <div className='grid grid-cols-[1fr_1fr_1.5fr] gap-4'>
-          <CriticalEventsCard count={criticalLast24h} />
+        <div className='grid grid-cols-[1fr_1fr_1.5fr] gap-[14px]'>
+          <SevEventsCard count={sevLast24h} />
           <MetricCard
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}
@@ -592,9 +567,9 @@ export function Dashboard() {
         </div>
 
         {/* ── Row 2: Capacity Overview + Host Performance ──────────────── */}
-        <div className='grid grid-cols-5 gap-4'>
+        <div className='grid grid-cols-5 gap-[14px]'>
           {/* Capacity Overview */}
-          <div className='col-span-2 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-4'>
+          <div className='col-span-2 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[14px]'>
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Capacity Overview
             </p>
@@ -605,7 +580,7 @@ export function Dashboard() {
           </div>
 
           {/* Host Performance — per-host CPU time series */}
-          <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-3'>
+          <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Host CPU %
             </p>
@@ -617,24 +592,24 @@ export function Dashboard() {
         <div className='rounded-lg border border-rim overflow-hidden'>
           <div className='flex items-center justify-between px-4 py-3 border-b border-rim bg-surface-alt'>
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Recent Alerts
+              Recent Activity
             </p>
             <Link
-              to='/alerts'
+              to='/activity'
               className='flex items-center gap-1 text-xs text-ink-faint hover:text-ink transition-colors'
             >
               View All <ChevronRight className='size-3.5' />
             </Link>
           </div>
           {notifications.length > 0 ? (
-            <div className='max-h-72 overflow-y-auto bg-surface'>
+            <div className='max-h-[259px] overflow-y-auto bg-surface'>
               {notifications.map((n, i) => (
                 <NotifRow key={n.ID ?? i} notif={n} />
               ))}
             </div>
           ) : (
             <div className='flex h-24 items-center justify-center text-xs text-ink-faint bg-surface'>
-              No recent alerts
+              No recent activity
             </div>
           )}
         </div>

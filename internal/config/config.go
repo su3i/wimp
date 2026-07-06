@@ -11,6 +11,7 @@ var (
     common   *CommonConfig
     database *DatabaseConfig
     casbin *CasbinConfig
+    alerts   *AlertConfig
 )
 
 func Initialize() {
@@ -30,9 +31,14 @@ func Initialize() {
 	if err := envconfig.Process("", casbin); err != nil {
 		log.Fatalf("database config: %v", err)
 	}
+	alerts = &AlertConfig{}
+	if err := envconfig.Process("", alerts); err != nil {
+		log.Fatalf("alert config: %v", err)
+	}
 }
 
 func Cache() *CacheConfig     { return cache }
 func Common() *CommonConfig     { return common }
 func Database() *DatabaseConfig { return database }
 func Casbin() *CasbinConfig { return casbin }
+func Alerts() *AlertConfig { return alerts }

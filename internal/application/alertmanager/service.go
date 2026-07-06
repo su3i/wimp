@@ -11,14 +11,15 @@ import (
 var client = &http.Client{Timeout: 10 * time.Second}
 
 type alert struct {
-	Labels      map[string]string `json:"labels"`
-	Annotations map[string]string `json:"annotations"`
-	GeneratorURL string           `json:"generatorURL,omitempty"`
+	Labels       map[string]string `json:"labels"`
+	Annotations  map[string]string `json:"annotations"`
+	GeneratorURL string            `json:"generatorURL,omitempty"`
 }
 
 // Fire pushes a single firing alert to Alertmanager's /api/v2/alerts endpoint.
-// It is a no-op if url is empty.
-func Fire(url, alertname, severity, instance, summary string) error {
+// It is a no-op if url is empty. generatorURL is optional - pass "" to omit it (e.g.
+// when config.Common().WebUrl isn't configured).
+func Fire(url, alertname, severity, instance, category, summary, generatorURL string) error {
 	if url == "" {
 		return nil
 	}
@@ -29,11 +30,13 @@ func Fire(url, alertname, severity, instance, summary string) error {
 				"alertname": alertname,
 				"severity":  severity,
 				"instance":  instance,
+				"category":  category,
 				"source":    "wimp",
 			},
 			Annotations: map[string]string{
 				"summary": summary,
 			},
+			GeneratorURL: generatorURL,
 		},
 	}
 

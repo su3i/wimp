@@ -240,7 +240,7 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
             href={url}
             target='_blank'
             rel='noopener noreferrer'
-            className='flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink transition-colors'
+            className='flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink underline underline-offset-2 transition-colors'
           >
             <span className='font-mono truncate max-w-[360px]'>{url}</span>
             <ExternalLink className='size-3 shrink-0' />

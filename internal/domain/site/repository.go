@@ -6,5 +6,6 @@ type SiteRepository interface {
 	FindByMachineAndAppPool(machineID uint, appPoolName string) (*[]Site, error)
 	FindOneByID(id uint) (*Site, error)
 	SyncFromDiscovery(machineID uint, sites []Site) error
-	SyncStates(machineID uint, runningNames []string) error
+	// SyncStates updates site states and returns (stoppedNames, startedNames, error).
+	SyncStates(machineID uint, runningNames []string) (stoppedNames []string, startedNames []string, err error)
 }

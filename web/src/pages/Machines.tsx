@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Layers, HardDrive, Server, AlertCircle, Clock, Plus, Copy, Check, Trash2, Power, RotateCw } from "lucide-react";
+import { Layers, HardDrive, Server, AlertCircle, Monitor, Plus, Copy, Check, Trash2, Power, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -300,9 +300,9 @@ export function Machines() {
         <div className='rounded-lg border border-rim overflow-hidden'>
           <div className='grid grid-cols-[2fr_2fr_1fr_1fr_auto] border-b border-rim bg-surface-alt'>
             <div className={TH}>Hostname</div>
-            <div className={TH}>IP Address(es)</div>
+            <div className={TH}>IP Address</div>
             <div className={TH}>Status</div>
-            <div className={TH}>Last Ping</div>
+            <div className={TH}>Version</div>
             <div className='px-4 py-2.5' />
           </div>
 
@@ -334,8 +334,7 @@ export function Machines() {
                 </div>
 
                 <div className='flex items-center gap-1.5 px-5 py-3.5'>
-                  <Clock className='size-3 text-ink-faint shrink-0' />
-                  <span className='text-xs text-ink-dim'>{formatLastPing(machine.LastSeenAt)}</span>
+                  <span className='text-xs text-ink-dim truncate'>{machine.WindowsVersion || '--'}</span>
                 </div>
 
                 <div className='flex items-center justify-center px-2 py-3'>
