@@ -70,25 +70,25 @@ config:
     # default from internal/domain/notification/alert_types.go - edit any line to change it.
     severity:
       machineConnected: info
-      machineDisconnected: sev
+      machineDisconnected: critical
       machineShutdown: info
       machineRestarting: info
       agentUpdated: info
       appPoolStopped: critical
       appPoolStarted: info
-      siteStopped: critical
+      siteStopped: warning
       siteStarted: info
-      windowsExporterDown: critical
+      windowsExporterDown: warning
       windowsExporterUp: info
-      fluentBitDown: critical
+      fluentBitDown: warning
       fluentBitUp: info
-      healthCheckDown: critical
+      healthCheckDown: sev
       healthCheckUp: info
-      highCpu: sev
+      highCpu: critical
       highCpuRecovered: info
-      highMemory: sev
+      highMemory: critical
       highMemoryRecovered: info
-      lowDisk: sev
+      lowDisk: critical
       lowDiskRecovered: info
 
     # Numeric thresholds for the metric-based alerts, pre-filled with the hardcoded
@@ -276,10 +276,8 @@ kube-prometheus-stack:
         #       chat_id: YOUR_CHAT_ID  # supergroup ID (negative, prefixed with -100)
         #       parse_mode: HTML
         #       message: |
-        #         {{ if eq .CommonLabels.severity "sev" }}🆘 SEV{{ else if eq .CommonLabels.severity "critical" }}🔴 CRITICAL{{ else if eq .CommonLabels.severity "warning" }}🟡 WARNING{{ else }}🔵 INFO{{ end }} — <b>{{ .GroupLabels.alertname }}</b>
-        #         <b>Category:</b> {{ .CommonLabels.category | default "unknown" }}
+        #         {{ if eq .CommonLabels.severity "sev" }}🔴🔴 SEV+{{ else if eq .CommonLabels.severity "critical" }}🔴 CRITICAL{{ else if eq .CommonLabels.severity "warning" }}🟡 WARNING{{ else }}🔵 INFO{{ end }} // <b>{{ .GroupLabels.alertname }}</b>
         #         {{ range .Alerts }}
-        #         <b>Instance:</b> {{ or .Labels.instance "Unknown" }}
         #         <b>Summary:</b> {{ or .Annotations.summary "No summary" }}
         #         {{ if .GeneratorURL }}<a href="{{ .GeneratorURL }}">View in WIMP</a>{{ end }}
         #         {{ end }}

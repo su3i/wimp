@@ -112,7 +112,7 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 				notification.EmitAlert(
 					notificationDomain.AlertHealthCheckDown,
 					app.ProjectID, 0, app.Name,
-					fmt.Sprintf("%s — Health Check Failing", app.Name),
+					notification.AlertTitle(app.Name, "Health Check Failing"),
 					fmt.Sprintf("Endpoint %s is not responding", *app.HealthCheckURL),
 					dbCfg,
 				)
@@ -124,7 +124,7 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 				notification.EmitAlert(
 					notificationDomain.AlertHealthCheckUp,
 					app.ProjectID, 0, app.Name,
-					fmt.Sprintf("%s — Health Check Recovered", app.Name),
+					notification.AlertTitle(app.Name, "Health Check Recovered"),
 					fmt.Sprintf("Endpoint %s is responding again", *app.HealthCheckURL),
 					dbCfg,
 				)

@@ -86,7 +86,7 @@ export function Pagination({ page, totalPages, total, pageSize, onPageChange, cl
         </button>
       </div>
 
-      {/* Showing info — below buttons */}
+      {/* Showing info below buttons */}
       {from && to && total && (
         <span className='tabular-nums text-[0.6875rem] text-ink-faint'>
           Showing <span className='text-ink-dim font-medium'>{from}–{to}</span> of <span className='text-ink-dim font-medium'>{total}</span>

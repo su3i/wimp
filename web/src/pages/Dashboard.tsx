@@ -161,7 +161,7 @@ function SevEventsCard({ count }: { count: number }) {
       'rounded-lg border bg-surface px-[18px] py-[18px] flex flex-col gap-3 transition-colors border-rim',
     )}>
       <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
-        Sev Events
+        Sev+ Events
       </span>
       <span className={cn('text-[27px] font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
         {count}
@@ -509,7 +509,7 @@ export function Dashboard() {
   const netInVal = scalar(rNetIn);
   const netOutVal = scalar(rNetOut);
 
-  // Per-host CPU time-series — one row per timestamp, one key per machine
+  // Per-host CPU time-series, one row per timestamp, one key per machine
   const hostPerfData = useMemo(() => {
     if (!rCpuHost?.length) return { rows: [] as Record<string, string | number>[], keys: [] as string[] };
     const keys = rCpuHost.map((s) => hostNameMap.get(Number(s.metric.machine_id)) ?? s.metric.machine_id ?? "?");
@@ -579,7 +579,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          {/* Host Performance — per-host CPU time series */}
+          {/* Host Performance, per-host CPU time series */}
           <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
             <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Host CPU %

@@ -110,7 +110,7 @@ func ClearLogs(c *gin.Context) {
 	if lokiResp.StatusCode >= 400 {
 		body, _ := io.ReadAll(lokiResp.Body)
 		log.Printf("loki delete error %d: %s", lokiResp.StatusCode, body)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "loki rejected the delete request — ensure compactor.deletion-mode is enabled"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "loki rejected the delete request, ensure compactor.deletion-mode is enabled"})
 		return
 	}
 

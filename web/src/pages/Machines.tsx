@@ -34,6 +34,38 @@ function filterIPv4(ips: string[]) {
   return (ips ?? []).filter((ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip));
 }
 
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+
+function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+
+  function show() {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+    }
+    setOpen(true);
+  }
+
+  return (
+    <div ref={ref} className='inline-flex' onMouseEnter={show} onMouseLeave={() => setOpen(false)}>
+      {children}
+      {open &&
+        createPortal(
+          <div
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)" }}
+            className='pointer-events-none z-[9999] px-2 py-1 rounded border border-rim bg-surface-highest text-[0.625rem] text-ink whitespace-nowrap shadow-md'
+          >
+            {label}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 // function formatLastPing(lastSeenAt: string | null) {
 //   if (!lastSeenAt) return "Never";
 //   const diff = Date.now() - new Date(lastSeenAt).getTime();
@@ -298,11 +330,10 @@ export function Machines() {
         <EmptyState onAdd={() => setConfirmOpen(true)} />
       ) : (
         <div className='rounded-lg border border-rim overflow-hidden'>
-          <div className='grid grid-cols-[2fr_2fr_1fr_1fr_auto] border-b border-rim bg-surface-alt'>
+          <div className='grid grid-cols-[2fr_2fr_1fr_auto] border-b border-rim bg-surface-alt'>
             <div className={TH}>Hostname</div>
             <div className={TH}>IP Address</div>
             <div className={TH}>Status</div>
-            <div className={TH}>Version</div>
             <div className='px-4 py-2.5' />
           </div>
 
@@ -312,14 +343,22 @@ export function Machines() {
               <div
                 key={machine.ID}
                 onClick={() => navigate(`/machines/${machine.ID}`)}
-                className='grid grid-cols-[2fr_2fr_1fr_1fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer'
+                className='grid grid-cols-[2fr_2fr_1fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer'
               >
                 <div className='flex items-center gap-3 px-5 py-3.5'>
-                  <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
-                    <Server className='size-3 text-ink-faint' />
-                  </div>
+                  {machine.WindowsVersion ? (
+                    <Tooltip label={machine.WindowsVersion}>
+                      <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
+                        <Server className='size-3 text-ink-faint' />
+                      </div>
+                    </Tooltip>
+                  ) : (
+                    <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
+                      <Server className='size-3 text-ink-faint' />
+                    </div>
+                  )}
                   {machine.Hostname ? (
-                    <span className='font-mono text-xs text-ink'>{machine.Hostname.toLowerCase()}</span>
+                    <span className='font-mono text-xs text-ink truncate'>{machine.Hostname.toLowerCase()}</span>
                   ) : (
                     <span className='text-xs text-ink-faint italic'>Awaiting connection...</span>
                   )}
@@ -331,10 +370,6 @@ export function Machines() {
 
                 <div className='px-5 py-3.5'>
                   <StatusCell status={machine.Status} />
-                </div>
-
-                <div className='flex items-center gap-1.5 px-5 py-3.5'>
-                  <span className='text-xs text-ink-dim truncate'>{machine.WindowsVersion || '--'}</span>
                 </div>
 
                 <div className='flex items-center justify-center px-2 py-3'>

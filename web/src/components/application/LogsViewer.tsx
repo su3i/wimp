@@ -88,7 +88,7 @@ function extractLogLine(raw: string): string {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed.log === "string") return parsed.log;
   } catch {
-    // not JSON — use raw
+    // not JSON, use raw
   }
   return raw;
 }
@@ -539,7 +539,7 @@ export function LogsViewer({
       )}
       {!hasMore && initialLoaded && entries.length > 0 && (
         <div className='flex items-center justify-center py-2 text-[0.625rem] text-ink-faint/50'>
-          — No more logs to show —
+          --- No more logs to show ---
         </div>
       )}
 

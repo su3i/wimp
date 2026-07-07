@@ -111,7 +111,7 @@ func (r *notificationRepository) CountByHour(hours int) ([]notification.HourCoun
 func (r *notificationRepository) CountSevSince(since time.Time, projectKey string) (int64, error) {
 	var count int64
 	err := r.db.Model(&notification.Notification{}).
-		Where("level = ? AND created_at >= ? AND deleted_at IS NULL", notification.LevelSev, since).
+		Where("level = ? AND is_repeat = ? AND created_at >= ? AND deleted_at IS NULL", notification.LevelSev, false, since).
 		Where("project_id = (SELECT id FROM projects WHERE key = ?)", projectKey).
 		Count(&count).Error
 	return count, err

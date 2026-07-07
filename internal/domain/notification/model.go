@@ -48,4 +48,9 @@ type Notification struct {
 	Title     string   `gorm:"not null"`
 	Detail    string
 	ReadAt    *time.Time
+	// IsRepeat marks a reminder fired for a breach that's still ongoing (e.g. the
+	// 15-minute Sev repeat reminder in internal/application/metrics/checker.go), as
+	// opposed to the alert's initial firing. Excluded from incident-count metrics like
+	// the dashboard's Sev Events card, which counts distinct incidents, not every reminder.
+	IsRepeat bool `gorm:"not null;default:false"`
 }

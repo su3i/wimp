@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/su3i/wimp/internal/application/notification"
+	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	machineDomain "github.com/su3i/wimp/internal/domain/machine"
 	notificationDomain "github.com/su3i/wimp/internal/domain/notification"
@@ -135,17 +136,29 @@ func checkThreshold(dbCfg *config.DatabaseConfig, prometheusUrl string, online m
 
 		key := breachKey{machineID: m.ID, alertType: alertType}
 		wasBreached := getBreach(key)
+		repeatKey := fmt.Sprintf("%d:%s", m.ID, alertType)
 
 		if breached && !wasBreached {
 			setBreach(key, true)
 			notification.EmitAlert(alertType, m.ProjectID, m.ID, m.Hostname,
-				fmt.Sprintf("%s — %s", m.Hostname, titleFor(alertType)),
+				notification.AlertTitle(m.Hostname, titleFor(alertType)),
 				fmt.Sprintf("%s %s is %.1f%% (threshold %.1f%%)", m.Hostname, label, val, threshold),
 				dbCfg)
+		} else if breached && wasBreached {
+			// Sustained breach: only Sev-severity alerts get a repeat reminder, at
+			// most once per cache.SevRepeatDue's interval, so a machine stuck above
+			// threshold doesn't go silent until it recovers.
+			if notification.SeverityFor(alertType) == notificationDomain.LevelSev && cache.SevRepeatDue(repeatKey) {
+				notification.EmitRepeatAlert(alertType, m.ProjectID, m.ID, m.Hostname,
+					notification.AlertTitle(m.Hostname, titleFor(alertType)),
+					fmt.Sprintf("%s %s is still %.1f%% (threshold %.1f%%)", m.Hostname, label, val, threshold),
+					dbCfg)
+			}
 		} else if !breached && wasBreached {
 			setBreach(key, false)
+			cache.ClearSevRepeat(repeatKey)
 			notification.EmitAlert(recoveredType, m.ProjectID, m.ID, m.Hostname,
-				fmt.Sprintf("%s — %s Recovered", m.Hostname, titleFor(alertType)),
+				notification.AlertTitle(m.Hostname, titleFor(alertType)+" Recovered"),
 				fmt.Sprintf("%s %s is back to %.1f%%", m.Hostname, label, val),
 				dbCfg)
 		}

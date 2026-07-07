@@ -22,10 +22,8 @@ receivers:
   #       chat_id: YOUR_CHAT_ID  # use supergroup ID (negative, prefixed with -100)
   #       parse_mode: HTML
   #       message: |
-  #         {{ if eq .CommonLabels.severity "sev" }}🆘 SEV{{ else if eq .CommonLabels.severity "critical" }}🔴 CRITICAL{{ else if eq .CommonLabels.severity "warning" }}🟡 WARNING{{ else }}🔵 INFO{{ end }} — <b>{{ .GroupLabels.alertname }}</b>
-  #         <b>Category:</b> {{ .CommonLabels.category | default "unknown" }}
+  #         {{ if eq .CommonLabels.severity "sev" }}🔴🔴 SEV+{{ else if eq .CommonLabels.severity "critical" }}🔴 CRITICAL{{ else if eq .CommonLabels.severity "warning" }}🟡 WARNING{{ else }}🔵 INFO{{ end }} // <b>{{ .GroupLabels.alertname }}</b>
   #         {{ range .Alerts }}
-  #         <b>Instance:</b> {{ or .Labels.instance "Unknown" }}
   #         <b>Summary:</b> {{ or .Annotations.summary "No summary" }}
   #         {{ if .GeneratorURL }}<a href="{{ .GeneratorURL }}">View in WIMP</a>{{ end }}
   #         {{ end }}
