@@ -194,16 +194,17 @@ loki:
     limits_config:
       allow_structured_metadata: true
       volume_enabled: true
+      # Required for the "Clear Logs" feature (internal/infrastructure/server/handlers/
+      # logs.go) to work - without this, Loki rejects delete requests. deletion_mode
+      # lives here (not under compactor) as of Loki 2.6+.
+      deletion_mode: filter-and-delete
     ruler:
       enable_api: true
 
-    # Required for the "Clear Logs" feature (internal/infrastructure/server/handlers/
-    # logs.go) to work - without deletion_mode enabled, Loki rejects delete requests.
     compactor:
       working_directory: /var/loki/compactor
       retention_enabled: true
       delete_request_store: s3   # matches storage.type above
-      deletion_mode: filter-and-delete
 
   minio:
     enabled: true
