@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -7,12 +7,17 @@ import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
 import { SitesTab } from '@/components/machine/SitesTab'
-import { MetricsTab } from '@/components/machine/MetricsTab'
 import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { cn } from '@/utils/cn'
 import { usePageTitle } from '@/utils/usePageTitle'
+import { useActionCooldown } from '@/utils/useActionCooldown'
+import { timeAgo } from '@/utils/time'
 import type { MachineStatus } from '@/types'
+
+// MetricsTab pulls in recharts (a large dependency) - split into its own chunk so the
+// page shell (header, tab bar, actions) can paint before it's fetched.
+const MetricsTab = lazy(() => import('@/components/machine/MetricsTab').then(m => ({ default: m.MetricsTab })))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -20,15 +25,21 @@ function filterIPv4(ips: string[]) {
   return (ips ?? []).filter(ip => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip))
 }
 
-function formatLastPing(lastSeenAt: string | null) {
-  if (!lastSeenAt) return 'Never'
-  const diff = Date.now() - new Date(lastSeenAt).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return 'Just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+function MetricsTabSkeleton() {
+  return (
+    <div className='space-y-4'>
+      <div className='grid grid-cols-3 gap-3'>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className='h-24 rounded-lg border border-rim bg-surface animate-pulse' />
+        ))}
+      </div>
+      <div className='grid grid-cols-2 gap-4'>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className='h-48 rounded-lg border border-rim bg-surface animate-pulse' />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const machineStatusCfg: Record<MachineStatus, { dot: string; label: string; text: string; pill: string }> = {
@@ -55,6 +66,7 @@ export function MachineDetail() {
   const [activeTab, setActiveTab] = useState<Tab>('metrics')
   const [confirmAction, setConfirmAction] = useState<'shutdown' | 'restart' | null>(null)
   const [actingOnMachine, setActingOnMachine] = useState(false)
+  const cooldown = useActionCooldown()
 
   const numericId = Number(machineId)
 
@@ -73,10 +85,12 @@ export function MachineDetail() {
   const machineCfg = machine ? machineStatusCfg[machine.Status] : null
   const ipv4s = machine ? filterIPv4(machine.IPs) : []
   const isOffline = machine?.Status === 'offline'
+  const cooling = cooldown.isCooling(numericId)
 
   async function handleMachineCommand() {
     if (!confirmAction || !activeProject) return
     setActingOnMachine(true)
+    cooldown.start(numericId)
     try {
       await machineService.command(activeProject.Key, numericId, confirmAction)
       queryClient.invalidateQueries({ queryKey: ['machines', activeProject.Key] })
@@ -134,7 +148,7 @@ export function MachineDetail() {
                 )}
                 <p className="flex items-center gap-1.5 text-xs text-ink-faint">
                   <Clock className="size-3 shrink-0" />
-                  {formatLastPing(machine.LastSeenAt)}
+                  {timeAgo(machine.LastSeenAt)}
                 </p>
               </div>
             </div>
@@ -143,7 +157,7 @@ export function MachineDetail() {
             <Button
               size="sm"
               variant="outline"
-              disabled={actingOnMachine || isOffline}
+              disabled={actingOnMachine || isOffline || cooling}
               onClick={() => setConfirmAction('restart')}
             >
               <RotateCw className="size-3" />
@@ -152,7 +166,7 @@ export function MachineDetail() {
             <Button
               size="sm"
               variant="danger"
-              disabled={actingOnMachine || isOffline}
+              disabled={actingOnMachine || isOffline || cooling}
               onClick={() => setConfirmAction('shutdown')}
             >
               <Power className="size-3" />
@@ -197,7 +211,9 @@ export function MachineDetail() {
       {/* Tab content */}
       <div className={cn(isOffline && 'opacity-40 pointer-events-none select-none')}>
         {activeTab === 'metrics' && (
-          <MetricsTab machineId={numericId} />
+          <Suspense fallback={<MetricsTabSkeleton />}>
+            <MetricsTab machineId={numericId} />
+          </Suspense>
         )}
         {activeTab === 'pools' && activeProject && (
           <AppPoolsTab projectKey={activeProject.Key} machineId={numericId} isOffline={isOffline} />

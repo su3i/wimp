@@ -63,7 +63,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	auth, err := authentication.Login(req.Username, req.Password, config.Common(), config.Database())
+	auth, err := authentication.IssueTokens(_account, config.Common(), config.Database())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -142,7 +142,7 @@ func MFA(c *gin.Context) {
 		_ = cache.GetCache().Delete(challengeKey)
 	}()
 
-	auth, err := authentication.LoginWithoutPassword(username, config.Common(), config.Database())
+	auth, err := authentication.IssueTokens(_account, config.Common(), config.Database())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

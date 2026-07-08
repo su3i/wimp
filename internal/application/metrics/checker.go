@@ -158,7 +158,7 @@ func checkThreshold(dbCfg *config.DatabaseConfig, prometheusUrl string, online m
 			setBreach(key, false)
 			cache.ClearSevRepeat(repeatKey)
 			notification.EmitAlert(recoveredType, m.ProjectID, m.ID, m.Hostname,
-				notification.AlertTitle(m.Hostname, titleFor(alertType)+" Recovered"),
+				notification.AlertTitle(m.Hostname, titleFor(alertType)+" recovered"),
 				fmt.Sprintf("%s %s is back to %.1f%%", m.Hostname, label, val),
 				dbCfg)
 		}

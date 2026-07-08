@@ -40,6 +40,26 @@ func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine
 	return repo.Create(m)
 }
 
+// BelongsToProject verifies a machine exists and belongs to the given project. Use this
+// for a plain ownership check - GetBootstrapToken also does this check internally but
+// additionally builds install/uninstall PowerShell commands, which is wasted work (and
+// a misleading call site) for callers that only need the existence check.
+func BelongsToProject(id uint, projectKey string, cfg *config.DatabaseConfig) error {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return errors.New("project not found")
+	}
+
+	m, err := database.NewMachineRepository(cfg).FindOneByID(id)
+	if err != nil {
+		return err
+	}
+	if m == nil || m.ProjectID != proj.ID {
+		return errors.New("machine not found")
+	}
+	return nil
+}
+
 func GetBootstrapToken(id uint, projectKey string, appUrl string, appEnv string, cfg *config.DatabaseConfig) (string, string, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {

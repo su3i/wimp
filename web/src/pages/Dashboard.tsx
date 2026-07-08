@@ -1,29 +1,26 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Monitor, Layers, X, ChevronRight } from "lucide-react";
+import { AlertTriangle, Monitor, Layers, X, ChevronRight, Info } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Cell,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Legend,
-} from "recharts";
 import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
 import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
+import { timeAgo } from "@/utils/time";
 import { machineService } from "@/services/machine.service";
 import { prometheusService, type PromInstantResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
+
+// Split out from pages/Dashboard.tsx into their own chunk since recharts is a large
+// dependency - the rest of the dashboard (header, stat cards) doesn't need to wait on it.
+const RadialGauge = lazy(() =>
+  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.RadialGauge })),
+);
+const HostCpuLineChart = lazy(() =>
+  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.HostCpuLineChart })),
+);
 
 // ── Prometheus query builders ─────────────────────────────────────────────────
 
@@ -67,10 +64,6 @@ function scalar(r: PromInstantResult[] | undefined): number | null {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-function fmtPct(v: number) {
-  return `${v.toFixed(1)}%`;
-}
-
 function fmtRate(v: number) {
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k/s`;
   return `${v.toFixed(1)}/s`;
@@ -81,21 +74,6 @@ function fmtBytes(v: number) {
   if (v >= 1_048_576) return `${(v / 1_048_576).toFixed(1)} MB/s`;
   if (v >= 1_024) return `${(v / 1_024).toFixed(1)} KB/s`;
   return `${Math.round(v)} B/s`;
-}
-
-function timeAgo(dateStr: string | null | undefined): string {
-  if (!dateStr) return "Never";
-  try {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60_000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  } catch {
-    return "N/A";
-  }
 }
 
 // ── Icon helpers ──────────────────────────────────────────────────────────────
@@ -128,21 +106,37 @@ function AlertRow({ alert, onDismiss }: { alert: ActiveAlert; onDismiss: () => v
   );
 }
 
+// ── Info tooltip ─────────────────────────────────────────────────────────────
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className='relative inline-flex group/info'>
+      <Info className='size-3 text-ink-faint hover:text-ink-dim transition-colors cursor-help' />
+      <span className='pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-max max-w-[190px] px-2 py-1.5 rounded border border-rim bg-surface-highest text-[0.5625rem] normal-case tracking-normal font-normal text-ink-dim leading-snug opacity-0 group-hover/info:opacity-100 transition-opacity z-20 shadow-md'>
+        {text}
+      </span>
+    </span>
+  );
+}
+
 // ── Metric stat card ──────────────────────────────────────────────────────────
 
 function MetricCard({
   label,
   value,
   sub,
+  info,
 }: {
   label: string;
   value: string | null;
   sub?: string;
+  info?: string;
 }) {
   return (
     <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
-      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         {label}
+        {info && <InfoTooltip text={info} />}
       </span>
       <span className='text-[27px] font-semibold font-mono leading-none text-ink'>
         {value ?? "N/A"}
@@ -160,8 +154,9 @@ function SevEventsCard({ count }: { count: number }) {
     <div className={cn(
       'rounded-lg border bg-surface px-[18px] py-[18px] flex flex-col gap-3 transition-colors border-rim',
     )}>
-      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Sev+ Events
+        <InfoTooltip text='Distinct Sev incidents in the last 24h.' />
       </span>
       <span className={cn('text-[27px] font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
         {count}
@@ -176,8 +171,9 @@ function SevEventsCard({ count }: { count: number }) {
 function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number | null }) {
   return (
     <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
-      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Bandwidth
+        <InfoTooltip text='Total network in/out across all hosts, 5-min average.' />
       </span>
       <div className='flex items-end gap-4'>
         <span className='text-[22px] font-semibold font-mono leading-none text-ink'>
@@ -192,121 +188,6 @@ function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number
       </div>
       <span className='text-[0.625rem] text-ink-faint'>last 5 min</span>
     </div>
-  );
-}
-
-// ── Radial gauge ──────────────────────────────────────────────────────────────
-
-function RadialGauge({ label, value }: { label: string; value: number | null }) {
-  const pct = Math.min(Math.max(value ?? 0, 0), 100);
-  const color = pct >= 80 ? "#f85149" : pct >= 60 ? "#d29922" : "#3fb950";
-  const data = [{ v: pct }, { v: 100 - pct }];
-
-  return (
-    <div className='flex flex-col items-center'>
-      <div className='relative w-full' style={{ height: 162 }}>
-        <ResponsiveContainer width='100%' height='100%'>
-          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-            <Pie
-              data={data}
-              dataKey='v'
-              cx='50%'
-              cy='55%'
-              startAngle={220}
-              endAngle={-40}
-              innerRadius='58%'
-              outerRadius='80%'
-              strokeWidth={0}
-              isAnimationActive={false}
-            >
-              <Cell fill={color} />
-              <Cell fill='#21262d' />
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className='absolute inset-0 flex items-center justify-center' style={{ paddingTop: "10%" }}>
-          <span className='text-[22px] font-semibold font-mono text-ink leading-none'>
-            {value != null ? fmtPct(value) : "N/A"}
-          </span>
-        </div>
-      </div>
-      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>{label}</span>
-    </div>
-  );
-}
-
-// ── Host CPU line chart ───────────────────────────────────────────────────────
-
-const TICK_STYLE = { fill: "#8b949e", fontSize: 10 };
-const LINE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function HostTooltipContent({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className='rounded-md border border-rim bg-surface-highest px-3 py-2 text-xs shadow-xl min-w-[150px]'>
-      <p className='font-mono text-ink-faint mb-1.5'>{label}</p>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      {payload.map((p: any) => (
-        <div key={p.name} className='flex items-center gap-2 py-0.5'>
-          <span className='size-1.5 rounded-full shrink-0' style={{ background: p.color }} />
-          <span className='text-ink-dim flex-1 truncate'>{p.name}</span>
-          <span className='font-mono font-semibold text-ink ml-2'>{(p.value as number).toFixed(1)}%</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function HostCpuLineChart({
-  rows,
-  keys,
-}: {
-  rows: Record<string, string | number>[];
-  keys: string[];
-}) {
-  if (!rows.length || !keys.length) {
-    return (
-      <div className='flex flex-1 items-center justify-center py-8'>
-        <p className='text-xs text-ink-faint'>No data</p>
-      </div>
-    );
-  }
-
-  return (
-    <ResponsiveContainer width='100%' height={234}>
-      <LineChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-        <CartesianGrid stroke='#30363d' strokeDasharray='3 3' vertical={false} />
-        <XAxis
-          dataKey='time'
-          tick={TICK_STYLE}
-          axisLine={false}
-          tickLine={false}
-          interval='preserveStartEnd'
-        />
-        <YAxis
-          domain={[0, 100]}
-          tick={TICK_STYLE}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v) => `${v}%`}
-          width={36}
-        />
-        <Tooltip content={HostTooltipContent} />
-        <Legend wrapperStyle={{ fontSize: 10, color: "#8b949e" }} />
-        {keys.map((key, i) => (
-          <Line
-            key={key}
-            type='monotone'
-            dataKey={key}
-            stroke={LINE_COLORS[i % LINE_COLORS.length]}
-            strokeWidth={1.5}
-            dot={false}
-            isAnimationActive={false}
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
   );
 }
 
@@ -344,6 +225,33 @@ function NotifRow({ notif }: { notif: DashboardNotification }) {
       <div className='px-4 py-[9px] text-right'>
         <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt)}</span>
       </div>
+    </div>
+  );
+}
+
+function NotifRowSkeleton() {
+  return (
+    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 animate-pulse'>
+      <div className='px-4 py-[9px]'>
+        <div className='h-4 w-12 rounded bg-surface-high' />
+      </div>
+      <div className='px-4 py-[9px]'>
+        <div className='h-2.5 w-2/3 rounded bg-surface-high' />
+      </div>
+      <div className='flex items-center px-4 py-[9px]'>
+        <div className='h-2.5 w-16 rounded bg-surface-high' />
+      </div>
+      <div className='px-4 py-[9px] flex justify-end'>
+        <div className='h-2.5 w-12 rounded bg-surface-high' />
+      </div>
+    </div>
+  );
+}
+
+function ChartSkeleton({ height }: { height: number }) {
+  return (
+    <div className='flex items-center justify-center animate-pulse' style={{ height }}>
+      <div className='h-full w-full rounded bg-surface-high' />
     </div>
   );
 }
@@ -441,7 +349,7 @@ export function Dashboard() {
 
   // ── Notifications ─────────────────────────────────────────────────────────
 
-  const { data: notifications = [] } = useQuery({
+  const { data: notifications = [], isLoading: notificationsLoading } = useQuery({
     queryKey: ["dashboard-notifications", projectKey],
     queryFn: () => dashboardService.getNotifications(projectKey || undefined),
     enabled: !!projectKey,
@@ -458,16 +366,43 @@ export function Dashboard() {
   // ── WebSocket (alerts + live notifications) ───────────────────────────────
 
   useEffect(() => {
-    const { accessToken } = useAuthStore.getState();
-    if (!accessToken) return;
+    const { accessToken: rawAccessToken } = useAuthStore.getState();
+    if (!rawAccessToken) return;
+    const accessToken: string = rawAccessToken;
 
     const base = (import.meta.env.VITE_API_BASE_URL as string)
       .replace(/\/api\/v1.*$/, "")
       .replace(/^http/, "ws");
 
+    const MIN_RECONNECT_DELAY_MS = 1_000;
+    const MAX_RECONNECT_DELAY_MS = 30_000;
+
+    let cancelled = false;
     let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(`${base}/ws?token=${encodeURIComponent(accessToken)}`);
+    let reconnectDelay = MIN_RECONNECT_DELAY_MS;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function scheduleReconnect() {
+      if (cancelled) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+        connect();
+      }, reconnectDelay);
+    }
+
+    function connect() {
+      if (cancelled) return;
+      try {
+        ws = new WebSocket(`${base}/ws?token=${encodeURIComponent(accessToken)}`);
+      } catch {
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        reconnectDelay = MIN_RECONNECT_DELAY_MS;
+      };
+
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data as string) as { type: string; payload: unknown };
@@ -491,11 +426,23 @@ export function Dashboard() {
           /* ignore malformed frames */
         }
       };
-    } catch {
-      /* WS not yet available */
+
+      // onerror is always followed by onclose (per the WebSocket spec), which is
+      // where reconnection is scheduled - nothing extra to do here beyond not crashing.
+      ws.onerror = () => {
+        ws?.close();
+      };
+
+      ws.onclose = () => {
+        scheduleReconnect();
+      };
     }
 
+    connect();
+
     return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       ws?.close();
     };
   }, [queryClient, projectKey]);
@@ -559,6 +506,7 @@ export function Dashboard() {
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}
             sub='last 5 min'
+            info='Total IIS request rate across this project, 5-min average.'
           />
           <BandwidthCard
             inVal={netInVal}
@@ -570,21 +518,29 @@ export function Dashboard() {
         <div className='grid grid-cols-5 gap-[14px]'>
           {/* Capacity Overview */}
           <div className='col-span-2 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[14px]'>
-            <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+            <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Capacity Overview
+              <InfoTooltip text='Live average CPU and memory across online hosts.' />
             </p>
             <div className='grid grid-cols-2 gap-2 flex-1'>
-              <RadialGauge label='CPU Avg' value={cpuAvgVal} />
-              <RadialGauge label='Memory Avg' value={memAvgVal} />
+              <Suspense fallback={<ChartSkeleton height={162} />}>
+                <RadialGauge label='CPU Avg' value={cpuAvgVal} />
+              </Suspense>
+              <Suspense fallback={<ChartSkeleton height={162} />}>
+                <RadialGauge label='Memory Avg' value={memAvgVal} />
+              </Suspense>
             </div>
           </div>
 
           {/* Host Performance, per-host CPU time series */}
           <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
-            <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+            <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
               Host CPU %
+              <InfoTooltip text='Live per-host CPU over time.' />
             </p>
-            <HostCpuLineChart rows={hostPerfData.rows} keys={hostPerfData.keys} />
+            <Suspense fallback={<ChartSkeleton height={234} />}>
+              <HostCpuLineChart rows={hostPerfData.rows} keys={hostPerfData.keys} />
+            </Suspense>
           </div>
         </div>
 
@@ -601,7 +557,13 @@ export function Dashboard() {
               View All <ChevronRight className='size-3.5' />
             </Link>
           </div>
-          {notifications.length > 0 ? (
+          {notificationsLoading ? (
+            <div className='bg-surface'>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <NotifRowSkeleton key={i} />
+              ))}
+            </div>
+          ) : notifications.length > 0 ? (
             <div className='max-h-[259px] overflow-y-auto bg-surface'>
               {notifications.map((n, i) => (
                 <NotifRow key={n.ID ?? i} notif={n} />

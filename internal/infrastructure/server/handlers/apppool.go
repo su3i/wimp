@@ -45,7 +45,7 @@ func RetrieveAppPools(c *gin.Context) {
 		return
 	}
 
-	if _, _, err := machineService.GetBootstrapToken(uint(machineID), projectKey, "", "", config.Database()); err != nil {
+	if err := machineService.BelongsToProject(uint(machineID), projectKey, config.Database()); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
 		return
 	}
@@ -89,7 +89,7 @@ func AppPoolCommand(action string) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, err := machineService.GetBootstrapToken(uint(machineID), projectKey, "", "", config.Database()); err != nil {
+		if err := machineService.BelongsToProject(uint(machineID), projectKey, config.Database()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
 			return
 		}

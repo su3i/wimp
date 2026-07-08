@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Self-hosted - only the weights actually used via font-mono/font-semibold etc.
+   Geist was previously fetched from Google Fonts too but --font-sans below never
+   referenced it (deliberate system-font stack), so it was pure dead weight - removed
+   rather than self-hosted. */
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-500.css";
+@import "@fontsource/jetbrains-mono/latin-ext-400.css";
+@import "@fontsource/jetbrains-mono/latin-ext-500.css";
+
 /* ── Tailwind design tokens - driven by CSS vars set by applyTheme() ── */
 @theme {
   /* Colors */
@@ -76,4 +85,41 @@ body {
 :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* Text fields rely on their own border-color focus state instead of a ring - the
+   default outline above reads as too heavy on dense forms/tables. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* ── Loading screen (see components/common/LoadingScreen.tsx) ────────────── */
+.loading-mark-pulse {
+  animation: loading-mark-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes loading-mark-breathe {
+  0%, 100% { transform: scale(0.94); opacity: 0.85; }
+  50% { transform: scale(1.03); opacity: 1; }
+}
+
+.loading-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: currentColor;
+  display: inline-block;
+  animation: loading-dot-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes loading-dot-bounce {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+
+@keyframes loading-screen-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

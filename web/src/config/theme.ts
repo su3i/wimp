@@ -1,5 +1,5 @@
 /**
- * su3i wimp - Global Color Theme
+ * Global Color Theme
  *
  * Inspired by GitHub's Primer dark mode design system.
  * Edit here and changes propagate everywhere via CSS custom properties.

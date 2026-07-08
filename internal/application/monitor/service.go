@@ -124,7 +124,7 @@ func runCheck(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 				notification.EmitAlert(
 					notificationDomain.AlertHealthCheckUp,
 					app.ProjectID, 0, app.Name,
-					notification.AlertTitle(app.Name, "Health Check Recovered"),
+					notification.AlertTitle(app.Name, "Health Check recovered"),
 					fmt.Sprintf("Endpoint %s is responding again", *app.HealthCheckURL),
 					dbCfg,
 				)

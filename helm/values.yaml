@@ -74,7 +74,7 @@ config:
       machineShutdown: info
       machineRestarting: info
       agentUpdated: info
-      appPoolStopped: critical
+      appPoolStopped: warning
       appPoolStarted: info
       siteStopped: warning
       siteStarted: info
@@ -94,9 +94,9 @@ config:
     # Numeric thresholds for the metric-based alerts, pre-filled with the hardcoded
     # default from internal/application/metrics/checker.go.
     threshold:
-      highCpuPercent: 90
-      highMemoryPercent: 90
-      lowDiskPercent: 10  # alert fires when free space drops BELOW this
+      highCpuPercent: 95
+      highMemoryPercent: 95
+      lowDiskPercent: 5  # alert fires when free space drops BELOW this
 
     # Only alerts at or above this severity are forwarded to Alertmanager (everything
     # non-disabled is still stored/shown in-app regardless).
@@ -196,6 +196,14 @@ loki:
       volume_enabled: true
     ruler:
       enable_api: true
+
+    # Required for the "Clear Logs" feature (internal/infrastructure/server/handlers/
+    # logs.go) to work - without deletion_mode enabled, Loki rejects delete requests.
+    compactor:
+      working_directory: /var/loki/compactor
+      retention_enabled: true
+      delete_request_store: s3   # matches storage.type above
+      deletion_mode: filter-and-delete
 
   minio:
     enabled: true

@@ -11,6 +11,9 @@ fi
 find /usr/share/nginx/html -name "*.js" | while read -r file; do
   sed -i "s|__WIMP_API_URL__|${VITE_API_BASE_URL}|g" "$file"
   sed -i "s|__WIMP_PROMETHEUS_URL__|${VITE_PROMETHEUS_URL}|g" "$file"
+  # Pre-compress for nginx's gzip_static module, after substitution so the .gz
+  # sibling reflects the real runtime URLs rather than the build-time placeholders.
+  gzip -9 -k -f "$file"
 done
 
 exec "$@"

@@ -13,6 +13,7 @@ import { useProjectStore } from "@/store/project";
 import { machineService } from "@/services/machine.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
+import { useActionCooldown } from "@/utils/useActionCooldown";
 import type { Machine } from "@/types";
 
 const PAGE_SIZE = 20;
@@ -65,17 +66,6 @@ function Tooltip({ label, children }: { label: string; children: React.ReactNode
     </div>
   );
 }
-
-// function formatLastPing(lastSeenAt: string | null) {
-//   if (!lastSeenAt) return "Never";
-//   const diff = Date.now() - new Date(lastSeenAt).getTime();
-//   const mins = Math.floor(diff / 60_000);
-//   if (mins < 1) return "Just now";
-//   if (mins < 60) return `${mins}m ago`;
-//   const hrs = Math.floor(mins / 60);
-//   if (hrs < 24) return `${hrs}h ago`;
-//   return `${Math.floor(hrs / 24)}d ago`;
-// }
 
 const statusConfig: Record<string, { dot: string; text: string; label: string }> = {
   online: { dot: "bg-success", text: "text-success", label: "Online" },
@@ -176,18 +166,14 @@ function TableSkeleton() {
 
 // ── Empty / placeholder states ────────────────────────────────────────────────
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState() {
   return (
     <div className='flex flex-col items-center justify-center py-20 rounded-lg border border-rim bg-surface text-center'>
       <div className='mb-4 flex size-11 items-center justify-center rounded-xl border border-rim bg-surface-alt'>
         <HardDrive className='size-4 text-ink-faint' />
       </div>
       <p className='text-sm font-semibold text-ink'>No hosts</p>
-      <p className='mt-1 max-w-xs text-xs text-ink-faint'>No hosts are registered to this project yet.</p>
-      <Button className='mt-5' onClick={onAdd} size='sm'>
-        <Plus className='size-3.5' />
-        New Host
-      </Button>
+      <p className='mt-1 max-w-xs text-xs text-ink-faint'>No hosts connected in this project yet.</p>
     </div>
   );
 }
@@ -228,6 +214,7 @@ export function Machines() {
   const [commandTarget, setCommandTarget] = useState<{ machine: Machine; action: "shutdown" | "restart" } | null>(null);
   const [commandLoading, setCommandLoading] = useState(false);
   const [uninstallCmd, setUninstallCmd] = useState<string | null>(null);
+  const cooldown = useActionCooldown();
 
   const {
     data: machinesPage,
@@ -278,6 +265,7 @@ export function Machines() {
   async function handleMachineCommand() {
     if (!commandTarget || !activeProject) return;
     setCommandLoading(true);
+    cooldown.start(commandTarget.machine.ID);
     try {
       await machineService.command(activeProject.Key, commandTarget.machine.ID, commandTarget.action);
       queryClient.invalidateQueries({ queryKey: ["machines", activeProject.Key] });
@@ -311,6 +299,9 @@ export function Machines() {
         <div>
           <h1 className='text-base font-semibold text-ink'>Hosts</h1>
           <p className='mt-0.5 text-xs text-ink-faint'>{activeProject.Name}</p>
+          <p className='mt-1 max-w-xl text-[0.6875rem] text-ink-faint'>
+            A host is a connected windows machine, reporting its app pools, sites, and metrics here automatically.
+          </p>
         </div>
         <Button size='sm' onClick={() => setConfirmOpen(true)}>
           <Plus className='size-3.5' />
@@ -327,7 +318,7 @@ export function Machines() {
           Failed to load hosts. Check your connection and try again.
         </div>
       ) : !machines.length ? (
-        <EmptyState onAdd={() => setConfirmOpen(true)} />
+        <EmptyState />
       ) : (
         <div className='rounded-lg border border-rim overflow-hidden'>
           <div className='grid grid-cols-[2fr_2fr_1fr_auto] border-b border-rim bg-surface-alt'>
@@ -339,11 +330,15 @@ export function Machines() {
 
           {(paginated as Machine[]).map((machine) => {
             const ipv4s = filterIPv4(machine.IPs);
+            const cooling = cooldown.isCooling(machine.ID);
             return (
               <div
                 key={machine.ID}
                 onClick={() => navigate(`/machines/${machine.ID}`)}
-                className='grid grid-cols-[2fr_2fr_1fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer'
+                className={cn(
+                  'grid grid-cols-[2fr_2fr_1fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer',
+                  cooling && 'opacity-50',
+                )}
               >
                 <div className='flex items-center gap-3 px-5 py-3.5'>
                   {machine.WindowsVersion ? (
@@ -394,6 +389,7 @@ export function Machines() {
                         onClick: () => setDeleteTarget(machine),
                       },
                     ]}
+                    disabled={cooling}
                   />
                 </div>
               </div>

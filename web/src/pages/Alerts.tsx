@@ -8,23 +8,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
 import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function timeAgo(dateStr: string | null | undefined): string {
-  if (!dateStr) return "N/A";
-  try {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60_000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  } catch {
-    return "N/A";
-  }
-}
+import { timeAgo } from "@/utils/time";
 
 // ── Level badge ───────────────────────────────────────────────────────────────
 
@@ -34,6 +18,42 @@ function LevelBadge({ level }: { level: string }) {
     <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide whitespace-nowrap", cfg.cls)}>
       {cfg.label}
     </span>
+  );
+}
+
+// ── Table header ──────────────────────────────────────────────────────────────
+
+const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
+
+function TableHeader() {
+  return (
+    <div className='grid grid-cols-[84px_1fr_124px_92px] border-b border-rim bg-surface-alt'>
+      <div className={TH}>Level</div>
+      <div className={TH}>Message</div>
+      <div className={TH}>Category</div>
+      <div className={cn(TH, "text-right")}>Time</div>
+    </div>
+  );
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+function RowSkeleton() {
+  return (
+    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 animate-pulse'>
+      <div className='px-4 py-3'>
+        <div className='h-4 w-12 rounded bg-surface-high' />
+      </div>
+      <div className='px-4 py-3'>
+        <div className='h-2.5 w-2/3 rounded bg-surface-high' />
+      </div>
+      <div className='px-4 py-3'>
+        <div className='h-2.5 w-16 rounded bg-surface-high' />
+      </div>
+      <div className='px-4 py-3 flex justify-end'>
+        <div className='h-2.5 w-12 rounded bg-surface-high' />
+      </div>
+    </div>
   );
 }
 
@@ -63,7 +83,7 @@ function AlertRow({ notif }: { notif: DashboardNotification }) {
       </div>
 
       <div className='px-4 py-3 text-right'>
-        <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt)}</span>
+        <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt, "N/A")}</span>
       </div>
     </div>
   );
@@ -80,7 +100,7 @@ const LEVELS = [
 ] as const;
 
 type Level = (typeof LEVELS)[number]["value"];
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function NoProjectSelected() {
   return (
@@ -131,6 +151,9 @@ export function Activity() {
       <div>
         <h1 className='text-base font-semibold text-ink'>Activity</h1>
         <p className='mt-0.5 text-xs text-ink-faint'>{activeProject.Name}</p>
+        <p className='mt-1 max-w-xl text-[0.6875rem] text-ink-faint'>
+          A live feed of host connects, app pool and site changes, and alerts across this project, newest first.
+        </p>
       </div>
 
       {/* Alertmanager hint */}
@@ -179,12 +202,11 @@ export function Activity() {
 
       {/* Table */}
       <div className='rounded-lg border border-rim overflow-hidden'>
+        <TableHeader />
         {/* Body */}
         <div className='min-h-[400px]'>
           {isLoading ? (
-            <div className='flex items-center justify-center h-[400px] text-xs text-ink-faint'>
-              Loading...
-            </div>
+            Array.from({ length: PAGE_SIZE }).map((_, i) => <RowSkeleton key={i} />)
           ) : isError ? (
             <div className='flex items-center justify-center gap-2 h-[400px] text-xs text-danger'>
               <AlertTriangle className='size-3.5' /> Failed to load activity.

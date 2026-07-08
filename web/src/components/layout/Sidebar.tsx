@@ -48,8 +48,8 @@ export function Sidebar() {
       expanded ? 'w-52' : 'w-14',
     )}>
       {/* Brand - icon only, always centered */}
-      <div className='flex h-14 items-center justify-center border-b border-rim shrink-0'>
-        <img src={iconSrc} alt='wimp' className='size-[38px] rounded-lg' />
+      <div className='flex items-center justify-center border-b border-rim py-3'>
+        <img src={iconSrc} alt='wimp' className='size-[72px]' />
       </div>
 
       {/* Project switcher */}

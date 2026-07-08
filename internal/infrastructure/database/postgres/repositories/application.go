@@ -82,12 +82,16 @@ func (r *applicationRepository) FindPoolCountsByApplicationIDs(appIDs []uint) (m
 		Healthy       int64
 	}
 	var rows []row
+	// A pool only counts as healthy if its owning machine is currently online - a
+	// "Started" state on a disconnected machine is just stale last-known state, not a
+	// live health signal.
 	err := r.db.Raw(`
 		SELECT aap.application_id,
-		       COUNT(ap.id)                                                        AS total,
-		       SUM(CASE WHEN ap.state = 'Started' THEN 1 ELSE 0 END)              AS healthy
+		       COUNT(ap.id)                                                                                   AS total,
+		       SUM(CASE WHEN ap.state = 'Started' AND m.status = 'online' THEN 1 ELSE 0 END)                 AS healthy
 		FROM application_app_pools aap
 		JOIN app_pools ap ON ap.id = aap.app_pool_id AND ap.deleted_at IS NULL
+		JOIN machines m ON m.id = ap.machine_id AND m.deleted_at IS NULL
 		WHERE aap.application_id IN ?
 		GROUP BY aap.application_id
 	`, appIDs).Scan(&rows).Error

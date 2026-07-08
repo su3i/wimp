@@ -200,14 +200,14 @@ func AgentWebSocket(c *gin.Context) {
 						notificationService.AlertTitle(m.Hostname, "windows_exporter Down"), "windows_exporter service is not running on "+m.Hostname, cfg)
 				} else if !prevWE && hb.WindowsExporterHealthy {
 					go notificationService.EmitAlert(notification.AlertWindowsExporterUp, m.ProjectID, m.ID, m.Hostname,
-						notificationService.AlertTitle(m.Hostname, "windows_exporter Recovered"), "windows_exporter service is running again on "+m.Hostname, cfg)
+						notificationService.AlertTitle(m.Hostname, "windows_exporter recovered"), "windows_exporter service is running again on "+m.Hostname, cfg)
 				}
 				if prevFB && !hb.FluentBitHealthy {
 					go notificationService.EmitAlert(notification.AlertFluentBitDown, m.ProjectID, m.ID, m.Hostname,
 						notificationService.AlertTitle(m.Hostname, "fluent-bit Down"), "fluent-bit service is not running on "+m.Hostname, cfg)
 				} else if !prevFB && hb.FluentBitHealthy {
 					go notificationService.EmitAlert(notification.AlertFluentBitUp, m.ProjectID, m.ID, m.Hostname,
-						notificationService.AlertTitle(m.Hostname, "fluent-bit Recovered"), "fluent-bit service is running again on "+m.Hostname, cfg)
+						notificationService.AlertTitle(m.Hostname, "fluent-bit recovered"), "fluent-bit service is running again on "+m.Hostname, cfg)
 				}
 			}
 			cache.SetSidecarHealth(m.ID, hb.WindowsExporterHealthy, hb.FluentBitHealthy)

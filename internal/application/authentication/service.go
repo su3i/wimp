@@ -7,26 +7,25 @@ import (
 
 	"github.com/su3i/wimp/internal/application/account"
 	"github.com/su3i/wimp/internal/config"
+	accountDomain "github.com/su3i/wimp/internal/domain/account"
 	"github.com/su3i/wimp/internal/domain/authentication"
 	"github.com/su3i/wimp/internal/infrastructure/cache"
 )
 
-func Login(username string, password string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
-	_account, err := account.RetrieveAccountWithPassword(username, password, databaseCfg)
+// IssueTokens builds an access + refresh token pair for an already-resolved,
+// already-authenticated account. Callers (password login, MFA-verified login) are
+// expected to have fetched and validated the account themselves - this is the single
+// shared call site so that work isn't repeated here.
+func IssueTokens(acc *accountDomain.Account, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
+	internalRoles := make([]string, 0, len(acc.InternalRoles))
 
-	if err != nil || _account == nil {
-		return nil, errors.New("Invalid username or password")
-	}
-
-	internalRoles := make([]string, 0, len(_account.InternalRoles))
-
-	for _, v := range _account.InternalRoles {
+	for _, v := range acc.InternalRoles {
 		internalRoles = append(internalRoles, v)
 	}
 
 	accessToken, err := authentication.GenerateJWT(authentication.JWTParams{
-		Subject:   _account.ID,
-		Username:  _account.Username,
+		Subject:   acc.ID,
+		Username:  acc.Username,
 		Roles:     internalRoles,
 		TTL:       time.Hour,
 		SecretKey: []byte(commonCfg.JWTSecret),
@@ -41,47 +40,7 @@ func Login(username string, password string, commonCfg *config.CommonConfig, dat
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), username, 7*24*time.Hour); err != nil {
-		return nil, errors.New("Failed to store refresh token")
-	}
-
-	return &authentication.LoginDTO{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
-}
-
-func LoginWithoutPassword(username string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
-	_account, err := account.RetrieveAccount(username, databaseCfg)
-
-	if err != nil || _account == nil {
-		return nil, errors.New("Invalid username or password")
-	}
-
-	internalRoles := make([]string, 0, len(_account.InternalRoles))
-
-	for _, v := range _account.InternalRoles {
-		internalRoles = append(internalRoles, v)
-	}
-
-	accessToken, err := authentication.GenerateJWT(authentication.JWTParams{
-		Subject:   _account.ID,
-		Username:  _account.Username,
-		Roles:     internalRoles,
-		TTL:       time.Hour,
-		SecretKey: []byte(commonCfg.JWTSecret),
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, refreshTokenHash, err := authentication.GenerateRefreshToken()
-	if err != nil {
-		return nil, fmt.Errorf("generate refresh token: %w", err)
-	}
-
-	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), username, 7*24*time.Hour); err != nil {
+	if err := cache.GetCache().Set(fmt.Sprintf("refresh-token-%s", refreshTokenHash), acc.Username, 7*24*time.Hour); err != nil {
 		return nil, errors.New("Failed to store refresh token")
 	}
 

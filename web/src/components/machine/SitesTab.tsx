@@ -5,15 +5,25 @@ import { Globe, FolderOpen, AlertCircle, Play, Square, RotateCw } from 'lucide-r
 import { RowMenu } from '@/components/ui/RowMenu'
 import type { RowMenuItem } from '@/components/ui/RowMenu'
 import { Pagination } from '@/components/ui/Pagination'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { appPoolService } from '@/services/appPool.service'
 import { cn } from '@/utils/cn'
+import { useActionCooldown } from '@/utils/useActionCooldown'
 import type { Binding, Site } from '@/types'
 
 type StatusFilter = 'All' | 'Started' | 'Stopped'
+type Cmd = 'start' | 'stop' | 'restart'
 
 const PER_PAGE = 25
 
 const TH = 'px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'
+
+const CONFIRM_CMDS: Cmd[] = ['stop', 'restart']
+
+const confirmCopy: Record<Exclude<Cmd, 'start'>, { title: string; verb: string }> = {
+  stop: { title: 'Stop Site', verb: 'stop' },
+  restart: { title: 'Restart Site', verb: 'restart' },
+}
 
 const siteStatusCfg: Record<string, { dot: string; text: string }> = {
   Started:  { dot: 'bg-success', text: 'text-success' },
@@ -68,6 +78,8 @@ export function SitesTab({
   const [acting, setActing] = useState<Record<number, string>>({})
   const [status, setStatus] = useState<StatusFilter>('Started')
   const [page, setPage] = useState(1)
+  const [confirmTarget, setConfirmTarget] = useState<{ site: Site; cmd: Cmd } | null>(null)
+  const cooldown = useActionCooldown()
 
   const apiStatus = status === 'All' ? undefined : status
 
@@ -93,8 +105,9 @@ export function SitesTab({
     setPage(1)
   }
 
-  async function runCmd(site: Site, cmd: 'start' | 'stop' | 'restart') {
+  async function runCmd(site: Site, cmd: Cmd) {
     setActing((prev) => ({ ...prev, [site.ID]: cmd }))
+    cooldown.start(site.ID)
     try {
       await appPoolService.siteCommand(projectKey, machineId, site.ID, cmd)
     } catch (err: unknown) {
@@ -108,6 +121,14 @@ export function SitesTab({
         delete n[site.ID]
         return n
       })
+    }
+  }
+
+  function requestCmd(site: Site, cmd: Cmd) {
+    if (CONFIRM_CMDS.includes(cmd)) {
+      setConfirmTarget({ site, cmd })
+    } else {
+      void runCmd(site, cmd)
     }
   }
 
@@ -163,20 +184,27 @@ export function SitesTab({
           </div>
 
           {(paginated as Site[]).map(site => {
-            const statusCfg = siteStatusCfg[site.State] ?? { dot: 'bg-ink-faint', text: 'text-ink-faint' }
+            const cooling = cooldown.isCooling(site.ID)
+            const statusCfg = isOffline
+              ? { dot: 'bg-ink-faint', text: 'text-ink-faint' }
+              : siteStatusCfg[site.State] ?? { dot: 'bg-ink-faint', text: 'text-ink-faint' }
+            const statusLabel = isOffline ? 'Unknown' : site.State
             const bindings = (site.Bindings ?? []).map(formatBinding)
             const busy = acting[site.ID]
             const started = site.State === 'Started'
             const menuItems: RowMenuItem[] = started
               ? [
-                  { icon: Square, label: 'Stop', variant: 'danger', onClick: () => runCmd(site, 'stop') },
-                  { icon: RotateCw, label: 'Restart', onClick: () => runCmd(site, 'restart') },
+                  { icon: Square, label: 'Stop', variant: 'danger', onClick: () => requestCmd(site, 'stop') },
+                  { icon: RotateCw, label: 'Restart', onClick: () => requestCmd(site, 'restart') },
                 ]
-              : [{ icon: Play, label: 'Start', onClick: () => runCmd(site, 'start') }]
+              : [{ icon: Play, label: 'Start', onClick: () => requestCmd(site, 'start') }]
             return (
               <div
                 key={site.ID}
-                className="grid grid-cols-[2fr_1fr_2fr_2fr_1.5fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100"
+                className={cn(
+                  'grid grid-cols-[2fr_1fr_2fr_2fr_1.5fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100',
+                  cooling && 'opacity-50',
+                )}
               >
                 <div className="flex items-center gap-3 px-4 py-3.5">
                   <div className="flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high">
@@ -188,7 +216,7 @@ export function SitesTab({
                 <div className="px-4 py-3.5">
                   <div className="flex items-center gap-2">
                     <span className={cn('size-1.5 rounded-full shrink-0', statusCfg.dot)} />
-                    <span className={cn('text-xs', statusCfg.text)}>{site.State}</span>
+                    <span className={cn('text-xs', statusCfg.text)}>{statusLabel}</span>
                   </div>
                 </div>
 
@@ -208,7 +236,7 @@ export function SitesTab({
                 </div>
 
                 <div className="flex items-center justify-center px-2 py-3">
-                  <RowMenu items={menuItems} disabled={!!busy || !!isOffline} />
+                  <RowMenu items={menuItems} disabled={!!busy || !!isOffline || cooling} />
                 </div>
               </div>
             )
@@ -221,6 +249,22 @@ export function SitesTab({
         page={page}
         totalPages={totalPages}
         onPageChange={setPage}
+      />
+
+      <ConfirmModal
+        open={!!confirmTarget}
+        title={confirmTarget ? confirmCopy[confirmTarget.cmd as Exclude<Cmd, 'start'>].title : ''}
+        description={
+          confirmTarget
+            ? `Are you sure you want to ${confirmCopy[confirmTarget.cmd as Exclude<Cmd, 'start'>].verb} "${confirmTarget.site.Name}"?`
+            : ''
+        }
+        confirmLabel={confirmTarget ? confirmCopy[confirmTarget.cmd as Exclude<Cmd, 'start'>].title.split(' ')[0] : 'Confirm'}
+        onClose={() => setConfirmTarget(null)}
+        onConfirm={() => {
+          if (confirmTarget) void runCmd(confirmTarget.site, confirmTarget.cmd)
+          setConfirmTarget(null)
+        }}
       />
     </div>
   )

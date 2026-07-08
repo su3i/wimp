@@ -296,6 +296,9 @@ export function Applications() {
         <div>
           <h1 className='text-base font-semibold text-ink'>Applications</h1>
           <p className='mt-0.5 text-xs text-ink-faint'>{activeProject.Name}</p>
+          <p className='mt-1 max-w-xl text-[0.6875rem] text-ink-faint'>
+            An application is a logical group of app pools across one or more hosts, so you can manage and monitor them together.
+          </p>
         </div>
         <Button size='sm' onClick={() => setCreateOpen(true)}>
           <Plus className='size-3.5' />

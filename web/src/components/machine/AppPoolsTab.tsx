@@ -5,16 +5,27 @@ import { Cpu, Play, Square, RotateCw, RefreshCw, AlertCircle } from "lucide-reac
 import { RowMenu } from "@/components/ui/RowMenu";
 import type { RowMenuItem } from "@/components/ui/RowMenu";
 import { Pagination } from "@/components/ui/Pagination";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { appPoolService } from "@/services/appPool.service";
 import { cn } from "@/utils/cn";
+import { useActionCooldown } from "@/utils/useActionCooldown";
 
 import type { AppPool } from "@/types";
 
 type StatusFilter = "All" | "Started" | "Stopped";
+type Cmd = "start" | "stop" | "restart" | "recycle";
 
 const PER_PAGE = 25;
 
 const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
+
+const CONFIRM_CMDS: Cmd[] = ["stop", "restart", "recycle"];
+
+const confirmCopy: Record<Exclude<Cmd, "start">, { title: string; verb: string }> = {
+  stop: { title: "Stop App Pool", verb: "stop" },
+  restart: { title: "Restart App Pool", verb: "restart" },
+  recycle: { title: "Recycle App Pool", verb: "recycle" },
+};
 
 const poolStatusCfg: Record<string, { dot: string; text: string }> = {
   Started: { dot: "bg-success", text: "text-success" },
@@ -23,7 +34,15 @@ const poolStatusCfg: Record<string, { dot: string; text: string }> = {
   Stopping: { dot: "bg-warning", text: "text-warning" },
 };
 
-function PoolStatus({ state }: { state: string }) {
+function PoolStatus({ state, offline }: { state: string; offline?: boolean }) {
+  if (offline) {
+    return (
+      <div className='flex items-center gap-2'>
+        <span className='size-1.5 rounded-full shrink-0 bg-ink-faint' />
+        <span className='text-xs text-ink-faint'>Unknown</span>
+      </div>
+    );
+  }
   const cfg = poolStatusCfg[state] ?? { dot: "bg-ink-faint", text: "text-ink-faint" };
   return (
     <div className='flex items-center gap-2'>
@@ -73,6 +92,8 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
   const [acting, setActing] = useState<Record<number, string>>({});
   const [status, setStatus] = useState<StatusFilter>("Started");
   const [page, setPage] = useState(1);
+  const [confirmTarget, setConfirmTarget] = useState<{ pool: AppPool; cmd: Cmd } | null>(null);
+  const cooldown = useActionCooldown();
 
   const apiStatus = status === "All" ? undefined : status;
 
@@ -98,8 +119,9 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
     setPage(1);
   }
 
-  async function runCmd(pool: AppPool, cmd: "start" | "stop" | "restart" | "recycle") {
+  async function runCmd(pool: AppPool, cmd: Cmd) {
     setActing((prev) => ({ ...prev, [pool.ID]: cmd }));
+    cooldown.start(pool.ID);
     try {
       await appPoolService.command(projectKey, machineId, pool.ID, cmd);
     } catch (err: unknown) {
@@ -113,6 +135,14 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
         delete n[pool.ID];
         return n;
       });
+    }
+  }
+
+  function requestCmd(pool: AppPool, cmd: Cmd) {
+    if (CONFIRM_CMDS.includes(cmd)) {
+      setConfirmTarget({ pool, cmd });
+    } else {
+      void runCmd(pool, cmd);
     }
   }
 
@@ -170,18 +200,22 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
 
           {paginated.map((pool) => {
             const busy = acting[pool.ID];
+            const cooling = cooldown.isCooling(pool.ID);
             const started = pool.State === "Started";
             const menuItems: RowMenuItem[] = started
               ? [
-                  { icon: Square, label: "Stop", variant: "danger", onClick: () => runCmd(pool, "stop") },
-                  { icon: RotateCw, label: "Restart", onClick: () => runCmd(pool, "restart") },
-                  { icon: RefreshCw, label: "Recycle", onClick: () => runCmd(pool, "recycle") },
+                  { icon: Square, label: "Stop", variant: "danger", onClick: () => requestCmd(pool, "stop") },
+                  { icon: RotateCw, label: "Restart", onClick: () => requestCmd(pool, "restart") },
+                  { icon: RefreshCw, label: "Recycle", onClick: () => requestCmd(pool, "recycle") },
                 ]
-              : [{ icon: Play, label: "Start", onClick: () => runCmd(pool, "start") }];
+              : [{ icon: Play, label: "Start", onClick: () => requestCmd(pool, "start") }];
             return (
               <div
                 key={pool.ID}
-                className={`grid ${cols} items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100`}
+                className={cn(
+                  `grid ${cols} items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100`,
+                  cooling && "opacity-50",
+                )}
               >
                 <div className='flex items-center gap-3 px-4 py-3.5'>
                   <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
@@ -191,7 +225,7 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
                 </div>
 
                 <div className='px-4 py-3.5'>
-                  <PoolStatus state={pool.State} />
+                  <PoolStatus state={pool.State} offline={isOffline} />
                 </div>
 
                 <div className='px-4 py-3.5'>
@@ -203,7 +237,7 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
                 </div>
 
                 <div className='flex items-center justify-center px-2 py-3'>
-                  <RowMenu items={menuItems} disabled={!!busy || !!isOffline} />
+                  <RowMenu items={menuItems} disabled={!!busy || !!isOffline || cooling} />
                 </div>
               </div>
             );
@@ -216,6 +250,22 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
         page={page}
         totalPages={totalPages}
         onPageChange={setPage}
+      />
+
+      <ConfirmModal
+        open={!!confirmTarget}
+        title={confirmTarget ? confirmCopy[confirmTarget.cmd as Exclude<Cmd, "start">].title : ""}
+        description={
+          confirmTarget
+            ? `Are you sure you want to ${confirmCopy[confirmTarget.cmd as Exclude<Cmd, "start">].verb} "${confirmTarget.pool.Name}"?`
+            : ""
+        }
+        confirmLabel={confirmTarget ? confirmCopy[confirmTarget.cmd as Exclude<Cmd, "start">].title.split(" ")[0] : "Confirm"}
+        onClose={() => setConfirmTarget(null)}
+        onConfirm={() => {
+          if (confirmTarget) void runCmd(confirmTarget.pool, confirmTarget.cmd);
+          setConfirmTarget(null);
+        }}
       />
     </div>
   );

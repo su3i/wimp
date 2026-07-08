@@ -38,7 +38,7 @@ func DownloadLogs(c *gin.Context) {
 	}
 
 	// Validate machine belongs to this project (reuse bootstrap lookup).
-	if _, _, err := machineService.GetBootstrapToken(uint(machineID), projectKey, "", "", config.Database()); err != nil {
+	if err := machineService.BelongsToProject(uint(machineID), projectKey, config.Database()); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
 		return
 	}

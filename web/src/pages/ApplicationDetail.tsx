@@ -37,7 +37,18 @@ import { machineService } from "@/services/machine.service";
 import { prometheusService } from "@/services/prometheus.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
+import { useActionCooldown } from "@/utils/useActionCooldown";
 import type { AppPoolWithDetails, ApplicationDetail as AppDetailType, MachineWithPools } from "@/types";
+
+type PoolCmd = "start" | "stop" | "restart" | "recycle";
+
+const CONFIRM_POOL_CMDS: PoolCmd[] = ["stop", "restart", "recycle"];
+
+const poolConfirmCopy: Record<Exclude<PoolCmd, "start">, { title: string; verb: string }> = {
+  stop: { title: "Stop App Pool", verb: "stop" },
+  restart: { title: "Restart App Pool", verb: "restart" },
+  recycle: { title: "Recycle App Pool", verb: "recycle" },
+};
 
 // ── Shared helpers (mirror AppPoolsTab) ───────────────────────────────────────
 
@@ -50,7 +61,15 @@ const poolStatusCfg: Record<string, { dot: string; text: string }> = {
   Stopping: { dot: "bg-warning", text: "text-warning" },
 };
 
-function PoolStatus({ state }: { state: string }) {
+function PoolStatus({ state, offline }: { state: string; offline?: boolean }) {
+  if (offline) {
+    return (
+      <div className='flex items-center gap-2'>
+        <span className='size-1.5 rounded-full shrink-0 bg-ink-faint' />
+        <span className='text-xs text-ink-faint'>Unknown</span>
+      </div>
+    );
+  }
   const cfg = poolStatusCfg[state] ?? { dot: "bg-ink-faint", text: "text-ink-faint" };
   return (
     <div className='flex items-center gap-2'>
@@ -365,7 +384,7 @@ function EditLogPathModal({
           </div>
           <div className='flex items-center justify-between px-4 py-2.5'>
             <span className='text-ink-faint'>Status</span>
-            <PoolStatus state={pool.State} />
+            <PoolStatus state={pool.State} offline={pool.machine?.Status !== "online"} />
           </div>
         </div>
 
@@ -425,8 +444,11 @@ function PoolList({
   const [editingPool, setEditingPool] = useState<AppPoolWithDetails | null>(null);
   const [removeTarget, setRemoveTarget] = useState<AppPoolWithDetails | null>(null);
   const [removing, setRemoving] = useState(false);
-  async function runCmd(pool: AppPoolWithDetails, cmd: "start" | "stop" | "restart" | "recycle") {
+  const [confirmTarget, setConfirmTarget] = useState<{ pool: AppPoolWithDetails; cmd: PoolCmd } | null>(null);
+  const cooldown = useActionCooldown();
+  async function runCmd(pool: AppPoolWithDetails, cmd: PoolCmd) {
     setActing((prev) => ({ ...prev, [pool.ID]: cmd }));
+    cooldown.start(pool.ID);
     try {
       await appPoolService.command(projectKey, pool.machine.ID, pool.ID, cmd);
     } catch (err: unknown) {
@@ -440,6 +462,14 @@ function PoolList({
         delete n[pool.ID];
         return n;
       });
+    }
+  }
+
+  function requestCmd(pool: AppPoolWithDetails, cmd: PoolCmd) {
+    if (CONFIRM_POOL_CMDS.includes(cmd)) {
+      setConfirmTarget({ pool, cmd });
+    } else {
+      void runCmd(pool, cmd);
     }
   }
 
@@ -474,29 +504,36 @@ function PoolList({
 
       {pools.map((pool) => {
         const busy = acting[pool.ID];
+        const cooling = cooldown.isCooling(pool.ID);
+        const offline = pool.machine?.Status !== "online";
         const started = pool.State === "Started";
         const menuItems: RowMenuItem[] = [
           { icon: Pencil, label: "Edit Log Path", onClick: () => setEditingPool(pool) },
           { type: "separator" },
-          ...(started
-            ? [
-                {
-                  icon: Square,
-                  label: "Stop",
-                  variant: "danger" as const,
-                  onClick: () => runCmd(pool, "stop"),
-                },
-                { icon: RotateCw, label: "Restart", onClick: () => runCmd(pool, "restart") },
-                { icon: RefreshCw, label: "Recycle", onClick: () => runCmd(pool, "recycle") },
-              ]
-            : [{ icon: Play, label: "Start", onClick: () => runCmd(pool, "start") }]),
-          { type: "separator" },
+          ...(offline
+            ? []
+            : started
+              ? [
+                  {
+                    icon: Square,
+                    label: "Stop",
+                    variant: "danger" as const,
+                    onClick: () => requestCmd(pool, "stop"),
+                  },
+                  { icon: RotateCw, label: "Restart", onClick: () => requestCmd(pool, "restart") },
+                  { icon: RefreshCw, label: "Recycle", onClick: () => requestCmd(pool, "recycle") },
+                ]
+              : [{ icon: Play, label: "Start", onClick: () => requestCmd(pool, "start") }]),
+          ...(offline ? [] : [{ type: "separator" as const }]),
           { icon: Trash2, label: "Remove", variant: "danger", onClick: () => setRemoveTarget(pool) },
         ];
         return (
           <div
             key={pool.ID}
-            className={`grid ${cols} items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100`}
+            className={cn(
+              `grid ${cols} items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100`,
+              cooling && "opacity-50",
+            )}
           >
             <div className='flex items-center gap-3 px-4 py-3.5'>
               <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
@@ -512,11 +549,11 @@ function PoolList({
             </div>
 
             <div className='px-4 py-3.5'>
-              <PoolStatus state={pool.State} />
+              <PoolStatus state={pool.State} offline={offline} />
             </div>
 
             <div className='flex items-center justify-center px-2 py-3'>
-              <RowMenu items={menuItems} disabled={!!busy} />
+              <RowMenu items={menuItems} disabled={!!busy || cooling} />
             </div>
           </div>
         );
@@ -542,6 +579,24 @@ function PoolList({
         loading={removing}
         onClose={() => setRemoveTarget(null)}
         onConfirm={() => void handleRemove()}
+      />
+
+      <ConfirmModal
+        open={!!confirmTarget}
+        title={confirmTarget ? poolConfirmCopy[confirmTarget.cmd as Exclude<PoolCmd, "start">].title : ""}
+        description={
+          confirmTarget
+            ? `Are you sure you want to ${poolConfirmCopy[confirmTarget.cmd as Exclude<PoolCmd, "start">].verb} "${confirmTarget.pool.Name}"?`
+            : ""
+        }
+        confirmLabel={
+          confirmTarget ? poolConfirmCopy[confirmTarget.cmd as Exclude<PoolCmd, "start">].title.split(" ")[0] : "Confirm"
+        }
+        onClose={() => setConfirmTarget(null)}
+        onConfirm={() => {
+          if (confirmTarget) void runCmd(confirmTarget.pool, confirmTarget.cmd);
+          setConfirmTarget(null);
+        }}
       />
     </div>
   );
@@ -731,6 +786,7 @@ export function ApplicationDetail() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [bulkActing, setBulkActing] = useState<"restart" | "recycle" | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<"restart" | "recycle" | null>(null);
 
   const numericId = Number(appId);
   const queryKey = ["application", activeProject?.Key, numericId];
@@ -753,23 +809,37 @@ export function ApplicationDetail() {
 
   const assignedPoolIds = new Set((app?.app_pools ?? []).map((p) => p.ID));
 
+  const ROLLING_RESTART_DELAY_MS = 10_000;
+
+  // Rolling restart/recycle: fires one pool at a time with a fixed delay between each,
+  // rather than hitting every pool at once (which would take the whole app down
+  // simultaneously). Gives immediate feedback that the rollout started instead of
+  // blocking until every pool finishes.
   async function runAllCmd(cmd: "restart" | "recycle") {
     const pools = app?.app_pools ?? [];
     if (!pools.length) return;
     setBulkActing(cmd);
-    try {
-      await Promise.all(
-        pools.map((pool) => appPoolService.command(activeProject!.Key, pool.machine.ID, pool.ID, cmd))
-      );
+    toast.success(`Rolling ${cmd} started for ${pools.length} pool${pools.length > 1 ? "s" : ""}.`);
+
+    let failures = 0;
+    for (let i = 0; i < pools.length; i++) {
+      const pool = pools[i];
+      try {
+        await appPoolService.command(activeProject!.Key, pool.machine.ID, pool.ID, cmd);
+      } catch {
+        failures++;
+      }
       queryClient.invalidateQueries({ queryKey });
-      toast.success(`All pools ${cmd}ed successfully.`);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        `${cmd} failed. Please try again.`;
-      toast.error(msg);
-    } finally {
-      setBulkActing(null);
+      if (i < pools.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, ROLLING_RESTART_DELAY_MS));
+      }
+    }
+
+    setBulkActing(null);
+    if (failures > 0) {
+      toast.error(`${failures} of ${pools.length} pools failed to ${cmd}.`);
+    } else {
+      toast.success(`Rolling ${cmd} complete for all ${pools.length} pools.`);
     }
   }
 
@@ -821,7 +891,9 @@ export function ApplicationDetail() {
           {/* Header */}
           {(() => {
             const total = app.app_pools?.length ?? 0;
-            const healthy = (app.app_pools ?? []).filter((p) => p.State === "Started").length;
+            const healthy = (app.app_pools ?? []).filter(
+              (p) => p.State === "Started" && p.machine?.Status === "online"
+            ).length;
             const dotColor =
               total === 0 ? "bg-ink-faint"
               : healthy === total ? "bg-success"
@@ -866,7 +938,7 @@ export function ApplicationDetail() {
                         variant='outline'
                         disabled={!!bulkActing}
                         loading={bulkActing === "restart"}
-                        onClick={() => void runAllCmd("restart")}
+                        onClick={() => setBulkConfirm("restart")}
                       >
                         <RotateCw className='size-3' />
                         Restart All
@@ -876,7 +948,7 @@ export function ApplicationDetail() {
                         variant='outline'
                         disabled={!!bulkActing}
                         loading={bulkActing === "recycle"}
-                        onClick={() => void runAllCmd("recycle")}
+                        onClick={() => setBulkConfirm("recycle")}
                       >
                         <RefreshCw className='size-3' />
                         Recycle All
@@ -957,6 +1029,18 @@ export function ApplicationDetail() {
           onSuccess={handleSuccess}
         />
       )}
+
+      <ConfirmModal
+        open={!!bulkConfirm}
+        title={bulkConfirm === "recycle" ? "Recycle All App Pools" : "Restart All App Pools"}
+        description={`This will ${bulkConfirm} all ${app?.app_pools?.length ?? 0} app pools one at a time, ${ROLLING_RESTART_DELAY_MS / 1000}s apart, rather than all at once. Continue?`}
+        confirmLabel={bulkConfirm === "recycle" ? "Recycle All" : "Restart All"}
+        onClose={() => setBulkConfirm(null)}
+        onConfirm={() => {
+          if (bulkConfirm) void runAllCmd(bulkConfirm);
+          setBulkConfirm(null);
+        }}
+      />
     </div>
   );
 }
