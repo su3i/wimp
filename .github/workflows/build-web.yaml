@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '.github/workflows/build-web.yaml'
 
 jobs:
   build:
@@ -28,4 +30,4 @@ jobs:
           context: ./web
           file: ./web/dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/wimp-web:0.0.44
+          tags: ${{ secrets.DOCKER_USERNAME }}/wimp-web:1.0.0

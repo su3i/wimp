@@ -1,0 +1,34 @@
+name: Build Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'helm/**'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package chart
+        run: |
+          helm dependency update ./helm
+          helm package ./helm -d ./dist
+
+      - name: Push chart to GHCR
+        run: |
+          CHART=$(ls ./dist/*.tgz)
+          helm push "$CHART" oci://ghcr.io/su3i/charts
