@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { AlertTriangle, Monitor, Layers, X, ChevronRight, Info } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertTriangle, Monitor, Layers, X, ChevronRight, Info, CheckCircle2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
@@ -10,8 +10,10 @@ import { cn } from "@/utils/cn";
 import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
 import { timeAgo } from "@/utils/time";
 import { machineService } from "@/services/machine.service";
+import { applicationService } from "@/services/application.service";
 import { prometheusService, type PromInstantResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
+import type { Application } from "@/types";
 
 // Split out from pages/Dashboard.tsx into their own chunk since recharts is a large
 // dependency - the rest of the dashboard (header, stat cards) doesn't need to wait on it.
@@ -22,8 +24,6 @@ const HostCpuLineChart = lazy(() =>
   import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.HostCpuLineChart })),
 );
 
-// ── Prometheus query builders ─────────────────────────────────────────────────
-
 function mids(ids: number[]) {
   return `machine_id=~"${ids.join("|")}"`;
 }
@@ -31,7 +31,6 @@ function mids(ids: number[]) {
 const PQ = {
   // Total IIS request rate across all hosts and sites (req/s)
   throughput: (ids: number[]) => `sum(rate(windows_iis_requests_total{${mids(ids)}}[5m]))`,
-
 
   // Average CPU % across all project hosts
   cpuAvg: (ids: number[]) =>
@@ -62,8 +61,6 @@ function scalar(r: PromInstantResult[] | undefined): number | null {
   return isFinite(n) ? n : null;
 }
 
-// ── Formatters ────────────────────────────────────────────────────────────────
-
 function fmtRate(v: number) {
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k/s`;
   return `${v.toFixed(1)}/s`;
@@ -76,15 +73,11 @@ function fmtBytes(v: number) {
   return `${Math.round(v)} B/s`;
 }
 
-// ── Icon helpers ──────────────────────────────────────────────────────────────
-
 function alertIcon(cat: string | null | undefined): LucideIcon {
   if (cat === "machine") return Monitor;
   if (cat === "apppool" || cat === "app_pool") return Layers;
   return AlertTriangle;
 }
-
-// ── Alert banner row ──────────────────────────────────────────────────────────
 
 function AlertRow({ alert, onDismiss }: { alert: ActiveAlert; onDismiss: () => void }) {
   const Icon = alertIcon(alert.category);
@@ -106,8 +99,6 @@ function AlertRow({ alert, onDismiss }: { alert: ActiveAlert; onDismiss: () => v
   );
 }
 
-// ── Info tooltip ─────────────────────────────────────────────────────────────
-
 function InfoTooltip({ text }: { text: string }) {
   return (
     <span className='relative inline-flex group/info'>
@@ -118,8 +109,6 @@ function InfoTooltip({ text }: { text: string }) {
     </span>
   );
 }
-
-// ── Metric stat card ──────────────────────────────────────────────────────────
 
 function MetricCard({
   label,
@@ -146,8 +135,6 @@ function MetricCard({
   );
 }
 
-// ── Sev events card ───────────────────────────────────────────────────────────
-
 function SevEventsCard({ count }: { count: number }) {
   const hot = count > 0;
   return (
@@ -166,7 +153,104 @@ function SevEventsCard({ count }: { count: number }) {
   );
 }
 
-// ── Bandwidth card ────────────────────────────────────────────────────────────
+// Up/Down is only ever reported for apps with a health check URL configured - that's
+// the one signal that actually means "is this app reachable". App pool state says
+// nothing about that (a pool can be Started with a dead site behind it), so apps
+// without a health check show their live pool count instead of a fabricated status.
+type AppRowStatus =
+  | { kind: "healthcheck"; label: "Up" | "Down" | "No Data"; dot: string; text: string; uptimePct: string | null }
+  | { kind: "pools"; healthy: number; total: number };
+
+function appRowStatus(
+  app: Application,
+  hcStatusMap: Record<number, "up" | "down">,
+  hcUptimeMap: Record<number, number>,
+): AppRowStatus {
+  if (app.HealthCheckURL) {
+    const raw = hcStatusMap[app.ID];
+    const label = raw === "up" ? "Up" : raw === "down" ? "Down" : "No Data";
+    const dot = label === "Up" ? "bg-success" : label === "Down" ? "bg-danger animate-pulse" : "bg-ink-faint/40";
+    const text = label === "Up" ? "text-success" : label === "Down" ? "text-danger" : "text-ink-faint";
+    const ratio = hcUptimeMap[app.ID];
+    // Exact value, not rounded in either direction - .toFixed(2) is display precision,
+    // not rounding-to-mislead (matches ApplicationDetail.tsx's HealthMonitor exactly).
+    const uptimePct = ratio != null ? `${(ratio * 100).toFixed(2)}%` : null;
+    return { kind: "healthcheck", label, dot, text, uptimePct };
+  }
+  return { kind: "pools", healthy: app.pool_healthy ?? 0, total: app.pool_total ?? 0 };
+}
+
+function ApplicationStatusCard({
+  apps,
+  hcStatusMap,
+  hcUptimeMap,
+}: {
+  apps: Application[];
+  hcStatusMap: Record<number, "up" | "down">;
+  hcUptimeMap: Record<number, number>;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <div className='min-w-0 max-h-[140px] rounded-lg border border-rim bg-surface px-[18px] py-[14px] flex flex-col gap-2 overflow-hidden'>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none shrink-0'>
+        Applications
+        <InfoTooltip text='Up/Down reflects the health check URL when one is configured; otherwise the live app pool count is shown.' />
+      </span>
+
+      {/* flex-1 always: this fills exactly whatever vertical space is left in the card
+          (which itself is height-locked by its sibling cards via the row-1 grid, not by
+          its own content) - so the list can never push the card taller, no matter how
+          many applications there are. 0-1 apps center in that space; more than that
+          scrolls internally instead of growing. */}
+      <div
+        className={cn(
+          'min-w-0 min-h-0 flex-1 flex flex-col overflow-x-hidden',
+          apps.length <= 1 ? 'justify-center' : 'overflow-y-auto',
+        )}
+      >
+        {apps.length === 0 ? (
+          <p className='text-center text-xs text-ink-faint'>No applications found.</p>
+        ) : (
+          apps.map((app) => {
+            const status = appRowStatus(app, hcStatusMap, hcUptimeMap);
+            return (
+              <div key={app.ID} className='grid grid-cols-[1fr_auto_auto] items-center gap-3 py-1.5'>
+                <button
+                  type='button'
+                  onClick={() => navigate(`/applications/${app.ID}`)}
+                  className='min-w-0 truncate rounded text-left text-xs text-ink underline-offset-2 underline cursor-pointer'
+                >
+                  {app.Name}
+                </button>
+                {status.kind === "healthcheck" ? (
+                  <span className={cn('flex items-center gap-1.5 text-[0.6875rem] font-medium', status.text)}>
+                    {status.label === "Up"
+                      ? <CheckCircle2 className='size-3 shrink-0' />
+                      : <span className={cn('size-2 rounded-full shrink-0', status.dot)} />}
+                    {status.label}
+                  </span>
+                ) : (
+                  <span className='font-mono text-[0.6875rem] text-ink-dim'>
+                    {status.healthy}/{status.total}
+                  </span>
+                )}
+                {status.kind === "healthcheck" && status.uptimePct ? (
+                  <span className='flex items-baseline gap-1 whitespace-nowrap text-ink'>
+                    <span className='text-[0.6875rem]'>{status.uptimePct}</span>
+                    <span className='text-[0.5625rem]'>uptime</span>
+                  </span>
+                ) : (
+                  <span />
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
 
 function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number | null }) {
   return (
@@ -190,8 +274,6 @@ function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number
     </div>
   );
 }
-
-// ── Recent alerts table ───────────────────────────────────────────────────────
 
 function LevelBadge({ level }: { level: string }) {
   const cfg = levelConfig(level);
@@ -256,8 +338,6 @@ function ChartSkeleton({ height }: { height: number }) {
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-
 export function Dashboard() {
   usePageTitle("Overview");
   const queryClient = useQueryClient();
@@ -266,8 +346,6 @@ export function Dashboard() {
 
   const [alerts, setAlerts] = useState<ActiveAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-
-  // ── Fetch project machines to build Prometheus label filter ───────────────
 
   const { data: machines } = useQuery({
     queryKey: ["machines", projectKey],
@@ -281,7 +359,6 @@ export function Dashboard() {
 
   const machineIds = useMemo(() => (machines ?? []).map((m) => m.ID), [machines]);
 
-  // Map machine_id → hostname for the performance chart labels
   const hostNameMap = useMemo(() => {
     const map = new Map<number, string>();
     for (const m of machines ?? []) {
@@ -300,8 +377,6 @@ export function Dashboard() {
   const promEnabled = promOk && machineIds.length > 0;
 
   const qOpts = { refetchInterval: 5_000, staleTime: 0, enabled: promEnabled } as const;
-
-  // ── Prometheus instant queries (all project-level aggregates) ─────────────
 
   const { data: rThroughput } = useQuery({
     queryKey: ["d-throughput", idKey],
@@ -337,8 +412,6 @@ export function Dashboard() {
     ...qOpts,
   });
 
-  // ── Dashboard stats (machines count + sev_last_24h) ────────────────────────
-
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats", projectKey],
     queryFn: () => dashboardService.getStats(projectKey!),
@@ -347,7 +420,54 @@ export function Dashboard() {
     staleTime: 0,
   });
 
-  // ── Notifications ─────────────────────────────────────────────────────────
+  const { data: dashboardApps = [] } = useQuery({
+    queryKey: ["dashboard-applications", projectKey],
+    queryFn: async () => {
+      const { data } = await applicationService.list(projectKey!, { page: 1, per_page: 100 });
+      return data.applications;
+    },
+    enabled: !!projectKey,
+    refetchInterval: 30_000,
+  });
+
+  // Only applications with a health check URL configured have a real up/down signal -
+  // same blackbox_http probe_success metric ApplicationDetail.tsx's HealthMonitor reads
+  // for a single app, batched here across every app_id at once via a regex label match
+  // (same batching trick as PQ.cpuPerHost for machine_id).
+  const hcAppIds = dashboardApps.filter((a) => !!a.HealthCheckURL).map((a) => a.ID);
+  const hcIdKey = hcAppIds.slice().sort((a, b) => a - b).join(",");
+  const hcEnabled = promOk && hcAppIds.length > 0;
+
+  const { data: hcStatusResult } = useQuery({
+    queryKey: ["d-app-hc-status", hcIdKey],
+    queryFn: () => prometheusService.instant(`probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}`),
+    enabled: hcEnabled,
+    refetchInterval: 30_000,
+  });
+  const { data: hcUptimeResult } = useQuery({
+    queryKey: ["d-app-hc-uptime", hcIdKey],
+    queryFn: () => prometheusService.instant(`avg_over_time(probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}[30d])`),
+    enabled: hcEnabled,
+    refetchInterval: 60_000,
+  });
+
+  const hcStatusMap = useMemo(() => {
+    const m: Record<number, "up" | "down"> = {};
+    for (const r of hcStatusResult ?? []) {
+      const id = Number(r.metric.application_id);
+      if (!Number.isNaN(id)) m[id] = r.value[1] === "1" ? "up" : "down";
+    }
+    return m;
+  }, [hcStatusResult]);
+
+  const hcUptimeMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const r of hcUptimeResult ?? []) {
+      const id = Number(r.metric.application_id);
+      if (!Number.isNaN(id)) m[id] = Number(r.value[1]);
+    }
+    return m;
+  }, [hcUptimeResult]);
 
   const { data: notifications = [], isLoading: notificationsLoading } = useQuery({
     queryKey: ["dashboard-notifications", projectKey],
@@ -357,13 +477,9 @@ export function Dashboard() {
     select: (d) => d ?? [],
   });
 
-  // ── Initial alert load ────────────────────────────────────────────────────
-
   useEffect(() => {
     void dashboardService.getActiveAlerts().then((d) => setAlerts(d ?? []));
   }, []);
-
-  // ── WebSocket (alerts + live notifications) ───────────────────────────────
 
   useEffect(() => {
     const { accessToken: rawAccessToken } = useAuthStore.getState();
@@ -447,8 +563,6 @@ export function Dashboard() {
     };
   }, [queryClient, projectKey]);
 
-  // ── Derived values ────────────────────────────────────────────────────────
-
   const sevLast24h = stats?.sev_last_24h ?? 0;
   const throughputVal = scalar(rThroughput);
   const cpuAvgVal = scalar(rCpuAvg);
@@ -479,8 +593,6 @@ export function Dashboard() {
     setDismissed((prev) => new Set([...prev, id]));
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <>
       {/* Alert Banner */}
@@ -500,8 +612,9 @@ export function Dashboard() {
 
       <div className='space-y-[14px]'>
         {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
-        <div className='grid grid-cols-[1fr_1fr_1.5fr] gap-[14px]'>
+        <div className='grid grid-cols-[0.85fr_1.15fr_1fr_1.5fr] gap-[14px]'>
           <SevEventsCard count={sevLast24h} />
+          <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} />
           <MetricCard
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}

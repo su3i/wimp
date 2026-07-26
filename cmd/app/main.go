@@ -12,9 +12,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/su3i/wimp/internal/application/authorization"
+	"github.com/su3i/wimp/internal/application/metadata"
 	metricsService "github.com/su3i/wimp/internal/application/metrics"
 	monitorService "github.com/su3i/wimp/internal/application/monitor"
-	"github.com/su3i/wimp/internal/application/metadata"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 	"github.com/su3i/wimp/internal/infrastructure/server"
@@ -27,52 +27,39 @@ import (
 )
 
 func main() {
-	// Load environment variables
 	err := godotenv.Load()
 	if err != nil {
 		log.Printf("Failed to load env: %v", err)
 	}
 
-	// Load config
 	config.Initialize()
 
-	// Initialize database
 	database.Initialize(config.Database())
 
-	// Run database migrations
 	database.Migrate(config.Database())
 
-	// Load bootstrap token
 	metadata.LoadBootstrapToken(config.Common().BootstrapToken, config.Database())
 
-	// Seed default account
 	if _, err := accountService.NewAccount("Administrator", config.Common().DefaultAdminUsername, config.Common().DefaultAdminPassword, account.SuperAdmin, config.Database()); err != nil {
 		log.Printf("Seed account: %v", err)
 	}
 
-	// Seed default organization
 	if _, err := organizationService.NewOrganization("Default", "default", string(organizationDomain.Public), config.Database()); err != nil {
 		log.Printf("Seed organization: %v", err)
 	}
 
-	// Seed default project
 	if _, err := projectService.NewProject("Default", "default", config.Common().DefaultAdminUsername, config.Database()); err != nil {
 		log.Printf("Seed project: %v", err)
 	}
 
-	// Initialize authorization module
 	authorization.Initialize(config.Casbin())
 
-	// Start monitor alert checker
 	monitorService.StartChecker(config.Database(), config.Common().PrometheusUrl)
 
-	// Start metrics threshold checker (CPU/memory/disk/thread count)
 	metricsService.StartChecker(config.Database(), config.Common().PrometheusUrl)
 
-	// Initialize router
 	router := server.InitializeRouter()
 
-	// Setup http server
 	httpServer := &http.Server{
 		Addr:    ":" + config.Common().AppPort,
 		Handler: router,
@@ -85,7 +72,6 @@ func main() {
 		}
 	}()
 
-	// Handle graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

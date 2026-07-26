@@ -39,7 +39,6 @@ func applyFluentConfig(fbDir string, payload protocol.FluentConfigPayload) error
 		activeFiles[fname] = true
 	}
 
-	// Remove any pool config files no longer in the payload.
 	entries, _ := os.ReadDir(confD)
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "wimp_pool_") && !activeFiles[e.Name()] {
@@ -104,7 +103,6 @@ func renderPoolConfig(fbDir string, cfg protocol.FluentAppConfig, lokiHost, loki
 `, cfg.LogPath, tag, dbPath, tag, lokiHost, lokiPort, tls, tlsVerify, cfg.ApplicationID, cfg.PoolID, machineID)
 }
 
-// restartFluentBit gets fluent-bit's PID, kills it, and starts the service again.
 func restartFluentBit() error {
 	exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
 		`Stop-Process -Id (Get-CimInstance Win32_Service -Filter "Name='fluent-bit'").ProcessId -Force -ErrorAction SilentlyContinue`,

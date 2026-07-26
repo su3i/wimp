@@ -236,12 +236,10 @@ func MachineCommand(action string) gin.HandlerFunc {
 	}
 }
 
-// shouldAutoUpdate reports whether a machine should receive an automatic agent update.
 func shouldAutoUpdate(_ uint) bool {
 	return config.Common().AutoUpdateAgent
 }
 
-// agentDownloadURL builds the download URL for the currently-configured agent release.
 func agentDownloadURL() string {
 	return fmt.Sprintf("%s/v%s/agent.exe", config.AgentReleaseBaseURL, config.Common().AgentVersion)
 }

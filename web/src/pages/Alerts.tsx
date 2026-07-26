@@ -10,8 +10,6 @@ import { cn } from "@/utils/cn";
 import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
 import { timeAgo } from "@/utils/time";
 
-// ── Level badge ───────────────────────────────────────────────────────────────
-
 function LevelBadge({ level }: { level: string }) {
   const cfg = levelConfig(level);
   return (
@@ -20,8 +18,6 @@ function LevelBadge({ level }: { level: string }) {
     </span>
   );
 }
-
-// ── Table header ──────────────────────────────────────────────────────────────
 
 const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
@@ -35,8 +31,6 @@ function TableHeader() {
     </div>
   );
 }
-
-// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function RowSkeleton() {
   return (
@@ -56,8 +50,6 @@ function RowSkeleton() {
     </div>
   );
 }
-
-// ── Table row ─────────────────────────────────────────────────────────────────
 
 function AlertRow({ notif }: { notif: DashboardNotification }) {
   const CatIcon = categoryIcon(notif.Category);
@@ -88,8 +80,6 @@ function AlertRow({ notif }: { notif: DashboardNotification }) {
     </div>
   );
 }
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 const LEVELS = [
   { value: "all", label: "All" },

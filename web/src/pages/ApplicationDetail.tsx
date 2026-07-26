@@ -50,8 +50,6 @@ const poolConfirmCopy: Record<Exclude<PoolCmd, "start">, { title: string; verb: 
   recycle: { title: "Recycle App Pool", verb: "recycle" },
 };
 
-// ── Shared helpers (mirror AppPoolsTab) ───────────────────────────────────────
-
 const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
 const poolStatusCfg: Record<string, { dot: string; text: string }> = {
@@ -78,8 +76,6 @@ function PoolStatus({ state, offline }: { state: string; offline?: boolean }) {
     </div>
   );
 }
-
-// ── Edit Application Modal ────────────────────────────────────────────────────
 
 function EditApplicationModal({
   open,
@@ -137,7 +133,7 @@ function EditApplicationModal({
 
         <div className='space-y-1.5'>
           <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-            Health Check URL <span className='normal-case font-normal'>(optional)</span>
+            Health Check URL
           </label>
           <input
             type='text'
@@ -175,8 +171,6 @@ function EditApplicationModal({
     </Modal>
   );
 }
-
-// ── Health Monitor section ────────────────────────────────────────────────────
 
 function fmtInterval(s: number) {
   if (s < 60) return `${s}s`;
@@ -301,8 +295,6 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
 function EmptyPools({ onAdd }: { onAdd: () => void }) {
   return (
     <div className='flex flex-col items-center justify-center py-20 rounded-lg border border-rim bg-surface text-center'>
@@ -320,8 +312,6 @@ function EmptyPools({ onAdd }: { onAdd: () => void }) {
     </div>
   );
 }
-
-// ── Edit Log Path Modal ───────────────────────────────────────────────────────
 
 function EditLogPathModal({
   open,
@@ -343,7 +333,6 @@ function EditLogPathModal({
   const [logPath, setLogPath] = useState(pool.log_path ?? "");
   const [saving, setSaving] = useState(false);
 
-  // Reset when pool changes
   useState(() => {
     setLogPath(pool.log_path ?? "");
   });
@@ -424,8 +413,6 @@ function EditLogPathModal({
   );
 }
 
-// ── Pool list ─────────────────────────────────────────────────────────────────
-
 function PoolList({
   pools,
   projectKey,
@@ -491,22 +478,24 @@ function PoolList({
     }
   }
 
-  const cols = "grid-cols-[2fr_1fr_1fr_auto]";
+  const cols = "grid-cols-[1fr_1fr_1fr_1fr_auto]";
 
   return (
-    <div className='overflow-hidden'>
-      <div className={`grid ${cols} border-b border-rim bg-surface-alt sticky top-0 z-10`}>
-        <div className={TH}>Name</div>
-        <div className={TH}>Machine</div>
-        <div className={TH}>Status</div>
-        <div className='px-4 py-2.5' />
-      </div>
+    <div className={`grid ${cols} overflow-hidden`}>
+      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Name</div>
+      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Machine</div>
+      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Status</div>
+      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Log Path</div>
+      <div className='sticky top-0 z-10 border-b border-rim bg-surface-alt px-4 py-2.5' />
 
-      {pools.map((pool) => {
+      {pools.map((pool, idx) => {
         const busy = acting[pool.ID];
-        const cooling = cooldown.isCooling(pool.ID);
+        const transitional = pool.State === "Starting" || pool.State === "Stopping";
+        const cooling = cooldown.isCooling(pool.ID) || transitional;
         const offline = pool.machine?.Status !== "online";
         const started = pool.State === "Started";
+        const isLast = idx === pools.length - 1;
+        const cellBorder = !isLast && "border-b border-rim";
         const menuItems: RowMenuItem[] = [
           { icon: Pencil, label: "Edit Log Path", onClick: () => setEditingPool(pool) },
           { type: "separator" },
@@ -528,31 +517,31 @@ function PoolList({
           { icon: Trash2, label: "Remove", variant: "danger", onClick: () => setRemoveTarget(pool) },
         ];
         return (
-          <div
-            key={pool.ID}
-            className={cn(
-              `grid ${cols} items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100`,
-              cooling && "opacity-50",
-            )}
-          >
-            <div className='flex items-center gap-3 px-4 py-3.5'>
+          <div key={pool.ID} className={cn("contents group", cooling && "opacity-50")}>
+            <div className={cn("flex min-w-0 items-center gap-3 px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
               <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
                 <Cpu className='size-3 text-ink-faint' />
               </div>
               <span className='font-mono text-xs text-ink truncate'>{pool.Name}</span>
             </div>
 
-            <div className='px-4 py-3.5'>
-              <span className='font-mono text-xs text-ink-dim'>
+            <div className={cn("min-w-0 px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+              <span className='block truncate font-mono text-xs text-ink-dim'>
                 {pool.machine?.Hostname?.toLowerCase() ?? "N/A"}
               </span>
             </div>
 
-            <div className='px-4 py-3.5'>
+            <div className={cn("px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
               <PoolStatus state={pool.State} offline={offline} />
             </div>
 
-            <div className='flex items-center justify-center px-2 py-3'>
+            <div className={cn("min-w-0 px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
+              <span className='block truncate font-mono text-xs text-ink-dim'>
+                {pool.log_path || "—"}
+              </span>
+            </div>
+
+            <div className={cn("flex items-center justify-center px-2 py-3 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
               <RowMenu items={menuItems} disabled={!!busy || cooling} />
             </div>
           </div>
@@ -601,8 +590,6 @@ function PoolList({
     </div>
   );
 }
-
-// ── Add App Pool Modal ────────────────────────────────────────────────────────
 
 interface AddAppPoolModalProps {
   open: boolean;
@@ -775,8 +762,6 @@ function AddAppPoolModal({
     </Modal>
   );
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export function ApplicationDetail() {
   const { appId } = useParams<{ appId: string }>();
@@ -1032,8 +1017,8 @@ export function ApplicationDetail() {
 
       <ConfirmModal
         open={!!bulkConfirm}
-        title={bulkConfirm === "recycle" ? "Recycle All App Pools" : "Restart All App Pools"}
-        description={`This will ${bulkConfirm} all ${app?.app_pools?.length ?? 0} app pools one at a time, ${ROLLING_RESTART_DELAY_MS / 1000}s apart, rather than all at once. Continue?`}
+        title={bulkConfirm === "recycle" ? "Recycle App Pools" : "Restart App Pools"}
+        description={`Are you sure you want to ${bulkConfirm} all app pools in this application? They'll ${bulkConfirm === "recycle" ? "recycle" : "restart"} one after another rather than all at once.`}
         confirmLabel={bulkConfirm === "recycle" ? "Recycle All" : "Restart All"}
         onClose={() => setBulkConfirm(null)}
         onConfirm={() => {

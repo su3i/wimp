@@ -21,9 +21,7 @@ var (
 	sweepOnce    sync.Once
 )
 
-// StageDownload records a temp file on disk under the given token, ready to be
-// fetched once (or cleaned up if it never is). Starts the background sweeper for
-// abandoned downloads on first use.
+// Starts the background sweeper for abandoned downloads on first use.
 func StageDownload(token, path, fileName string, size int64) {
 	sweepOnce.Do(startDownloadSweeper)
 
@@ -37,7 +35,6 @@ func StageDownload(token, path, fileName string, size int64) {
 	}
 }
 
-// GetStagedDownload returns the staged file for a token, if it exists and hasn't expired.
 func GetStagedDownload(token string) (stagedDownload, bool) {
 	stagingMu.Lock()
 	defer stagingMu.Unlock()

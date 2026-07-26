@@ -1,5 +1,3 @@
-// ── Auth ──────────────────────────────────────────────────────────────────
-
 export interface LoginResponse {
   message: string
   access_token: string
@@ -20,8 +18,6 @@ export interface TokenPayload {
   iat: number
 }
 
-// ── Account ───────────────────────────────────────────────────────────────
-
 export type AccountRole = 'SUPERADMIN' | 'ADMIN' | 'GUEST'
 
 export interface AccountDTO {
@@ -36,8 +32,6 @@ export interface AccountDTO {
 
 export type SecurityLevel = 'Excellent' | 'Strong' | 'Fair' | 'Weak'
 
-// ── Organization ──────────────────────────────────────────────────────────
-
 export type OrgScope = 'PUBLIC' | 'PRIVATE'
 
 export interface Organization {
@@ -48,8 +42,6 @@ export interface Organization {
   CreatedAt: string
   UpdatedAt: string
 }
-
-// ── Project ───────────────────────────────────────────────────────────────
 
 export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
 
@@ -64,8 +56,6 @@ export interface Project {
   CreatedAt: string
   UpdatedAt: string
 }
-
-// ── Machine ───────────────────────────────────────────────────────────────
 
 export type MachineStatus = 'pending' | 'online' | 'offline'
 
@@ -88,8 +78,6 @@ export interface MachineWithPools extends Machine {
   app_pools: AppPool[]
 }
 
-// ── App Pool ──────────────────────────────────────────────────────────────
-
 export interface AppPool {
   ID: number
   MachineID: number
@@ -102,8 +90,6 @@ export interface AppPool {
   CreatedAt: string
   UpdatedAt: string
 }
-
-// ── Site ──────────────────────────────────────────────────────────────────
 
 export interface Binding {
   protocol: string
@@ -123,8 +109,6 @@ export interface Site {
   CreatedAt: string
   UpdatedAt: string
 }
-
-// ── Application ───────────────────────────────────────────────────────────
 
 export interface Application {
   ID: number
@@ -150,8 +134,6 @@ export interface ApplicationDetail extends Application {
   app_pools: AppPoolWithDetails[]
 }
 
-// ── Loki ──────────────────────────────────────────────────────────────────
-
 export interface LokiStream {
   stream: Record<string, string>
   values: [string, string][] // [nanosecond timestamp, log line]
@@ -164,9 +146,6 @@ export interface LokiResponse {
     result: LokiStream[]
   }
 }
-
-
-// ── Monitor ───────────────────────────────────────────────────────────────
 
 export interface Monitor {
   ID: number

@@ -18,8 +18,6 @@ import type { Machine } from "@/types";
 
 const PAGE_SIZE = 20;
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const FIREWALL_COMMAND =
   `New-NetFirewallRule \`\n` +
   `  -DisplayName "Windows Exporter 9182" \`\n` +
@@ -29,13 +27,9 @@ const FIREWALL_COMMAND =
   `  -Action Allow \`\n` +
   `  -Profile Any`;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function filterIPv4(ips: string[]) {
   return (ips ?? []).filter((ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip));
 }
-
-// ── Tooltip ───────────────────────────────────────────────────────────────────
 
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -138,8 +132,6 @@ function StatusCell({ status }: { status: string }) {
   );
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-
 function TableSkeleton() {
   return (
     <div className='rounded-lg border border-rim overflow-hidden'>
@@ -163,8 +155,6 @@ function TableSkeleton() {
     </div>
   );
 }
-
-// ── Empty / placeholder states ────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -191,8 +181,6 @@ function NoProjectSelected() {
     </div>
   );
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 
@@ -379,6 +367,7 @@ export function Machines() {
                         icon: Power,
                         label: "Shutdown",
                         variant: "danger",
+                        disabled: true,
                         onClick: () => setCommandTarget({ machine, action: "shutdown" }),
                       },
                       { type: "separator" },
@@ -436,7 +425,7 @@ export function Machines() {
       <ConfirmModal
         open={confirmOpen}
         title='New Host'
-        description='Are you sure you want to connect a new host?'
+        description="Add a new host to this project? You'll get a bootstrap command to run on the target machine."
         confirmLabel='Proceed'
         loading={creating}
         onClose={() => setConfirmOpen(false)}

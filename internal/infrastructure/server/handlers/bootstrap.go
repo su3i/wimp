@@ -36,11 +36,6 @@ func Bootstrap(c *gin.Context) {
 		return
 	}
 
-	// if time.Now().After(m.TokenExpiresAt) {
-	// 	c.String(http.StatusUnauthorized, "# Error: token has expired\nexit 1")
-	// 	return
-	// }
-
 	scriptBytes, err := os.ReadFile("./data/bootstrap.ps1")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "# Error: bootstrap script unavailable\nexit 1")
@@ -83,4 +78,3 @@ func Uninstall(c *gin.Context) {
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusOK, string(scriptBytes))
 }
-

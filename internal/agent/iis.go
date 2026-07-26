@@ -24,19 +24,17 @@ func iisAvailable() bool {
 	return err == nil
 }
 
-// ── XML structs for parsing appcmd /xml output ────────────────────────────────
-
 type appcmdOutput struct {
 	AppPools []xmlAppPool `xml:"APPPOOL"`
 	Sites    []xmlSite    `xml:"SITE"`
 }
 
 type xmlAppPool struct {
-	Name           string        `xml:"APPPOOL.NAME,attr"`
-	PipelineMode   string        `xml:"PipelineMode,attr"`
-	RuntimeVersion string        `xml:"RuntimeVersion,attr"`
-	State          string        `xml:"state,attr"`
-	Extra          xmlAppPoolEx  `xml:"appPoolEx"`
+	Name           string       `xml:"APPPOOL.NAME,attr"`
+	PipelineMode   string       `xml:"PipelineMode,attr"`
+	RuntimeVersion string       `xml:"RuntimeVersion,attr"`
+	State          string       `xml:"state,attr"`
+	Extra          xmlAppPoolEx `xml:"appPoolEx"`
 }
 
 type xmlAppPoolEx struct {
@@ -45,9 +43,9 @@ type xmlAppPoolEx struct {
 }
 
 type xmlSite struct {
-	Name string      `xml:"SITE.NAME,attr"`
-	State string     `xml:"state,attr"`
-	Body xmlSiteBody `xml:"site"`
+	Name  string      `xml:"SITE.NAME,attr"`
+	State string      `xml:"state,attr"`
+	Body  xmlSiteBody `xml:"site"`
 }
 
 type xmlSiteBody struct {
@@ -56,8 +54,8 @@ type xmlSiteBody struct {
 }
 
 type xmlApplication struct {
-	Pool string    `xml:"applicationPool,attr"`
-	VDir xmlVDir   `xml:"virtualDirectory"`
+	Pool string  `xml:"applicationPool,attr"`
+	VDir xmlVDir `xml:"virtualDirectory"`
 }
 
 type xmlVDir struct {
@@ -68,8 +66,6 @@ type xmlBinding struct {
 	Protocol           string `xml:"protocol,attr"`
 	BindingInformation string `xml:"bindingInformation,attr"`
 }
-
-// ── Discovery ─────────────────────────────────────────────────────────────────
 
 func discoverAppPools() []protocol.AppPoolInfo {
 	if !iisAvailable() {
@@ -126,8 +122,6 @@ func discoverSites() []protocol.SiteInfo {
 	return sites
 }
 
-// ── Heartbeat helpers ─────────────────────────────────────────────────────────
-
 func runningAppPools() []string {
 	if !iisAvailable() {
 		return nil
@@ -165,8 +159,6 @@ func runningSites() []string {
 	}
 	return names
 }
-
-// ── Command execution ─────────────────────────────────────────────────────────
 
 func executeCommand(action, targetType, target string) (string, error) {
 	if targetType == "machine" {
@@ -241,8 +233,6 @@ func run(name string, args ...string) (string, error) {
 	}
 	return output, nil
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 // parseBinding parses an IIS binding information string (ip:port:hostname).
 func parseBinding(proto, info string) protocol.BindingInfo {

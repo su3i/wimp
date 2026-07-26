@@ -7,28 +7,23 @@
 
 export const theme = {
   colors: {
-    // ── Backgrounds ───────────────────────────────────────────────
     canvas: "#0d1117", // GitHub canvas.default - deepest layer
     surface: "#161b22", // GitHub canvas.subtle - sidebar, cards, panels
     surfaceAlt: "#1c2128", // slightly elevated surface
     surfaceHigh: "#21262d", // GitHub canvas.inset - hover rows, table alt
     surfaceHighest: "#2d333b", // popovers, dropdowns, tooltips
 
-    // ── Brand / Interactive ────────────────────────────────────────
     primary: "#f0f6fc", // near-white - GitHub fg.on-emphasis - selected states, CTAs
     primaryHover: "#ffffff", // pure white on hover
 
-    // ── Semantic ──────────────────────────────────────────────────
     success: "#3fb950", // GitHub success.fg
     warning: "#d29922", // GitHub attention.fg
     danger: "#f85149", // GitHub danger.fg
 
-    // ── Text ──────────────────────────────────────────────────────
     ink: "#e6edf3", // GitHub fg.default - primary text (cool white)
     inkDim: "#8b949e", // GitHub fg.muted - secondary / label text
     inkFaint: "#6e7681", // GitHub fg.subtle - placeholder / disabled
 
-    // ── Borders ───────────────────────────────────────────────────
     rim: "#30363d", // GitHub border.default
     rimStrong: "#484f58", // GitHub border.muted - emphasis
   },

@@ -18,14 +18,13 @@ var Languages = []map[string]string{
 
 func SupportedLanguages(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
+		"message":   "success",
 		"languages": Languages,
 	})
 	return
 }
 
 func SetLanguagePreference(c *gin.Context) {
-	// Parse the request body
 	var req struct {
 		Code string `json:"code" binding:"required"`
 	}
@@ -33,12 +32,11 @@ func SetLanguagePreference(c *gin.Context) {
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
 
-	// Validate language code against supported languages
 	var isValid bool
 	for _, lang := range Languages {
 		if lang["code"] == req.Code {
@@ -54,7 +52,6 @@ func SetLanguagePreference(c *gin.Context) {
 		return
 	}
 
-	// Update metadata with the language
 	if err := metadata.SetLanguage(req.Code, config.Database()); err != nil {
 		log.Printf("Error updating language: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -73,11 +70,10 @@ func RetrieveLanguagePreference(c *gin.Context) {
 	language, err := metadata.RetrieveLanguage(config.Database())
 
 	if err != nil || *language == "" {
-		// Return the default language
 		for _, lang := range Languages {
 			if lang["default"] == "true" {
 				c.JSON(http.StatusOK, gin.H{
-					"message": "success",
+					"message":  "success",
 					"language": lang["code"],
 				})
 				return
@@ -90,7 +86,7 @@ func RetrieveLanguagePreference(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
+		"message":  "success",
 		"language": language,
 	})
 	return

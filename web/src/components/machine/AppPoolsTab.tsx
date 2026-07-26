@@ -200,7 +200,8 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
 
           {paginated.map((pool) => {
             const busy = acting[pool.ID];
-            const cooling = cooldown.isCooling(pool.ID);
+            const transitional = pool.State === "Starting" || pool.State === "Stopping";
+            const cooling = cooldown.isCooling(pool.ID) || transitional;
             const started = pool.State === "Started";
             const menuItems: RowMenuItem[] = started
               ? [

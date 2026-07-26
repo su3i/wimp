@@ -14,7 +14,27 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
 )
 
+// NewAccount is publicly reachable only for first-run setup, when no accounts exist
+// yet - there's no other way to create the first admin. Once at least one account
+// exists, this requires an authenticated caller with org-write access, the same as any
+// other account management action. Without this gate, anyone who can reach the control
+// plane could self-register as an admin at any time.
 func NewAccount(c *gin.Context) {
+	existing, err := accountService.RetrieveAccounts(config.Database())
+	if err != nil {
+		log.Printf("Error checking existing accounts: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(*existing) > 0 {
+		allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainOrg, authorizationDomain.Organization, "write")
+		if err != nil || !allow {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+	}
+
 	var req struct {
 		Name     string `json:"name" binding:"required"`
 		Username string `json:"username" binding:"required"`
@@ -120,6 +140,20 @@ func UpdateAccount(c *gin.Context) {
 			"error": "Missing required query parameter: username",
 		})
 		return
+	}
+
+	// Callers may update their own account; changing someone else's requires org-write.
+	callerUsername, err := utils.GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if *callerUsername != username {
+		allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainOrg, authorizationDomain.Organization, "write")
+		if err != nil || !allow {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 	}
 
 	var req struct {

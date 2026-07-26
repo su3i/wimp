@@ -20,8 +20,6 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/cn";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 interface Machine {
   id: number;
   hostname: string;
@@ -38,8 +36,6 @@ interface LogEntry {
   nanoTs: string; // original nanosecond string, used for pagination
   content: string;
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtLogTime(nanoTs: string): string {
   const ms = Number(BigInt(nanoTs) / 1_000_000n);
@@ -110,8 +106,6 @@ function extractEntries(data: { result?: { values: [string, string][] }[] } | un
 const FAR_BACK = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 const FETCH_LIMIT = 1000;
 
-// ── Tooltip ───────────────────────────────────────────────────────────────────
-
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className='relative group/tip'>
@@ -122,8 +116,6 @@ function Tooltip({ label, children }: { label: string; children: React.ReactNode
     </div>
   );
 }
-
-// ── Select ────────────────────────────────────────────────────────────────────
 
 function FilterSelect<T extends string | number>({
   value,
@@ -154,8 +146,6 @@ function FilterSelect<T extends string | number>({
     </div>
   );
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function LogsViewer({
   projectKey,
@@ -194,11 +184,12 @@ export function LogsViewer({
   const prevScrollHeightRef = useRef(0);
   const loadingMoreRef = useRef(false);
 
-  // ── Selectors ───────────────────────────────────────────────────────────────
-
   function handleMachineChange(v: string) {
     setMachineId(v);
-    setPoolId("");
+    // Auto-select the first app pool on this host instead of forcing an extra click -
+    // most hosts only have one or two pools anyway.
+    const firstPool = pools.find((p) => p.machineId === Number(v));
+    setPoolId(firstPool ? String(firstPool.id) : "");
     setFilename("");
   }
 
@@ -218,8 +209,6 @@ export function LogsViewer({
     ];
   }, [pools, machineId]);
 
-  // ── Files (machine-scoped) ─────────────────────────────────────────────────
-
   const { data: filesData, isLoading: filesLoading } = useQuery({
     queryKey: ["app-files", projectKey, appId, machineId],
     queryFn: async () => {
@@ -235,14 +224,11 @@ export function LogsViewer({
     [filesData],
   );
 
-  // Clear filename if it disappeared from the available list
   useEffect(() => {
     if (filename && filesData && !filesData.includes(filename)) {
       setFilename("");
     }
   }, [filesData, filename]);
-
-  // ── Log fetching ───────────────────────────────────────────────────────────
 
   const readyToFetch = !!machineId && !!poolId;
 
@@ -355,8 +341,6 @@ export function LogsViewer({
     }
   }
 
-  // ── Search ─────────────────────────────────────────────────────────────────
-
   const searchQuery = searchText.trim();
 
   const matchCount = useMemo(() => {
@@ -365,8 +349,6 @@ export function LogsViewer({
     const re = new RegExp(esc, 'gi');
     return entries.reduce((n, e) => n + (e.content.match(re)?.length ?? 0), 0);
   }, [entries, searchQuery]);
-
-  // ── Download ───────────────────────────────────────────────────────────────
 
   async function handleStageDownload() {
     if (!machineId || !filename) {
@@ -410,8 +392,6 @@ export function LogsViewer({
     }
   }
 
-  // ── Clear ──────────────────────────────────────────────────────────────────
-
   async function handleClear() {
     setClearing(true);
     try {
@@ -432,8 +412,6 @@ export function LogsViewer({
       setClearing(false);
     }
   }
-
-  // ── Render pieces ──────────────────────────────────────────────────────────
 
   const filterBar = (
     <div className='flex items-center gap-2 px-4 py-2.5 border-b border-rim bg-surface-alt shrink-0 flex-wrap'>
@@ -592,7 +570,7 @@ export function LogsViewer({
       <ConfirmModal
         open={clearConfirmOpen}
         title='Clear Logs'
-        description='This permanently deletes all log files from disk on the selected host and removes the corresponding entries from the log index. This cannot be undone.'
+        description='This permanently deletes the log files on this host and removes them from the log viewer. This cannot be undone.'
         confirmLabel='Clear Logs'
         loading={clearing}
         onClose={() => setClearConfirmOpen(false)}
@@ -631,8 +609,6 @@ export function LogsViewer({
     </>
   );
 
-  // ── Expanded modal (portal) ────────────────────────────────────────────────
-
   if (expanded) {
     return (
       <>
@@ -670,8 +646,6 @@ export function LogsViewer({
       </>
     );
   }
-
-  // ── Normal embedded view ───────────────────────────────────────────────────
 
   return (
     <>

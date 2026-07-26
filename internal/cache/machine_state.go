@@ -17,16 +17,14 @@ var (
 	machineActionPending = map[uint]machineActionEntry{}
 )
 
-// SetMachineActionPending marks a machine as having a deliberate shutdown/restart
-// in flight, so the WebSocket disconnect handler can tell it apart from a real outage.
+// Marks a machine as having a deliberate shutdown/restart in flight, so the WebSocket
+// disconnect handler can tell it apart from a real outage.
 func SetMachineActionPending(machineID uint, action string) {
 	machineActionMu.Lock()
 	machineActionPending[machineID] = machineActionEntry{action: action, expiresAt: time.Now().Add(machineActionTTL)}
 	machineActionMu.Unlock()
 }
 
-// IsMachineActionPending reports whether the machine has a recent shutdown/restart
-// command in flight.
 func IsMachineActionPending(machineID uint) bool {
 	machineActionMu.Lock()
 	defer machineActionMu.Unlock()
@@ -34,8 +32,6 @@ func IsMachineActionPending(machineID uint) bool {
 	return ok && time.Now().Before(e.expiresAt)
 }
 
-// GetMachineActionPending returns the pending action ("shutdown" or "restart") and
-// whether one is still in flight.
 func GetMachineActionPending(machineID uint) (string, bool) {
 	machineActionMu.Lock()
 	defer machineActionMu.Unlock()

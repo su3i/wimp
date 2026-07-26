@@ -19,8 +19,6 @@ import type { MachineStatus } from '@/types'
 // page shell (header, tab bar, actions) can paint before it's fetched.
 const MetricsTab = lazy(() => import('@/components/machine/MetricsTab').then(m => ({ default: m.MetricsTab })))
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function filterIPv4(ips: string[]) {
   return (ips ?? []).filter(ip => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip))
 }
@@ -47,8 +45,6 @@ const machineStatusCfg: Record<MachineStatus, { dot: string; label: string; text
   offline: { dot: 'bg-danger',  label: 'Offline', text: 'text-danger',  pill: 'bg-danger/10 text-danger'   },
   pending: { dot: 'bg-warning', label: 'Pending', text: 'text-warning', pill: 'bg-warning/10 text-warning' },
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 type Tab = 'metrics' | 'pools' | 'sites'
 
@@ -166,7 +162,8 @@ export function MachineDetail() {
             <Button
               size="sm"
               variant="danger"
-              disabled={actingOnMachine || isOffline || cooling}
+              disabled
+              title="Remote shutdown is temporarily disabled"
               onClick={() => setConfirmAction('shutdown')}
             >
               <Power className="size-3" />

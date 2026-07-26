@@ -22,7 +22,6 @@ func (a *agentConn) write(msg []byte) error {
 	return a.conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-// Hub holds the live WebSocket connections from all agents, keyed by machine ID.
 type Hub struct {
 	mu    sync.RWMutex
 	conns map[uint]*agentConn
@@ -61,8 +60,6 @@ func (h *Hub) IsOnline(machineID uint) bool {
 	return ok
 }
 
-// Send writes a raw message to a connected agent. Returns an error if the
-// machine is not currently connected.
 func (h *Hub) Send(machineID uint, msg []byte) error {
 	h.mu.RLock()
 	ac, ok := h.conns[machineID]

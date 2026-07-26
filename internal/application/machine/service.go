@@ -18,6 +18,10 @@ type MachineWithPools struct {
 	AppPools []apppool.AppPool `json:"app_pools"`
 }
 
+// tokenNeverExpires is used as the agent token's expiry from the moment it's issued -
+// there's no rotation path for it, so it just doesn't expire.
+const tokenNeverExpires = 100 * 365 * 24 * time.Hour
+
 func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine, error) {
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
@@ -33,7 +37,7 @@ func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine
 		ProjectID:      proj.ID,
 		Status:         machine.Pending,
 		Token:          token,
-		TokenExpiresAt: time.Now().Add(24 * time.Hour),
+		TokenExpiresAt: time.Now().Add(tokenNeverExpires),
 	}
 
 	repo := database.NewMachineRepository(cfg)

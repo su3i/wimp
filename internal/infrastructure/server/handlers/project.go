@@ -13,16 +13,15 @@ import (
 )
 
 func NewProject(c *gin.Context) {
-	// Parse the request body
 	var req struct {
-		Name           string `json:"name" binding:"required"`
-		Key            string `json:"key" binding:"required"`
+		Name string `json:"name" binding:"required"`
+		Key  string `json:"key" binding:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"message": "Validation failed.",
-			"errors": utils.FormatValidationErrors(err),
+			"errors":  utils.FormatValidationErrors(err),
 		})
 		return
 	}
@@ -36,7 +35,6 @@ func NewProject(c *gin.Context) {
 		return
 	}
 
-	// Authorization
 	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), "org", authorizationDomain.Organization, "write")
 
 	if err != nil || !allow {
@@ -46,7 +44,6 @@ func NewProject(c *gin.Context) {
 		return
 	}
 
-	// Create project
 	_project, err := project.NewProject(req.Name, req.Key, *createdByUsername, config.Database())
 
 	if err != nil {
@@ -60,11 +57,11 @@ func NewProject(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "success",
 		"project": _project,
-	  })
+	})
 }
 
 func RetrieveProject(c *gin.Context) {
-	key := c.Param("key") // assumes route is like /projects/:key
+	key := c.Param("key")
 	if key == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Project key is required",
@@ -72,7 +69,6 @@ func RetrieveProject(c *gin.Context) {
 		return
 	}
 
-	// Authorization
 	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), "org", authorizationDomain.Organization, "read")
 
 	if err != nil || !allow {
@@ -82,7 +78,6 @@ func RetrieveProject(c *gin.Context) {
 		return
 	}
 
-	// Retrieve project
 	_project, err := project.RetrieveProject(key, config.Database())
 
 	if err != nil {
@@ -116,7 +111,6 @@ func RetrieveProjects(c *gin.Context) {
 		return
 	}
 
-	// Retrieve projects
 	_projects, err := project.RetrieveProjects(config.Database())
 
 	if err != nil {
@@ -128,13 +122,13 @@ func RetrieveProjects(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
+		"message":  "success",
 		"projects": _projects,
 	})
 }
 
 func UpdateProject(c *gin.Context) {
-	key := c.Param("key") // assumes route is like /projects/:key
+	key := c.Param("key")
 	if key == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Project key is required",
@@ -142,28 +136,28 @@ func UpdateProject(c *gin.Context) {
 		return
 	}
 
-    var req struct {
+	var req struct {
 		Name *string `json:"name,omitempty"`
 		Key  *string `json:"key,omitempty"`
 	}
 
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-    updatedProject, err := project.UpdateProject(
-        key,
-        req.Name,
-        req.Key,
-        config.Database(),
-    )
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	updatedProject, err := project.UpdateProject(
+		key,
+		req.Name,
+		req.Key,
+		config.Database(),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-    c.JSON(http.StatusOK, updatedProject)
+	c.JSON(http.StatusOK, updatedProject)
 }
 
 func DeleteProject(c *gin.Context) {

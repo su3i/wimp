@@ -53,7 +53,6 @@ func UpdateOrganization(name *string, key string, scope *string, cfg *config.Dat
 		_organization.Scope = organization.OrgScope(*scope)
 	}
 
-	// Save updated project
 	if err := _organizationRepository.Update(_organization); err != nil {
 		return nil, err
 	}

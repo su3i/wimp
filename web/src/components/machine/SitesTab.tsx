@@ -184,7 +184,8 @@ export function SitesTab({
           </div>
 
           {(paginated as Site[]).map(site => {
-            const cooling = cooldown.isCooling(site.ID)
+            const transitional = site.State === 'Starting' || site.State === 'Stopping'
+            const cooling = cooldown.isCooling(site.ID) || transitional
             const statusCfg = isOffline
               ? { dot: 'bg-ink-faint', text: 'text-ink-faint' }
               : siteStatusCfg[site.State] ?? { dot: 'bg-ink-faint', text: 'text-ink-faint' }

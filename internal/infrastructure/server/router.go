@@ -1,8 +1,12 @@
 package server
 
 import (
+	"log"
+	"time"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/server/handlers"
 	middleware "github.com/su3i/wimp/internal/infrastructure/server/middlewares"
 )
@@ -10,69 +14,72 @@ import (
 func InitializeRouter() *gin.Engine {
 	router := gin.Default()
 
-	// Cors Settings
-	router.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
+	// Cors Settings - restricted to WEBURL (the frontend's own origin) rather than
+	// AllowAllOrigins. If WEBURL isn't set, no cross-origin browser request is allowed
+	// (the safe default) - same-origin deployments don't need CORS headers at all.
+	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"*"},
+		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"*"},
 		AllowCredentials: false,
-	}))
+	}
+	if webUrl := config.Common().WebUrl; webUrl != "" {
+		corsConfig.AllowOrigins = []string{webUrl}
+	} else {
+		log.Println("WARNING: WEBURL is not set - cross-origin browser requests will be blocked. Set WEBURL if the frontend is served from a different origin than the control plane.")
+	}
+	router.Use(cors.New(corsConfig))
 
 	// Agent WebSocket (public - token is the credential)
 	router.GET("/ws/agent", handlers.AgentWebSocket)
 
-	// Frontend WebSocket (JWT via query param)
 	router.GET("/ws", handlers.ClientWebSocket)
 
 	// Bootstrap (public - token is the credential)
 	router.GET("/bootstrap", handlers.Bootstrap)
 	router.GET("/bootstrap/uninstall", handlers.Uninstall)
 
-	// Health
 	router.GET("/health", handlers.Health)
 
-	// Prometheus HTTP service discovery
 	router.GET("/prometheus/targets", handlers.PrometheusTargets)
 	router.GET("/prometheus/monitors", handlers.PrometheusMonitorTargets)
 
-	// Config
 	router.GET("/config", handlers.RetrieveConfig)
 
-	// Language Settings
 	router.GET("/supported-languages", handlers.SupportedLanguages)
 	router.PUT("/set-language", handlers.SetLanguagePreference)
 	router.GET("/get-language", handlers.RetrieveLanguagePreference)
 
-	// Organization
+	// NewOrganization is public only for first-run setup (gated in the handler itself
+	// once an organization exists). Everything else needs a real, authenticated caller.
 	router.POST("/organization", handlers.NewOrganization)
-	router.PUT("/organization", handlers.UpdateOrganization)
+	router.PUT("/organization", middleware.AuthMiddleware(), handlers.UpdateOrganization)
 	router.GET("/organization", handlers.RetrieveOrganization)
 
-	// Account
-	router.POST("/account", handlers.NewAccount)
-	router.GET("/account", handlers.RetrieveAccountByUsername)
-	router.PUT("/account", handlers.UpdateAccount)
+	// NewAccount is public only for first-run setup (gated in the handler itself once
+	// any account exists) - OptionalAuthMiddleware lets it recognize an authenticated
+	// admin for every case after that, without aborting the bootstrap case.
+	router.POST("/account", middleware.OptionalAuthMiddleware(), handlers.NewAccount)
+	router.GET("/account", middleware.AuthMiddleware(), handlers.RetrieveAccountByUsername)
+	router.PUT("/account", middleware.AuthMiddleware(), handlers.UpdateAccount)
 	router.GET("/accounts", middleware.AuthMiddleware(), handlers.RetrieveAccounts)
 
-	// MFA
 	router.POST("/mfa/totp-uri", handlers.RetrieveTotpURI)
 	router.POST("/mfa/confirm", handlers.ConfirmMFA)
 
-	// Auth
-	router.POST("/auth/login", handlers.Login)
-	router.POST("/auth/mfa", handlers.MFA)
+	// Login and MFA are rate limited per IP - both are brute-forceable (password guessing,
+	// TOTP code guessing) and were previously unbounded.
+	router.POST("/auth/login", middleware.RateLimit("login", 10, 5*time.Minute), handlers.Login)
+	router.POST("/auth/mfa", middleware.RateLimit("mfa", 10, 5*time.Minute), handlers.MFA)
 	router.POST("/auth/refresh-token", handlers.RefreshToken)
 	router.POST("/auth/revoke-token", handlers.RevokeToken)
 
-	// Project
 	router.POST("/project", middleware.AuthMiddleware(), handlers.NewProject)
 	router.GET("/project/:key", middleware.AuthMiddleware(), handlers.RetrieveProject)
 	router.PUT("/project/:key", middleware.AuthMiddleware(), handlers.UpdateProject)
 	router.DELETE("/project/:key", middleware.AuthMiddleware(), handlers.DeleteProject)
 	router.GET("/projects", middleware.AuthMiddleware(), handlers.RetrieveProjects)
 
-	// Machine (project-scoped)
 	router.POST("/projects/:key/machines", middleware.AuthMiddleware(), handlers.NewMachine)
 	router.GET("/projects/:key/machines", middleware.AuthMiddleware(), handlers.RetrieveMachines)
 	router.GET("/projects/:key/machines/:machineId/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
@@ -84,7 +91,6 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/machines/:machineId/logs/download", middleware.AuthMiddleware(), handlers.DownloadLogs)
 	router.GET("/downloads/:token", middleware.AuthMiddleware(), handlers.FetchStagedDownload)
 
-	// Applications (project-scoped)
 	router.POST("/projects/:key/applications", middleware.AuthMiddleware(), handlers.NewApplication)
 	router.GET("/projects/:key/applications", middleware.AuthMiddleware(), handlers.RetrieveApplications)
 	router.GET("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.RetrieveApplication)
@@ -98,30 +104,25 @@ func InitializeRouter() *gin.Engine {
 	router.DELETE("/projects/:key/applications/:appId/logs", middleware.AuthMiddleware(), handlers.ClearLogs)
 	router.DELETE("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.DeleteApplication)
 
-	// App Pools (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/app-pools", middleware.AuthMiddleware(), handlers.RetrieveAppPools)
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/start", middleware.AuthMiddleware(), handlers.AppPoolCommand("start"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/stop", middleware.AuthMiddleware(), handlers.AppPoolCommand("stop"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/restart", middleware.AuthMiddleware(), handlers.AppPoolCommand("restart"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/recycle", middleware.AuthMiddleware(), handlers.AppPoolCommand("recycle"))
 
-	// Sites (machine-scoped)
 	router.GET("/projects/:key/machines/:machineId/sites", middleware.AuthMiddleware(), handlers.RetrieveSites)
 	router.POST("/projects/:key/machines/:machineId/sites/:siteId/start", middleware.AuthMiddleware(), handlers.SiteCommand("start"))
 	router.POST("/projects/:key/machines/:machineId/sites/:siteId/stop", middleware.AuthMiddleware(), handlers.SiteCommand("stop"))
 	router.POST("/projects/:key/machines/:machineId/sites/:siteId/restart", middleware.AuthMiddleware(), handlers.SiteCommand("restart"))
 
-	// Dashboard (project-scoped)
 	router.GET("/projects/:key/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
 
-	// Notifications
 	router.GET("/notifications", middleware.AuthMiddleware(), handlers.ListNotifications)
 	router.GET("/notifications/unread-count", middleware.AuthMiddleware(), handlers.GetUnreadCount)
 	router.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MarkNotificationRead)
 	router.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MarkAllNotificationsRead)
 	router.GET("/projects/:key/notifications", middleware.AuthMiddleware(), handlers.ListProjectNotifications)
 
-	// Metrics
 	handlers.MetricsHandler(router)
 
 	return router

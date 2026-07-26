@@ -8,12 +8,11 @@ func GetUserRolesFromContext(c *gin.Context) []string {
 		return nil
 	}
 
-	// Attempt []string assertion
 	if roles, ok := raw.([]string); ok {
 		return roles
 	}
 
-	// If it's []interface{} (common from JWT), convert
+	// JWT claims decode as []interface{}, not []string.
 	if rolesIface, ok := raw.([]interface{}); ok {
 		roles := make([]string, 0, len(rolesIface))
 		for _, r := range rolesIface {
@@ -24,6 +23,5 @@ func GetUserRolesFromContext(c *gin.Context) []string {
 		return roles
 	}
 
-	// fallback
 	return nil
 }

@@ -19,7 +19,6 @@ func (c *clientConn) write(msg []byte) error {
 	return c.conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-// clientHub holds live WebSocket connections from frontend browser clients.
 type clientHub struct {
 	mu    sync.RWMutex
 	conns map[string]*clientConn // keyed by a unique connection ID
@@ -51,8 +50,7 @@ func (h *clientHub) Deregister(id string) {
 	delete(h.conns, id)
 }
 
-// Broadcast sends a message to all connected frontend clients.
-// Stale connections are silently removed.
+// Stale connections are silently removed on write failure.
 func (h *clientHub) Broadcast(msg []byte) {
 	h.mu.RLock()
 	snapshot := make(map[string]*clientConn, len(h.conns))

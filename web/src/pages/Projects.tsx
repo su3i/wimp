@@ -8,8 +8,6 @@ import { projectService } from '@/services/project.service'
 import { cn } from '@/utils/cn'
 import type { ProjectStatus } from '@/types'
 
-// ── Status dot + label ───────────────────────────────────────────────────────
-
 const statusConfig: Record<ProjectStatus, { dot: string; label: string; text: string }> = {
   ACTIVE:   { dot: 'bg-success', label: 'Active',   text: 'text-success' },
   PAUSED:   { dot: 'bg-warning', label: 'Paused',   text: 'text-warning' },
@@ -25,8 +23,6 @@ function StatusCell({ status }: { status: ProjectStatus }) {
     </div>
   )
 }
-
-// ── Table skeleton ───────────────────────────────────────────────────────────
 
 function TableSkeleton() {
   return (
@@ -57,8 +53,6 @@ function TableSkeleton() {
   )
 }
 
-// ── Empty state ──────────────────────────────────────────────────────────────
-
 function EmptyState({ onNew }: { onNew: () => void }) {
   return (
     <div className="rounded-lg border border-rim bg-surface">
@@ -78,8 +72,6 @@ function EmptyState({ onNew }: { onNew: () => void }) {
     </div>
   )
 }
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {

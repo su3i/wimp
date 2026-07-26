@@ -13,8 +13,6 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import type { Project } from '@/types'
 
-// ── Delete confirmation modal ─────────────────────────────────────────────────
-
 function DeleteProjectModal({
   project,
   onClose,
@@ -80,8 +78,6 @@ function DeleteProjectModal({
   )
 }
 
-// ── Project switcher ──────────────────────────────────────────────────────────
-
 export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
   const [open, setOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -102,7 +98,6 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
     staleTime: 60_000,
   })
 
-  // Auto-select first project on first load if nothing is persisted
   useEffect(() => {
     if (!activeProject && projects?.length) {
       setActiveProject(projects[0])
@@ -113,7 +108,6 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
     if (!buttonRef.current) return
     const rect = buttonRef.current.getBoundingClientRect()
     if (expanded) {
-      // Drop down below the trigger, flush with the sidebar's left edge
       setPos({ top: rect.bottom + 4, left: rect.left - 8 })
     } else {
       setPos({ top: rect.top, left: rect.right + 8 })
@@ -121,7 +115,6 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
     setOpen(v => !v)
   }
 
-  // Close on click outside
   useEffect(() => {
     if (!open) return
     function close() { setOpen(false) }

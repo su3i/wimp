@@ -21,8 +21,6 @@ import {
   type PromInstantResult,
 } from "@/services/prometheus.service";
 
-// ── Theme colors (keep in sync with theme.ts) ─────────────────────────────────
-
 const C = {
   blue: "#3b82f6",
   green: "#22c55e",
@@ -33,8 +31,6 @@ const C = {
 };
 
 const MULTI_PALETTE = [C.blue, C.green, C.amber, C.red, C.purple, C.cyan];
-
-// ── Prometheus query builders ─────────────────────────────────────────────────
 
 function mid(machineId: number) {
   return `machine_id="${machineId}"`;
@@ -60,8 +56,6 @@ const Q = {
   uptime: (id: number) => `time() - windows_system_boot_time_timestamp{${mid(id)}}`,
 };
 
-// ── Formatters ────────────────────────────────────────────────────────────────
-
 function fmtBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes.toFixed(0)} B`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -81,8 +75,6 @@ function fmtUptime(seconds: number): string {
 function fmtTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-
-// ── Data transformers ─────────────────────────────────────────────────────────
 
 type ChartRow = Record<string, string | number>;
 
@@ -115,8 +107,6 @@ function instantValue(results: PromInstantResult[]): number | null {
   const v = results[0]?.value?.[1];
   return v != null ? parseFloat(v) : null;
 }
-
-// ── Shared chart primitives ───────────────────────────────────────────────────
 
 const TICK = { fill: "#8c909f", fontSize: 10 };
 
@@ -180,8 +170,6 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-// ── Gradient defs ─────────────────────────────────────────────────────────────
-
 function Gradients() {
   return (
     <defs>
@@ -207,8 +195,6 @@ const REFETCH_MS = 30_000;
 const RANGE_SECS = 30 * 60;
 const STEP = 60;
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export function MetricsTab({ machineId }: { machineId: number }) {
   if (!prometheusService.isConfigured()) {
     return (
@@ -230,7 +216,6 @@ export function MetricsTab({ machineId }: { machineId: number }) {
 
   const qOpts = { refetchInterval: REFETCH_MS, staleTime: 0 };
 
-  // Instant (stat cards)
   const { data: iUptime } = useQuery({
     queryKey: ["pm-uptime", machineId],
     queryFn: () => prometheusService.instant(Q.uptime(machineId)),
@@ -252,7 +237,7 @@ export function MetricsTab({ machineId }: { machineId: number }) {
     ...qOpts,
   });
 
-  // Range (charts) - queryFn computes time window fresh on each refetch
+  // queryFn computes the time window fresh on each refetch, not once up front.
   const range = (key: string, qFn: () => Promise<PromRangeResult[]>) =>
     useQuery({ queryKey: ["pm-range", key, machineId], queryFn: qFn, ...qOpts });
 
@@ -290,13 +275,11 @@ export function MetricsTab({ machineId }: { machineId: number }) {
     ...qOpts,
   });
 
-  // Derived stat values
   const cpuPct = instantValue(iCpu ?? []);
   const memPct = instantValue(iMemPct ?? []);
   const memAvailB = instantValue(iMemAvail ?? []);
   const uptimeSecs = instantValue(iUptime ?? []);
 
-  // Chart data
   const cpuData = singleSeries(rCpu ?? []);
   const memData = singleSeries(rMem ?? []);
   const diskIoData = mergedSeries(rDiskR ?? [], "Read", rDiskW ?? [], "Write");

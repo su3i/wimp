@@ -61,11 +61,11 @@ func AgentWebSocket(c *gin.Context) {
 	defer conn.Close()
 	conn.SetReadDeadline(time.Now().Add(wsReadTimeout)) //nolint:errcheck
 
-	// Mark online and extend token validity so reconnects always work.
+	// Mark online. The token was already issued with a never-expire TTL in NewMachine,
+	// so there's nothing to extend here.
 	now := time.Now()
 	m.Status = machineDomain.Online
 	m.LastSeenAt = &now
-	m.TokenExpiresAt = now.Add(100 * 365 * 24 * time.Hour)
 	if err := repo.Update(m); err != nil {
 		log.Printf("failed to mark machine online: %v", err)
 		return
@@ -135,7 +135,12 @@ func AgentWebSocket(c *gin.Context) {
 			repo.Update(m)
 
 			ack, _ := json.Marshal(protocol.Message{Type: protocol.TypeRegisterAck})
-			conn.WriteMessage(websocket.TextMessage, ack)
+			// Route through the hub's mutex-guarded write instead of writing to conn
+			// directly - this read loop already races against hub.Get().Send() calls
+			// made from HTTP command handlers on other goroutines.
+			if err := hub.Get().Send(m.ID, ack); err != nil {
+				log.Printf("machine (%d) register ack send failed: %v", m.ID, err)
+			}
 
 			go func(machineID uint) {
 				if err := applicationService.PushFluentConfig(machineID, config.Database()); err != nil {

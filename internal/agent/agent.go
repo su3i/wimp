@@ -53,7 +53,6 @@ func (a *Agent) run(ctx context.Context) {
 	a.logger().Info("wimp agent stopped")
 }
 
-// logger returns a safe logger regardless of whether the service logger initialised.
 func (a *Agent) logger() service.Logger {
 	if a.log != nil {
 		return a.log
@@ -64,9 +63,18 @@ func (a *Agent) logger() service.Logger {
 // stdLogger is a fallback that writes to stdout when the service logger is unavailable.
 type stdLogger struct{}
 
-func (s *stdLogger) Error(v ...interface{}) error                   { log.Println(v...); return nil }
-func (s *stdLogger) Warning(v ...interface{}) error                 { log.Println(v...); return nil }
-func (s *stdLogger) Info(v ...interface{}) error                    { log.Println(v...); return nil }
-func (s *stdLogger) Errorf(format string, a ...interface{}) error   { log.Printf(format, a...); return nil }
-func (s *stdLogger) Warningf(format string, a ...interface{}) error { log.Printf(format, a...); return nil }
-func (s *stdLogger) Infof(format string, a ...interface{}) error    { log.Printf(format, a...); return nil }
+func (s *stdLogger) Error(v ...interface{}) error   { log.Println(v...); return nil }
+func (s *stdLogger) Warning(v ...interface{}) error { log.Println(v...); return nil }
+func (s *stdLogger) Info(v ...interface{}) error    { log.Println(v...); return nil }
+func (s *stdLogger) Errorf(format string, a ...interface{}) error {
+	log.Printf(format, a...)
+	return nil
+}
+func (s *stdLogger) Warningf(format string, a ...interface{}) error {
+	log.Printf(format, a...)
+	return nil
+}
+func (s *stdLogger) Infof(format string, a ...interface{}) error {
+	log.Printf(format, a...)
+	return nil
+}

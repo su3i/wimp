@@ -15,8 +15,6 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/prometheus"
 )
 
-// ── Application health checker ────────────────────────────────────────────────
-
 func Create(projectID uint, name, rawURL string, intervalSeconds int, cfg *config.DatabaseConfig) (*monitor.Monitor, error) {
 	m := &monitor.Monitor{
 		ProjectID:       projectID,
@@ -54,8 +52,6 @@ func Update(id uint, name, rawURL string, intervalSeconds int, cfg *config.Datab
 func AllForSD(cfg *config.DatabaseConfig) ([]monitor.Monitor, error) {
 	return database.NewMonitorRepository(cfg).FindAll()
 }
-
-// ── Alert checker ─────────────────────────────────────────────────────────────
 
 func StartChecker(dbCfg *config.DatabaseConfig, prometheusUrl string) {
 	if prometheusUrl == "" {

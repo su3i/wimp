@@ -20,8 +20,6 @@ function fmtPct(v: number) {
   return `${v.toFixed(1)}%`;
 }
 
-// ── Radial gauge ──────────────────────────────────────────────────────────────
-
 export function RadialGauge({ label, value }: { label: string; value: number | null }) {
   const pct = Math.min(Math.max(value ?? 0, 0), 100);
   const color = pct >= 80 ? "#f85149" : pct >= 60 ? "#d29922" : "#3fb950";
@@ -59,8 +57,6 @@ export function RadialGauge({ label, value }: { label: string; value: number | n
     </div>
   );
 }
-
-// ── Host CPU line chart ───────────────────────────────────────────────────────
 
 const TICK_STYLE = { fill: "#8b949e", fontSize: 10 };
 const LINE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];

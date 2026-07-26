@@ -116,7 +116,6 @@ func ClearLogs(c *gin.Context) {
 
 	// ── 2. Delete files from disk via agent ───────────────────────────────────
 
-	// Collect unique log directories for this machine (optionally scoped to one pool).
 	seen := map[string]bool{}
 	var logPaths []string
 	for _, pool := range detail.AppPools {

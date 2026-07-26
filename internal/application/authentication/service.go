@@ -51,7 +51,6 @@ func IssueTokens(acc *accountDomain.Account, commonCfg *config.CommonConfig, dat
 }
 
 func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *config.DatabaseConfig) (*authentication.LoginDTO, error) {
-	// 1. Get refresh token from cache
 	oldRefreshTokenKey := fmt.Sprintf("refresh-token-%s", authentication.HashRefreshToken(rawRefresh))
 	username, err := cache.GetCache().Get(oldRefreshTokenKey)
 
@@ -59,7 +58,6 @@ func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *con
 		return nil, errors.New("Invalid refresh token")
 	}
 
-	// 2. Get account
 	_account, err := account.RetrieveAccount(username, databaseCfg)
 
 	if err != nil {
@@ -72,16 +70,17 @@ func Refresh(rawRefresh string, commonCfg *config.CommonConfig, databaseCfg *con
 		internalRoles = append(internalRoles, v)
 	}
 
-	// 3. Issue new access token
-	accessToken, _ := authentication.GenerateJWT(authentication.JWTParams{
+	accessToken, err := authentication.GenerateJWT(authentication.JWTParams{
 		Subject:   _account.ID,
 		Username:  _account.Username,
 		Roles:     internalRoles,
 		TTL:       time.Hour,
 		SecretKey: []byte(commonCfg.JWTSecret),
 	})
+	if err != nil {
+		return nil, fmt.Errorf("generate access token: %w", err)
+	}
 
-	// 4. Rotate refresh token
 	newRaw, newHash, err := authentication.GenerateRefreshToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)

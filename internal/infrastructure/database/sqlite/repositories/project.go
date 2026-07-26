@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/su3i/wimp/internal/domain/apppool"
 	"github.com/su3i/wimp/internal/domain/application"
+	"github.com/su3i/wimp/internal/domain/apppool"
 	"github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/project"
 )
@@ -75,7 +75,6 @@ func (r *projectRepository) Update(payload *project.Project) error {
 
 func (r *projectRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Find all applications in this project
 		var apps []application.Application
 		if err := tx.Unscoped().Where("project_id = ?", id).Find(&apps).Error; err != nil {
 			return err
@@ -89,7 +88,6 @@ func (r *projectRepository) Delete(id uint) error {
 			return err
 		}
 
-		// Find all machines in this project
 		var machines []machine.Machine
 		if err := tx.Unscoped().Where("project_id = ?", id).Find(&machines).Error; err != nil {
 			return err

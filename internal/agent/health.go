@@ -23,7 +23,6 @@ func serviceState(name string) string {
 	return ""
 }
 
-// serviceRunning reports whether the named Windows service is currently RUNNING.
 func serviceRunning(name string) bool {
 	return serviceState(name) == "RUNNING"
 }

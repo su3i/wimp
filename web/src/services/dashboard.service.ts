@@ -1,7 +1,5 @@
 import { api } from "@/lib/axios";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export interface DashboardStats {
   machines_count: number;
   applications_count: number;
@@ -75,8 +73,6 @@ export interface AlertHistoryPoint {
   hour: string; // ISO timestamp - start of the hour
   count: number;
 }
-
-// ── Service ───────────────────────────────────────────────────────────────────
 
 export const dashboardService = {
   async getStats(projectKey: string): Promise<DashboardStats | null> {

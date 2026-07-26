@@ -45,7 +45,6 @@ func (m *MemoryCache) Get(key string) (string, error) {
 	}
 
 	if time.Now().After(it.expiration) {
-		// expired
 		delete(m.data, key)
 		return "", errors.New("key not found")
 	}

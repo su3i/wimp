@@ -15,8 +15,6 @@ import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import type { Application } from "@/types";
 
-// ── Health helpers ────────────────────────────────────────────────────────────
-
 function poolHealth(app: Application) {
   return { healthy: app.pool_healthy ?? 0, total: app.pool_total ?? 0 };
 }
@@ -50,8 +48,6 @@ function HealthStatus({ healthy, total }: { healthy: number; total: number }) {
   );
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-
 function TableSkeleton() {
   return (
     <div className='rounded-lg border border-rim overflow-hidden'>
@@ -78,8 +74,6 @@ function TableSkeleton() {
     </div>
   );
 }
-
-// ── Empty / error states ──────────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -108,8 +102,6 @@ function NoProjectSelected() {
     </div>
   );
 }
-
-// ── Edit Application Modal ────────────────────────────────────────────────────
 
 function EditApplicationModal({
   open,
@@ -167,7 +159,7 @@ function EditApplicationModal({
 
         <div className="space-y-1.5">
           <label className="text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint">
-            Health Check URL <span className="normal-case font-normal">(optional)</span>
+            Health Check URL
           </label>
           <input
             type="text"
@@ -205,8 +197,6 @@ function EditApplicationModal({
     </Modal>
   );
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
 const PAGE_SIZE = 20;
@@ -417,7 +407,7 @@ export function Applications() {
 
           <div className='space-y-1.5'>
             <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Health Check URL <span className='normal-case font-normal'>(optional)</span>
+              Health Check URL
             </label>
             <Input
               placeholder='https://example.com/health'

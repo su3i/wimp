@@ -17,8 +17,6 @@ import { usePageTitle } from '@/utils/usePageTitle'
 import { cn } from '@/utils/cn'
 import type { Monitor } from '@/types'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 const INTERVALS = [
   { label: '30 seconds', value: 30 },
   { label: '1 minute', value: 60 },
@@ -46,8 +44,6 @@ function isHttps(url: string) {
   return url.toLowerCase().startsWith('https://')
 }
 
-// ── Status dot ────────────────────────────────────────────────────────────────
-
 type ProbeStatus = 'up' | 'down' | 'unknown'
 
 function StatusDot({ status }: { status: ProbeStatus }) {
@@ -59,8 +55,6 @@ function StatusDot({ status }: { status: ProbeStatus }) {
     )} />
   )
 }
-
-// ── SSL badge ─────────────────────────────────────────────────────────────────
 
 function SslBadge({ days }: { days: number | null }) {
   if (days == null) return <span className='text-xs text-ink-faint'>--</span>
@@ -84,8 +78,6 @@ function SslBadge({ days }: { days: number | null }) {
   )
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-
 function TableSkeleton() {
   return (
     <div className='rounded-lg border border-rim overflow-hidden'>
@@ -107,8 +99,6 @@ function TableSkeleton() {
     </div>
   )
 }
-
-// ── Empty / no-project states ─────────────────────────────────────────────────
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
@@ -141,8 +131,6 @@ function NoProjectSelected() {
     </div>
   )
 }
-
-// ── Add/Edit modal ────────────────────────────────────────────────────────────
 
 interface MonitorFormProps {
   open: boolean
@@ -211,11 +199,7 @@ function MonitorModal({ open, initial, onClose, onSave, saving }: MonitorFormPro
   )
 }
 
-// ── Column header ─────────────────────────────────────────────────────────────
-
 const TH = 'px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 export function Monitors() {
   usePageTitle('Uptime Monitor')

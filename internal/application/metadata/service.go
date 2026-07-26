@@ -8,16 +8,12 @@ import (
 	"github.com/su3i/wimp/internal/infrastructure/database"
 )
 
-// Check if bootstrap token exists in database
-// If it does not, create it
-// If it does, validate it
-// If validation fails, throw error
 func LoadBootstrapToken(bootstrapToken string, cfg *config.DatabaseConfig) error {
 	log.Print("Loading bootstrap token..")
 
 	_metadataRepository := database.NewMetadataRepository(cfg)
 
-	_metadata, err := _metadataRepository.FindOne();
+	_metadata, err := _metadataRepository.FindOne()
 
 	if err != nil {
 		return err
@@ -42,7 +38,7 @@ func LoadBootstrapToken(bootstrapToken string, cfg *config.DatabaseConfig) error
 func SetLanguage(language string, cfg *config.DatabaseConfig) error {
 	_metadataRepository := database.NewMetadataRepository(cfg)
 
-	_metadata, err := _metadataRepository.FindOne();
+	_metadata, err := _metadataRepository.FindOne()
 
 	if err != nil {
 		return err
@@ -58,7 +54,7 @@ func SetLanguage(language string, cfg *config.DatabaseConfig) error {
 func RetrieveLanguage(cfg *config.DatabaseConfig) (*string, error) {
 	_metadataRepository := database.NewMetadataRepository(cfg)
 
-	_metadata, err := _metadataRepository.FindOne();
+	_metadata, err := _metadataRepository.FindOne()
 
 	if err != nil || _metadata == nil {
 		return nil, err

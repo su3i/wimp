@@ -2,7 +2,6 @@ package cache
 
 import "sync"
 
-// sidecarHealth is the last-known health of the per-machine sidecar services.
 type sidecarHealth struct {
 	windowsExporterHealthy bool
 	fluentBitHealthy       bool
@@ -13,8 +12,7 @@ var (
 	sidecarState = map[uint]sidecarHealth{}
 )
 
-// GetSidecarHealth returns the last-known sidecar health for a machine and whether
-// one has been recorded yet (false on the machine's first-ever report).
+// known is false on the machine's first-ever report.
 func GetSidecarHealth(machineID uint) (windowsExporterHealthy, fluentBitHealthy bool, known bool) {
 	sidecarMu.Lock()
 	defer sidecarMu.Unlock()
@@ -22,7 +20,6 @@ func GetSidecarHealth(machineID uint) (windowsExporterHealthy, fluentBitHealthy 
 	return h.windowsExporterHealthy, h.fluentBitHealthy, ok
 }
 
-// SetSidecarHealth records the latest sidecar health for a machine.
 func SetSidecarHealth(machineID uint, windowsExporterHealthy, fluentBitHealthy bool) {
 	sidecarMu.Lock()
 	defer sidecarMu.Unlock()

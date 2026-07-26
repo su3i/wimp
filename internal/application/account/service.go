@@ -13,21 +13,18 @@ import (
 func NewAccount(name string, username string, password string, role account.AccountRole, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	// Check if username already exists - Fail fast
 	_account, err := _accountRepository.FindOneByUsername(username)
 
 	if err != nil || _account != nil {
 		return nil, errors.New("Username already registered.")
 	}
 
-	// Check password against password requirements
 	err = account.CheckPassword(password)
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Encrypt password
 	passwordEnc, err := account.EncryptPassword(password)
 
 	if err != nil {
@@ -46,7 +43,6 @@ func NewAccount(name string, username string, password string, role account.Acco
 		"default": internalRoleKey,
 	}
 
-	// Create account
 	_account = &account.Account{
 		Name:          name,
 		Username:      username,
@@ -115,7 +111,6 @@ func EnableTOTP(username string, cfg *config.DatabaseConfig) error {
 func UpdateAccount(oldUsername string, name *string, username *string, cfg *config.DatabaseConfig) (*account.Account, error) {
 	_accountRepository := database.NewAccountRepository(cfg)
 
-	// Check if username exists - Fail fast
 	_account, err := _accountRepository.FindOneByUsername(oldUsername)
 
 	if err != nil || _account == nil {
@@ -130,7 +125,6 @@ func UpdateAccount(oldUsername string, name *string, username *string, cfg *conf
 		_account.Username = *username
 	}
 
-	// Save updated account
 	if err := _accountRepository.Update(_account); err != nil {
 		return nil, err
 	}

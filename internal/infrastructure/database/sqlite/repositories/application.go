@@ -105,6 +105,7 @@ func (r *applicationRepository) FindPoolCountsByApplicationIDs(appIDs []uint) (m
 	return out, nil
 }
 
+
 func (r *applicationRepository) AddAppPool(rel *application.ApplicationAppPool) error {
 	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(rel).Error
 }

@@ -27,7 +27,6 @@ func RegisterCommand(id string) chan CommandResult {
 	return ch
 }
 
-// ResolveCommand delivers a result to the waiting caller and removes the entry.
 func ResolveCommand(id string, result CommandResult) {
 	cmdHub.mu.Lock()
 	ch, ok := cmdHub.pending[id]
