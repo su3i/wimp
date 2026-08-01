@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus, Pencil } from "lucide-react";
+import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus, Pencil, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -11,40 +11,38 @@ import { RowMenu } from "@/components/ui/RowMenu";
 import { Pagination } from "@/components/ui/Pagination";
 import { useProjectStore } from "@/store/project";
 import { applicationService } from "@/services/application.service";
+import { prometheusService } from "@/services/prometheus.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import type { Application } from "@/types";
 
-function poolHealth(app: Application) {
-  return { healthy: app.pool_healthy ?? 0, total: app.pool_total ?? 0 };
+// Status/uptime only exist for apps with a health check URL configured - app pool
+// state (Started/Stopped) says nothing about whether the app itself is reachable, so
+// apps without one show N/A rather than a fabricated status.
+function healthCheckStatus(
+  app: Application,
+  hcStatusMap: Record<number, "up" | "down">,
+  hcUptimeMap: Record<number, number>,
+) {
+  if (!app.HealthCheckURL) return null;
+  const raw = hcStatusMap[app.ID];
+  const label = raw === "up" ? "Up" : raw === "down" ? "Down" : "No Data";
+  const dot = label === "Up" ? "bg-success" : label === "Down" ? "bg-danger animate-pulse" : "bg-ink-faint/40";
+  const text = label === "Up" ? "text-success" : label === "Down" ? "text-danger" : "text-ink-faint";
+  const ratio = hcUptimeMap[app.ID];
+  const uptimePct = ratio != null ? `${(ratio * 100).toFixed(2)}%` : null;
+  return { label, dot, text, uptimePct };
 }
 
-function HealthStatus({ healthy, total }: { healthy: number; total: number }) {
-  const dot =
-    total === 0
-      ? "bg-ink-faint"
-      : healthy === total
-      ? "bg-success"
-      : healthy === 0
-      ? "bg-danger"
-      : "bg-warning";
-
-  const text =
-    total === 0
-      ? "text-ink-faint"
-      : healthy === total
-      ? "text-success"
-      : healthy === 0
-      ? "text-danger"
-      : "text-warning";
-
+function StatusCell({ status }: { status: ReturnType<typeof healthCheckStatus> }) {
+  if (!status) return <span className='text-xs text-ink-faint'>N/A</span>;
   return (
-    <div className='flex items-center gap-2'>
-      <span className={cn("size-1.5 rounded-full shrink-0", dot)} />
-      <span className={cn("text-xs", text)}>
-        {healthy}/{total} Healthy
-      </span>
-    </div>
+    <span className={cn("flex items-center gap-1.5 text-xs font-medium", status.text)}>
+      {status.label === "Up"
+        ? <CheckCircle2 className='size-3 shrink-0' />
+        : <span className={cn("size-2 rounded-full shrink-0", status.dot)} />}
+      {status.label}
+    </span>
   );
 }
 
@@ -229,6 +227,38 @@ export function Applications() {
     },
   });
 
+  // Batched Prometheus queries for every app on this page that has a health check URL -
+  // same blackbox_http probe_success metric ApplicationDetail.tsx's HealthMonitor reads
+  // for a single app, batched here via a regex label match (same trick used elsewhere
+  // for machine_id/application_id label sets).
+  const hcAppIds = (appsPage?.applications ?? []).filter((a) => !!a.HealthCheckURL).map((a) => a.ID);
+  const hcIdKey = hcAppIds.slice().sort((a, b) => a - b).join(",");
+  const hcEnabled = prometheusService.isConfigured() && hcAppIds.length > 0;
+
+  const { data: hcStatusResult } = useQuery({
+    queryKey: ["applications-hc-status", hcIdKey],
+    queryFn: () => prometheusService.instant(`probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}`),
+    enabled: hcEnabled,
+    refetchInterval: 30_000,
+  });
+  const { data: hcUptimeResult } = useQuery({
+    queryKey: ["applications-hc-uptime", hcIdKey],
+    queryFn: () => prometheusService.instant(`avg_over_time(probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}[30d])`),
+    enabled: hcEnabled,
+    refetchInterval: 60_000,
+  });
+
+  const hcStatusMap: Record<number, "up" | "down"> = {};
+  for (const r of hcStatusResult ?? []) {
+    const id = Number(r.metric.application_id);
+    if (!Number.isNaN(id)) hcStatusMap[id] = r.value[1] === "1" ? "up" : "down";
+  }
+  const hcUptimeMap: Record<number, number> = {};
+  for (const r of hcUptimeResult ?? []) {
+    const id = Number(r.metric.application_id);
+    if (!Number.isNaN(id)) hcUptimeMap[id] = Number(r.value[1]);
+  }
+
   function resetCreateForm() {
     setAppName("");
     setAppHcUrl("");
@@ -307,46 +337,68 @@ export function Applications() {
       ) : !apps?.length ? (
         <EmptyState />
       ) : (
-        <div className='rounded-lg border border-rim overflow-hidden'>
-          {/* Column headers */}
-          <div className='grid grid-cols-[2fr_1fr_1fr_auto] border-b border-rim bg-surface-alt'>
-            <div className={TH}>Application Name</div>
-            <div className={TH}>Instances</div>
-            <div className={TH}>Health Status</div>
-            <div className='px-4 py-2.5' />
-          </div>
+        // Header and rows are all direct children of this single grid (row wrappers use
+        // `contents` so they don't start their own nested grid) - that keeps every
+        // column's width consistent across the header and every row. Separate grids that
+        // merely share the same grid-cols classes each size their own tracks
+        // independently, so a long value (a URL, a long app name) in one row can widen
+        // that row's columns without widening the header's - which is what was skewed.
+        <div className='grid grid-cols-[2fr_0.7fr_1.5fr_0.7fr_0.8fr_auto] rounded-lg border border-rim overflow-hidden'>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Application Name</div>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Instances</div>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>URL</div>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Status</div>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Uptime</div>
+          <div className='border-b border-rim bg-surface-alt px-4 py-2.5' />
 
           {/* Rows */}
-          {paginated.map((app) => {
-            const { healthy, total } = poolHealth(app);
+          {paginated.map((app, idx) => {
+            const total = app.pool_total ?? 0;
+            const status = healthCheckStatus(app, hcStatusMap, hcUptimeMap);
+            const isLast = idx === paginated.length - 1;
+            const cellBorder = !isLast && "border-b border-rim";
             return (
               <div
                 key={app.ID}
-                className='grid grid-cols-[2fr_1fr_1fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer'
+                className='contents group cursor-pointer'
                 onClick={() => navigate(`/applications/${app.ID}`)}
               >
                 {/* Name */}
-                <div className='flex items-center gap-3 px-5 py-3.5'>
+                <div className={cn("flex min-w-0 items-center gap-3 px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
                   <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
                     <AppWindow className='size-3 text-ink-faint' />
                   </div>
-                  <span className='font-mono text-xs text-ink'>{app.Name}</span>
+                  <span className='font-mono text-xs text-ink truncate'>{app.Name}</span>
                 </div>
 
                 {/* Instances */}
-                <div className='px-5 py-3.5'>
+                <div className={cn("px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
                   <span className='text-xs text-ink-dim'>
                     {total} {total === 1 ? "instance" : "instances"}
                   </span>
                 </div>
 
-                {/* Health */}
-                <div className='px-5 py-3.5'>
-                  <HealthStatus healthy={healthy} total={total} />
+                {/* URL */}
+                <div className={cn("min-w-0 px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={app.HealthCheckURL ?? undefined}>
+                  {app.HealthCheckURL ? (
+                    <span className='block truncate font-mono text-xs text-ink-dim'>{app.HealthCheckURL}</span>
+                  ) : (
+                    <span className='text-xs text-ink-faint'>N/A</span>
+                  )}
+                </div>
+
+                {/* Status */}
+                <div className={cn("px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                  <StatusCell status={status} />
+                </div>
+
+                {/* Uptime */}
+                <div className={cn("px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                  <span className='text-xs text-ink-dim'>{status?.uptimePct ?? "N/A"}</span>
                 </div>
 
                 {/* Menu */}
-                <div className='flex items-center justify-center px-2 py-3'>
+                <div className={cn("flex items-center justify-center px-2 py-3 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
                   <RowMenu
                     items={[
                       {

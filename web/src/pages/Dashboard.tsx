@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, Monitor, Layers, X, ChevronRight, Info, CheckCircle2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Monitor, Layers, X, ChevronRight, Info } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
@@ -153,31 +153,13 @@ function SevEventsCard({ count }: { count: number }) {
   );
 }
 
-// Up/Down is only ever reported for apps with a health check URL configured - that's
-// the one signal that actually means "is this app reachable". App pool state says
-// nothing about that (a pool can be Started with a dead site behind it), so apps
-// without a health check show their live pool count instead of a fabricated status.
-type AppRowStatus =
-  | { kind: "healthcheck"; label: "Up" | "Down" | "No Data"; dot: string; text: string; uptimePct: string | null }
-  | { kind: "pools"; healthy: number; total: number };
-
-function appRowStatus(
-  app: Application,
-  hcStatusMap: Record<number, "up" | "down">,
-  hcUptimeMap: Record<number, number>,
-): AppRowStatus {
-  if (app.HealthCheckURL) {
-    const raw = hcStatusMap[app.ID];
-    const label = raw === "up" ? "Up" : raw === "down" ? "Down" : "No Data";
-    const dot = label === "Up" ? "bg-success" : label === "Down" ? "bg-danger animate-pulse" : "bg-ink-faint/40";
-    const text = label === "Up" ? "text-success" : label === "Down" ? "text-danger" : "text-ink-faint";
-    const ratio = hcUptimeMap[app.ID];
-    // Exact value, not rounded in either direction - .toFixed(2) is display precision,
-    // not rounding-to-mislead (matches ApplicationDetail.tsx's HealthMonitor exactly).
-    const uptimePct = ratio != null ? `${(ratio * 100).toFixed(2)}%` : null;
-    return { kind: "healthcheck", label, dot, text, uptimePct };
-  }
-  return { kind: "pools", healthy: app.pool_healthy ?? 0, total: app.pool_total ?? 0 };
+// A "healthy" app is Up on its health check when one is configured, otherwise fully
+// healthy on live app pool state - the same per-app source of truth used on the
+// Applications list page, just rolled up into one count here.
+function isAppHealthy(app: Application, hcStatusMap: Record<number, "up" | "down">): boolean {
+  if (app.HealthCheckURL) return hcStatusMap[app.ID] === "up";
+  const total = app.pool_total ?? 0;
+  return total > 0 && app.pool_healthy === total;
 }
 
 function ApplicationStatusCard({
@@ -189,65 +171,37 @@ function ApplicationStatusCard({
   hcStatusMap: Record<number, "up" | "down">;
   hcUptimeMap: Record<number, number>;
 }) {
-  const navigate = useNavigate();
+  const total = apps.length;
+  const healthy = apps.filter((a) => isAppHealthy(a, hcStatusMap)).length;
+
+  const uptimeRatios = Object.values(hcUptimeMap);
+  const avgUptime =
+    uptimeRatios.length > 0
+      ? (uptimeRatios.reduce((sum, r) => sum + r, 0) / uptimeRatios.length) * 100
+      : null;
+
+  const color =
+    total === 0 ? "text-ink" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
 
   return (
-    <div className='min-w-0 max-h-[140px] rounded-lg border border-rim bg-surface px-[18px] py-[14px] flex flex-col gap-2 overflow-hidden'>
-      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none shrink-0'>
+    <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Applications
         <InfoTooltip text='Up/Down reflects the health check URL when one is configured; otherwise the live app pool count is shown.' />
       </span>
-
-      {/* flex-1 always: this fills exactly whatever vertical space is left in the card
-          (which itself is height-locked by its sibling cards via the row-1 grid, not by
-          its own content) - so the list can never push the card taller, no matter how
-          many applications there are. 0-1 apps center in that space; more than that
-          scrolls internally instead of growing. */}
-      <div
-        className={cn(
-          'min-w-0 min-h-0 flex-1 flex flex-col overflow-x-hidden',
-          apps.length <= 1 ? 'justify-center' : 'overflow-y-auto',
-        )}
-      >
-        {apps.length === 0 ? (
-          <p className='text-center text-xs text-ink-faint'>No applications found.</p>
+      <span className={cn('flex items-baseline gap-1.5', color)}>
+        {total === 0 ? (
+          <span className='text-[27px] font-semibold font-mono leading-none'>N/A</span>
         ) : (
-          apps.map((app) => {
-            const status = appRowStatus(app, hcStatusMap, hcUptimeMap);
-            return (
-              <div key={app.ID} className='grid grid-cols-[1fr_auto_auto] items-center gap-3 py-1.5'>
-                <button
-                  type='button'
-                  onClick={() => navigate(`/applications/${app.ID}`)}
-                  className='min-w-0 truncate rounded text-left text-xs text-ink underline-offset-2 underline cursor-pointer'
-                >
-                  {app.Name}
-                </button>
-                {status.kind === "healthcheck" ? (
-                  <span className={cn('flex items-center gap-1.5 text-[0.6875rem] font-medium', status.text)}>
-                    {status.label === "Up"
-                      ? <CheckCircle2 className='size-3 shrink-0' />
-                      : <span className={cn('size-2 rounded-full shrink-0', status.dot)} />}
-                    {status.label}
-                  </span>
-                ) : (
-                  <span className='font-mono text-[0.6875rem] text-ink-dim'>
-                    {status.healthy}/{status.total}
-                  </span>
-                )}
-                {status.kind === "healthcheck" && status.uptimePct ? (
-                  <span className='flex items-baseline gap-1 whitespace-nowrap text-ink'>
-                    <span className='text-[0.6875rem]'>{status.uptimePct}</span>
-                    <span className='text-[0.5625rem]'>uptime</span>
-                  </span>
-                ) : (
-                  <span />
-                )}
-              </div>
-            );
-          })
+          <>
+            <span className='text-[27px] font-semibold font-mono leading-none'>{healthy}/{total}</span>
+            <span className='text-xs font-medium'>Healthy</span>
+          </>
         )}
-      </div>
+      </span>
+      <span className='text-[0.625rem] text-ink-faint'>
+        {avgUptime != null ? `${avgUptime.toFixed(2)}% avg uptime` : "no health checks configured"}
+      </span>
     </div>
   );
 }
@@ -612,7 +566,7 @@ export function Dashboard() {
 
       <div className='space-y-[14px]'>
         {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
-        <div className='grid grid-cols-[0.85fr_1.15fr_1fr_1.5fr] gap-[14px]'>
+        <div className='grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-[14px]'>
           <SevEventsCard count={sevLast24h} />
           <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} />
           <MetricCard

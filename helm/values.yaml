@@ -17,7 +17,7 @@ webUrl: ""
 
 image:
   repository: darksueii/wimp
-  tag: "1.0.0"
+  tag: "1.0.2"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
@@ -129,7 +129,7 @@ config:
 web:
   image:
     repository: darksueii/wimp-web
-    tag: "1.0.0"
+    tag: "1.0.2"
     pullPolicy: IfNotPresent
 
   replicaCount: 1

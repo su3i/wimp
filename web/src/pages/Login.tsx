@@ -67,7 +67,7 @@ export function Login() {
       <div className='w-full max-w-[450px]'>
         {/* Brand */}
         <div className='mb-8 flex justify-center'>
-          <img src={iconSrc} alt='wimp' className='size-12 rounded-xl' />
+          <img src={iconSrc} alt='wimp' className='size-16 rounded-xl' />
         </div>
 
         {/* Card */}
