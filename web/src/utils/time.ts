@@ -14,3 +14,29 @@ export function timeAgo(dateStr: string | null | undefined, emptyLabel = "Never"
     return "N/A";
   }
 }
+
+// Formats a timestamp as an exact, unambiguous, absolute moment (e.g.
+// "Aug 9, 3:45:12 PM GMT+1") - what admins actually need to line up against other
+// systems' logs, unlike the vague timeAgo(). Always in the browser's local timezone
+// (never UTC), with the AM/PM and zone spelled out explicitly rather than left for the
+// reader to guess or assume. Year is included only when it isn't the current year, to
+// keep the common case short without silently dropping information that matters.
+export function absoluteTime(dateStr: string | null | undefined, emptyLabel = "N/A"): string {
+  if (!dateStr) return emptyLabel;
+  try {
+    const d = new Date(dateStr);
+    const opts: Intl.DateTimeFormatOptions = {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZoneName: "short",
+    };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+    return d.toLocaleString([], opts);
+  } catch {
+    return "N/A";
+  }
+}

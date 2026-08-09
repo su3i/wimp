@@ -480,9 +480,13 @@ function PoolList({
 
   const cols = "grid-cols-[1fr_1fr_1fr_1fr_auto]";
 
+  // No items-center on the grid - see Applications.tsx for why (each cell stretches to
+  // the full row height via grid's default align-items:stretch, then centers its own
+  // content with its own flex items-center; centering at the grid level instead shrinks
+  // each cell to its own content height first, which looks inconsistent).
   return (
     <div className={`grid ${cols} overflow-hidden`}>
-      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Name</div>
+      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>App Pool</div>
       <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Machine</div>
       <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Status</div>
       <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Log Path</div>
@@ -525,18 +529,18 @@ function PoolList({
               <span className='font-mono text-xs text-ink truncate'>{pool.Name}</span>
             </div>
 
-            <div className={cn("min-w-0 px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-              <span className='block truncate font-mono text-xs text-ink-dim'>
+            <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+              <span className='block min-w-0 truncate font-mono text-xs text-ink-dim'>
                 {pool.machine?.Hostname?.toLowerCase() ?? "N/A"}
               </span>
             </div>
 
-            <div className={cn("px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+            <div className={cn("flex items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
               <PoolStatus state={pool.State} offline={offline} />
             </div>
 
-            <div className={cn("min-w-0 px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
-              <span className='block truncate font-mono text-xs text-ink-dim'>
+            <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
+              <span className='block min-w-0 truncate font-mono text-xs text-ink-dim'>
                 {pool.log_path || "—"}
               </span>
             </div>

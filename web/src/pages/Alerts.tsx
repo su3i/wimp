@@ -7,8 +7,8 @@ import type { DashboardNotification } from "@/services/dashboard.service";
 import { Pagination } from "@/components/ui/Pagination";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
-import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
-import { timeAgo } from "@/utils/time";
+import { levelConfig, splitTitle } from "@/utils/notifications";
+import { timeAgo, absoluteTime } from "@/utils/time";
 
 function LevelBadge({ level }: { level: string }) {
   const cfg = levelConfig(level);
@@ -23,59 +23,65 @@ const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracki
 
 function TableHeader() {
   return (
-    <div className='grid grid-cols-[84px_1fr_124px_92px] border-b border-rim bg-surface-alt'>
+    <div className='grid grid-cols-[84px_140px_1fr_190px] border-b border-rim bg-surface-alt'>
       <div className={TH}>Level</div>
-      <div className={TH}>Message</div>
-      <div className={TH}>Category</div>
+      <div className={TH}>Host</div>
+      <div className={TH}>Event</div>
       <div className={cn(TH, "text-right")}>Time</div>
     </div>
   );
 }
 
+// Mirrors AlertRow's exact structure (same two-line Event column) so the loading state
+// is the same height as a loaded row - swapping one for the other shouldn't shift layout.
 function RowSkeleton() {
   return (
-    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 animate-pulse'>
-      <div className='px-4 py-3'>
+    <div className='grid grid-cols-[84px_140px_1fr_190px] border-b border-rim last:border-0 animate-pulse'>
+      <div className='flex items-center px-4 py-3'>
         <div className='h-4 w-12 rounded bg-surface-high' />
       </div>
-      <div className='px-4 py-3'>
+      <div className='flex items-center px-4 py-3'>
+        <div className='h-2.5 w-20 rounded bg-surface-high' />
+      </div>
+      <div className='flex flex-col justify-center gap-1.5 px-4 py-3'>
         <div className='h-2.5 w-2/3 rounded bg-surface-high' />
+        <div className='h-2 w-1/3 rounded bg-surface-high' />
       </div>
-      <div className='px-4 py-3'>
-        <div className='h-2.5 w-16 rounded bg-surface-high' />
-      </div>
-      <div className='px-4 py-3 flex justify-end'>
-        <div className='h-2.5 w-12 rounded bg-surface-high' />
+      <div className='flex flex-col items-end justify-center gap-1 px-4 py-3'>
+        <div className='h-2.5 w-14 rounded bg-surface-high' />
+        <div className='h-2 w-20 rounded bg-surface-high' />
       </div>
     </div>
   );
 }
 
 function AlertRow({ notif }: { notif: DashboardNotification }) {
-  const CatIcon = categoryIcon(notif.Category);
+  const { host, event } = splitTitle(notif.Title);
   return (
-    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100'>
-      <div className='px-4 py-3'>
+    // No items-center at the row's grid level - the Event cell can be one or two lines
+    // depending on whether Detail exists, so centering the *cells* there (each shrunk to
+    // its own content height first) would look inconsistent next to the single-line
+    // cells. Every cell stretches to the row's full height instead and centers its own
+    // content with its own flex items-center.
+    <div className='grid grid-cols-[84px_140px_1fr_190px] border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100'>
+      <div className='flex items-center px-4 py-3'>
         <LevelBadge level={notif.Level ?? "info"} />
       </div>
 
-      <div className='px-4 py-3 min-w-0 flex items-center gap-1.5 overflow-hidden'>
-        <span className='text-xs font-medium text-ink shrink-0 truncate'>{notif.Title ?? ""}</span>
+      <div className='flex min-w-0 items-center px-4 py-3'>
+        <span className='font-mono text-xs text-ink-dim truncate block'>{host.toLowerCase() || "—"}</span>
+      </div>
+
+      <div className='flex min-w-0 flex-col justify-center px-4 py-3'>
+        <p className='text-xs font-medium text-ink truncate'>{event}</p>
         {notif.Detail && (
-          <>
-            <span className='text-ink-faint/40 text-sm shrink-0'>/</span>
-            <span className='text-xs text-ink-dim truncate'>{notif.Detail.toLowerCase()}</span>
-          </>
+          <p className='text-[0.6875rem] text-ink-faint truncate'>{notif.Detail.toLowerCase()}</p>
         )}
       </div>
 
-      <div className='flex items-center gap-1.5 px-4 py-3'>
-        <CatIcon className='size-3 text-ink-faint shrink-0' />
-        <span className='text-xs text-ink-dim'>{categoryLabel(notif.Category)}</span>
-      </div>
-
-      <div className='px-4 py-3 text-right'>
-        <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt, "N/A")}</span>
+      <div className='flex flex-col items-end justify-center px-4 py-3'>
+        <span className='text-xs text-ink-faint tabular-nums whitespace-nowrap'>{timeAgo(notif.CreatedAt)}</span>
+        <span className='text-[0.625rem] text-ink-faint/60 tabular-nums whitespace-nowrap'>{absoluteTime(notif.CreatedAt)}</span>
       </div>
     </div>
   );

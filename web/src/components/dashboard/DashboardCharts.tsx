@@ -5,10 +5,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Cell,
   ResponsiveContainer,
-  PieChart,
-  Pie,
   Legend,
 } from "recharts";
 
@@ -16,50 +13,12 @@ import {
 // usage in pages/Dashboard.tsx) so the rest of the dashboard (header, stat cards) can
 // paint immediately instead of waiting on this library to download.
 
-function fmtPct(v: number) {
-  return `${v.toFixed(1)}%`;
-}
-
-export function RadialGauge({ label, value }: { label: string; value: number | null }) {
-  const pct = Math.min(Math.max(value ?? 0, 0), 100);
-  const color = pct >= 80 ? "#f85149" : pct >= 60 ? "#d29922" : "#3fb950";
-  const data = [{ v: pct }, { v: 100 - pct }];
-
-  return (
-    <div className='flex flex-col items-center'>
-      <div className='relative w-full' style={{ height: 162 }}>
-        <ResponsiveContainer width='100%' height='100%'>
-          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-            <Pie
-              data={data}
-              dataKey='v'
-              cx='50%'
-              cy='55%'
-              startAngle={220}
-              endAngle={-40}
-              innerRadius='58%'
-              outerRadius='80%'
-              strokeWidth={0}
-              isAnimationActive={false}
-            >
-              <Cell fill={color} />
-              <Cell fill='#21262d' />
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className='absolute inset-0 flex items-center justify-center' style={{ paddingTop: "10%" }}>
-          <span className='text-[22px] font-semibold font-mono text-ink leading-none'>
-            {value != null ? fmtPct(value) : "N/A"}
-          </span>
-        </div>
-      </div>
-      <span className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>{label}</span>
-    </div>
-  );
-}
-
 const TICK_STYLE = { fill: "#8b949e", fontSize: 10 };
-const LINE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
+export const LINE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
+// Matches the height passed to ChartSkeleton (the Suspense fallback in pages/Dashboard.tsx)
+// - the "no data yet" state below needs to be the same height as a loaded chart too, or
+// the chart's box visibly grows the moment data arrives.
+const CHART_HEIGHT = 234;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function HostTooltipContent({ active, payload, label }: any) {
@@ -79,23 +38,28 @@ function HostTooltipContent({ active, payload, label }: any) {
   );
 }
 
-export function HostCpuLineChart({
+export function HostLineChart({
   rows,
   keys,
+  colors,
 }: {
   rows: Record<string, string | number>[];
   keys: string[];
+  // Maps a key (hostname) to a fixed color, so the same machine gets the same line
+  // color on every chart it appears in, not just a per-chart positional color. Falls
+  // back to position-based color for any key not in the map.
+  colors?: Record<string, string>;
 }) {
   if (!rows.length || !keys.length) {
     return (
-      <div className='flex flex-1 items-center justify-center py-8'>
+      <div className='flex items-center justify-center' style={{ height: CHART_HEIGHT }}>
         <p className='text-xs text-ink-faint'>No data</p>
       </div>
     );
   }
 
   return (
-    <ResponsiveContainer width='100%' height={234}>
+    <ResponsiveContainer width='100%' height={CHART_HEIGHT}>
       <LineChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
         <CartesianGrid stroke='#30363d' strokeDasharray='3 3' vertical={false} />
         <XAxis
@@ -120,7 +84,7 @@ export function HostCpuLineChart({
             key={key}
             type='monotone'
             dataKey={key}
-            stroke={LINE_COLORS[i % LINE_COLORS.length]}
+            stroke={colors?.[key] ?? LINE_COLORS[i % LINE_COLORS.length]}
             strokeWidth={1.5}
             dot={false}
             isAnimationActive={false}

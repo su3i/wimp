@@ -14,19 +14,20 @@ import (
 func InitializeRouter() *gin.Engine {
 	router := gin.Default()
 
-	// Cors Settings - restricted to WEBURL (the frontend's own origin) rather than
-	// AllowAllOrigins. If WEBURL isn't set, no cross-origin browser request is allowed
-	// (the safe default) - same-origin deployments don't need CORS headers at all.
+	// Cors Settings - restricted to WEBURL (the frontend's own origin) plus the local Vite
+	// dev server, rather than AllowAllOrigins. If WEBURL isn't set, only the dev server
+	// origin is allowed - same-origin deployments don't need CORS headers at all.
 	corsConfig := cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"*"},
 		AllowCredentials: false,
 	}
 	if webUrl := config.Common().WebUrl; webUrl != "" {
-		corsConfig.AllowOrigins = []string{webUrl}
+		corsConfig.AllowOrigins = append(corsConfig.AllowOrigins, webUrl)
 	} else {
-		log.Println("WARNING: WEBURL is not set - cross-origin browser requests will be blocked. Set WEBURL if the frontend is served from a different origin than the control plane.")
+		log.Println("WARNING: WEBURL is not set, only http://localhost:5173 will be allowed cross-origin. Set WEBURL if the frontend is served from a different origin than the control plane.")
 	}
 	router.Use(cors.New(corsConfig))
 

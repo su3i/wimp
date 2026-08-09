@@ -17,7 +17,7 @@ webUrl: ""
 
 image:
   repository: darksueii/wimp
-  tag: "1.0.2"
+  tag: "1.0.3"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
@@ -55,6 +55,7 @@ config:
 
   # Alertmanager webhook URL - leave empty to disable external alerting.
   # When kube-prometheus-stack.enabled=true (below), use:
+  
   #   http://<release>-kube-prometheus-stack-alertmanager.<namespace>.svc:9093
   alertmanagerUrl: ""
 
@@ -129,7 +130,7 @@ config:
 web:
   image:
     repository: darksueii/wimp-web
-    tag: "1.0.2"
+    tag: "1.0.3"
     pullPolicy: IfNotPresent
 
   replicaCount: 1
@@ -198,6 +199,9 @@ loki:
       # logs.go) to work - without this, Loki rejects delete requests. deletion_mode
       # lives here (not under compactor) as of Loki 2.6+.
       deletion_mode: filter-and-delete
+      # Without a retention period, logs accumulate forever. 7d matches the Prometheus
+      # retention default below - shorten (or lengthen) to taste.
+      retention_period: 168h
     ruler:
       enable_api: true
 
@@ -205,10 +209,22 @@ loki:
       working_directory: /var/loki/compactor
       retention_enabled: true
       delete_request_store: s3   # matches storage.type above
+      # Sweep for expired chunks often so disk is actually reclaimed promptly once
+      # retention_period kicks in, rather than piling up between rare sweeps.
+      compaction_interval: 10m
+      retention_delete_delay: 1h
+      retention_delete_worker_count: 50
 
   minio:
     enabled: true
   gateway:
+    enabled: false
+
+  # The bundled memcached instances default to caching ~9.8Gi (chunks) and ~1.2Gi
+  # (results) of memory - far more than a single-binary install needs.
+  chunksCache:
+    enabled: false
+  resultsCache:
     enabled: false
 
   deploymentMode: Monolithic
@@ -217,6 +233,13 @@ loki:
     replicas: 1
     service:
       type: ClusterIP
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 3Gi
 
   # Zero out all other replica sets
   backend:
@@ -257,10 +280,34 @@ kube-prometheus-stack:
   grafana:
     enabled: false
 
+  prometheusOperator:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    prometheusConfigReloader:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+
   alertmanager:
     enabled: true
     alertmanagerSpec:
       retention: 1h
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
     config:
       global:
         resolve_timeout: 5m
@@ -300,6 +347,13 @@ kube-prometheus-stack:
       podMonitorSelectorNilUsesHelmValues: false
       ruleSelectorNilUsesHelmValues: false
       retention: 7d
+      resources:
+        requests:
+          cpu: 250m
+          memory: 1Gi
+        limits:
+          cpu: "1"
+          memory: 2Gi
       # Windows-exporter HTTP service discovery via WIMP control plane.
       # Assumes release name "wimp" in the same namespace.
       # Override with --set if your release name differs.

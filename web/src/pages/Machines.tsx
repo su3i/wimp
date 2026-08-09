@@ -310,7 +310,7 @@ export function Machines() {
       ) : (
         <div className='rounded-lg border border-rim overflow-hidden'>
           <div className='grid grid-cols-[2fr_2fr_1fr_auto] border-b border-rim bg-surface-alt'>
-            <div className={TH}>Hostname</div>
+            <div className={TH}>Host Name</div>
             <div className={TH}>IP Address</div>
             <div className={TH}>Status</div>
             <div className='px-4 py-2.5' />

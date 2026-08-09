@@ -1,5 +1,3 @@
-import { Bell, Layers, Monitor, Server, Activity, Gauge, type LucideIcon } from 'lucide-react'
-
 // Single source of truth for how notification Level/Category values map to visual
 // treatment - was previously duplicated (and drifting) between Alerts.tsx and
 // Dashboard.tsx.
@@ -30,21 +28,11 @@ export function levelConfig(level: string | null | undefined) {
   return LEVEL_CFG[level] ?? { label: level, cls: FALLBACK_LEVEL_CFG.cls }
 }
 
-export function categoryIcon(cat: string | null | undefined): LucideIcon {
-  if (cat === 'machine') return Monitor
-  if (cat === 'apppool' || cat === 'app_pool') return Layers
-  if (cat === 'iis') return Server
-  if (cat === 'sidecar') return Activity
-  if (cat === 'metrics') return Gauge
-  return Bell
-}
-
-export function categoryLabel(cat: string | null | undefined): string {
-  if (cat === 'machine') return 'Machine'
-  if (cat === 'apppool' || cat === 'app_pool') return 'App Pool'
-  if (cat === 'iis') return 'IIS'
-  if (cat === 'service') return 'Service'
-  if (cat === 'sidecar') return 'Sidecar'
-  if (cat === 'metrics') return 'Metrics'
-  return cat ?? 'System'
+// Title is built server-side as "<HOST> // <event>" (see AlertTitle in
+// internal/application/notification/service.go) - split it back into a host chip and
+// event text rather than rendering the raw "X // Y" string.
+export function splitTitle(title: string | null | undefined): { host: string; event: string } {
+  const idx = (title ?? '').indexOf(' // ')
+  if (idx === -1) return { host: '', event: title ?? '' }
+  return { host: title!.slice(0, idx), event: title!.slice(idx + 4) }
 }

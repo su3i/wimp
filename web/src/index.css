@@ -72,9 +72,16 @@ body {
   background: transparent;
 }
 
+/* Thumb is transparent until the scrollable area itself is hovered - defining
+   ::-webkit-scrollbar-thumb at all opts out of the browser's native overlay/auto-hide
+   scrollbar, so without this the thumb would render permanently visible even at rest. */
 ::-webkit-scrollbar-thumb {
-  background: var(--rim-strong);
+  background: transparent;
   border-radius: 2px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--rim-strong);
 }
 
 ::-webkit-scrollbar-thumb:hover {

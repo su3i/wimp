@@ -351,13 +351,18 @@ export function LogsViewer({
   }, [entries, searchQuery]);
 
   async function handleStageDownload() {
-    if (!machineId || !filename) {
-      toast.error("Select a host and log file before downloading.");
+    // Downloading always zips the whole log directory server-side (the agent zips the
+    // parent directory of whatever path it's given), so "All files" doesn't need its own
+    // path - any file in that directory produces the identical result. Fall back to the
+    // first listed file so the download still has something to point at.
+    const path = filename || filesData?.[0];
+    if (!machineId || !path) {
+      toast.error("Select a host with log files before downloading.");
       return;
     }
     setStaging(true);
     try {
-      const { data } = await logsService.stageDownload(projectKey, Number(machineId), filename);
+      const { data } = await logsService.stageDownload(projectKey, Number(machineId), path);
       setPendingDownload({ token: data.token, fileName: data.file_name, fileSize: data.file_size });
     } catch (err: unknown) {
       const msg =
@@ -463,7 +468,7 @@ export function LogsViewer({
           <button
             type='button'
             onClick={() => void handleStageDownload()}
-            disabled={staging || !machineId || !filename}
+            disabled={staging || !machineId || (!filename && !filesData?.length)}
             className='flex items-center justify-center h-7 w-7 rounded-md border border-rim bg-surface text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
           >
             <Download className={cn("size-3.5", staging && "animate-pulse")} />

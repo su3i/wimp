@@ -7,21 +7,18 @@ import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
-import { categoryIcon, categoryLabel, levelConfig } from "@/utils/notifications";
-import { timeAgo } from "@/utils/time";
+import { levelConfig, splitTitle } from "@/utils/notifications";
+import { timeAgo, absoluteTime } from "@/utils/time";
 import { machineService } from "@/services/machine.service";
 import { applicationService } from "@/services/application.service";
-import { prometheusService, type PromInstantResult } from "@/services/prometheus.service";
+import { prometheusService, type PromInstantResult, type PromRangeResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
 import type { Application } from "@/types";
 
 // Split out from pages/Dashboard.tsx into their own chunk since recharts is a large
 // dependency - the rest of the dashboard (header, stat cards) doesn't need to wait on it.
-const RadialGauge = lazy(() =>
-  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.RadialGauge })),
-);
-const HostCpuLineChart = lazy(() =>
-  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.HostCpuLineChart })),
+const HostLineChart = lazy(() =>
+  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.HostLineChart })),
 );
 
 function mids(ids: number[]) {
@@ -32,25 +29,19 @@ const PQ = {
   // Total IIS request rate across all hosts and sites (req/s)
   throughput: (ids: number[]) => `sum(rate(windows_iis_requests_total{${mids(ids)}}[5m]))`,
 
-  // Average CPU % across all project hosts
-  cpuAvg: (ids: number[]) =>
-    `avg(100 - (avg by (machine_id) (rate(windows_cpu_time_total{${mids(ids)},mode="idle"}[5m])) * 100))`,
-
-  // Average memory used % across all project hosts
-  memAvg: (ids: number[]) =>
-    `avg(100 - (windows_memory_physical_free_bytes{${mids(ids)}} / windows_memory_physical_total_bytes{${mids(
-      ids,
-    )}} * 100))`,
-
   networkIn: (ids: number[]) =>
     `sum(rate(windows_net_bytes_received_total{${mids(ids)},nic!~".*isatap.*"}[5m]))`,
 
   networkOut: (ids: number[]) =>
     `sum(rate(windows_net_bytes_sent_total{${mids(ids)},nic!~".*isatap.*"}[5m]))`,
 
-  // Per-host CPU %, one result per machine_id label - used for comparison chart
+  // Per-host CPU %, one result per machine_id label - used for the Cpu Usage chart
   cpuPerHost: (ids: number[]) =>
     `100 - (avg by (machine_id) (rate(windows_cpu_time_total{${mids(ids)},mode="idle"}[5m])) * 100)`,
+
+  // Per-host memory used %, one result per machine_id label - used for the Memory Usage chart
+  memPerHost: (ids: number[]) =>
+    `100 - (windows_memory_physical_free_bytes{${mids(ids)}} / windows_memory_physical_total_bytes{${mids(ids)}} * 100)`,
 };
 
 // Extracts a single scalar from a Prometheus instant result (handles NaN/Inf)
@@ -59,6 +50,26 @@ function scalar(r: PromInstantResult[] | undefined): number | null {
   if (v == null) return null;
   const n = parseFloat(v);
   return isFinite(n) ? n : null;
+}
+
+// Reshapes a per-host Prometheus range result (one series per machine_id) into
+// one row per timestamp with one column per hostname - the shape HostLineChart needs.
+// Shared by the Cpu Usage and Memory Usage charts.
+function toHostRows(range: PromRangeResult[] | undefined, hostNameMap: Map<number, string>) {
+  if (!range?.length) return { rows: [] as Record<string, string | number>[], keys: [] as string[] };
+  const keys = range.map((s) => hostNameMap.get(Number(s.metric.machine_id)) ?? s.metric.machine_id ?? "?");
+  const timestamps = range[0]?.values?.map(([ts]) => ts) ?? [];
+  const rows = timestamps.map((ts, i) => {
+    const row: Record<string, string | number> = {
+      time: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    range.forEach((s, si) => {
+      const val = parseFloat(s.values[i]?.[1] ?? "0");
+      row[keys[si]] = isFinite(val) ? parseFloat(val.toFixed(1)) : 0;
+    });
+    return row;
+  });
+  return { rows, keys };
 }
 
 function fmtRate(v: number) {
@@ -166,13 +177,19 @@ function ApplicationStatusCard({
   apps,
   hcStatusMap,
   hcUptimeMap,
+  ready,
 }: {
   apps: Application[];
   hcStatusMap: Record<number, "up" | "down">;
   hcUptimeMap: Record<number, number>;
+  // False while health-check status has been requested but hasn't arrived yet - without
+  // this, apps that are actually healthy would briefly count as down (no data yet reads
+  // the same as "down"), flashing a misleading 0/N before settling on the real count.
+  ready: boolean;
 }) {
   const total = apps.length;
   const healthy = apps.filter((a) => isAppHealthy(a, hcStatusMap)).length;
+  const showCount = ready && total > 0;
 
   const uptimeRatios = Object.values(hcUptimeMap);
   const avgUptime =
@@ -181,16 +198,16 @@ function ApplicationStatusCard({
       : null;
 
   const color =
-    total === 0 ? "text-ink" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
+    !showCount ? "text-ink" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
 
   return (
     <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Applications
-        <InfoTooltip text='Up/Down reflects the health check URL when one is configured; otherwise the live app pool count is shown.' />
+        <InfoTooltip text='Counts an app healthy via its health check URL when configured, otherwise by live app pool state.' />
       </span>
       <span className={cn('flex items-baseline gap-1.5', color)}>
-        {total === 0 ? (
+        {!showCount ? (
           <span className='text-[27px] font-semibold font-mono leading-none'>N/A</span>
         ) : (
           <>
@@ -200,7 +217,7 @@ function ApplicationStatusCard({
         )}
       </span>
       <span className='text-[0.625rem] text-ink-faint'>
-        {avgUptime != null ? `${avgUptime.toFixed(2)}% avg uptime` : "no health checks configured"}
+        {avgUptime != null ? `${avgUptime.toFixed(2)}% avg uptime` : "no data"}
       </span>
     </div>
   );
@@ -239,46 +256,50 @@ function LevelBadge({ level }: { level: string }) {
 }
 
 function NotifRow({ notif }: { notif: DashboardNotification }) {
-  const CatIcon = categoryIcon(notif.Category);
+  const { host, event } = splitTitle(notif.Title);
   return (
-    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100'>
-      <div className='px-4 py-[9px]'>
+    // No items-center at the row's grid level - see Applications.tsx/Alerts.tsx for why
+    // (the Event cell is one or two lines depending on Detail; every cell stretches to
+    // the full row height and centers its own content instead).
+    <div className='grid grid-cols-[84px_120px_1fr_190px] border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100'>
+      <div className='flex items-center px-4 py-[9px]'>
         <LevelBadge level={notif.Level ?? "info"} />
       </div>
-      <div className='px-4 py-[9px] min-w-0 flex items-center gap-1.5 overflow-hidden'>
-        <span className='text-xs font-medium text-ink shrink-0 truncate'>{notif.Title ?? ""}</span>
+      <div className='flex min-w-0 items-center px-4 py-[9px]'>
+        <span className='font-mono text-xs text-ink-dim truncate block'>{host.toLowerCase() || "—"}</span>
+      </div>
+      <div className='flex min-w-0 flex-col justify-center px-4 py-[9px]'>
+        <p className='text-xs font-medium text-ink truncate'>{event}</p>
         {notif.Detail && (
-          <>
-            <span className='text-ink-faint/40 text-sm shrink-0'>/</span>
-            <span className='text-xs text-ink-dim truncate'>{notif.Detail.toLowerCase()}</span>
-          </>
+          <p className='text-[0.6875rem] text-ink-faint truncate'>{notif.Detail.toLowerCase()}</p>
         )}
       </div>
-      <div className='flex items-center gap-1.5 px-4 py-[9px]'>
-        <CatIcon className='size-3 text-ink-faint shrink-0' />
-        <span className='text-xs text-ink-dim'>{categoryLabel(notif.Category)}</span>
-      </div>
-      <div className='px-4 py-[9px] text-right'>
-        <span className='text-xs text-ink-faint tabular-nums'>{timeAgo(notif.CreatedAt)}</span>
+      <div className='flex flex-col items-end justify-center px-4 py-[9px]'>
+        <span className='text-xs text-ink-faint tabular-nums whitespace-nowrap'>{timeAgo(notif.CreatedAt)}</span>
+        <span className='text-[0.625rem] text-ink-faint/60 tabular-nums whitespace-nowrap'>{absoluteTime(notif.CreatedAt)}</span>
       </div>
     </div>
   );
 }
 
+// Mirrors NotifRow's exact structure (same two-line Event column) so the loading state
+// is the same height as a loaded row - swapping one for the other shouldn't shift layout.
 function NotifRowSkeleton() {
   return (
-    <div className='grid grid-cols-[84px_1fr_124px_92px] items-center border-b border-rim last:border-0 animate-pulse'>
-      <div className='px-4 py-[9px]'>
+    <div className='grid grid-cols-[84px_120px_1fr_190px] border-b border-rim last:border-0 animate-pulse'>
+      <div className='flex items-center px-4 py-[9px]'>
         <div className='h-4 w-12 rounded bg-surface-high' />
-      </div>
-      <div className='px-4 py-[9px]'>
-        <div className='h-2.5 w-2/3 rounded bg-surface-high' />
       </div>
       <div className='flex items-center px-4 py-[9px]'>
         <div className='h-2.5 w-16 rounded bg-surface-high' />
       </div>
-      <div className='px-4 py-[9px] flex justify-end'>
-        <div className='h-2.5 w-12 rounded bg-surface-high' />
+      <div className='flex flex-col justify-center gap-1.5 px-4 py-[9px]'>
+        <div className='h-2.5 w-2/3 rounded bg-surface-high' />
+        <div className='h-2 w-1/3 rounded bg-surface-high' />
+      </div>
+      <div className='flex flex-col items-end justify-center gap-1 px-4 py-[9px]'>
+        <div className='h-2.5 w-14 rounded bg-surface-high' />
+        <div className='h-2 w-20 rounded bg-surface-high' />
       </div>
     </div>
   );
@@ -321,6 +342,23 @@ export function Dashboard() {
     return map;
   }, [machines]);
 
+  // Same hostname -> color mapping for both the Cpu Usage and Memory Usage charts, so a
+  // given machine's line is the same color on both. Assigned from a stable, alphabetized
+  // host list rather than each chart's own Prometheus query result order, which can
+  // differ between the two metrics and would otherwise put the same color on different
+  // machines per chart. (Duplicated from DashboardCharts.tsx's own LINE_COLORS rather
+  // than imported - that module pulls in recharts, and this needs to exist before that
+  // chunk lazy-loads.)
+  const hostColorMap = useMemo(() => {
+    const LINE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
+    const names = Array.from(hostNameMap.values()).sort();
+    const map: Record<string, string> = {};
+    names.forEach((name, i) => {
+      map[name] = LINE_COLORS[i % LINE_COLORS.length];
+    });
+    return map;
+  }, [hostNameMap]);
+
   // Stable string key for queryKey (avoids array reference churn)
   const idKey = machineIds
     .slice()
@@ -335,16 +373,6 @@ export function Dashboard() {
   const { data: rThroughput } = useQuery({
     queryKey: ["d-throughput", idKey],
     queryFn: () => prometheusService.instant(PQ.throughput(machineIds)),
-    ...qOpts,
-  });
-  const { data: rCpuAvg } = useQuery({
-    queryKey: ["d-cpuavg", idKey],
-    queryFn: () => prometheusService.instant(PQ.cpuAvg(machineIds)),
-    ...qOpts,
-  });
-  const { data: rMemAvg } = useQuery({
-    queryKey: ["d-memavg", idKey],
-    queryFn: () => prometheusService.instant(PQ.memAvg(machineIds)),
     ...qOpts,
   });
   const { data: rNetIn } = useQuery({
@@ -362,6 +390,14 @@ export function Dashboard() {
     queryFn: () => {
       const now = Math.floor(Date.now() / 1000);
       return prometheusService.range(PQ.cpuPerHost(machineIds), now - 60 * 60, now, 60);
+    },
+    ...qOpts,
+  });
+  const { data: rMemHost } = useQuery({
+    queryKey: ["d-memhost", idKey],
+    queryFn: () => {
+      const now = Math.floor(Date.now() / 1000);
+      return prometheusService.range(PQ.memPerHost(machineIds), now - 60 * 60, now, 60);
     },
     ...qOpts,
   });
@@ -398,6 +434,10 @@ export function Dashboard() {
     enabled: hcEnabled,
     refetchInterval: 30_000,
   });
+  // True once we're not missing data the healthy count depends on - before this, some
+  // health-checked apps would count as "down" simply because their status hasn't loaded
+  // yet, understating the healthy count until it resolves (a misleading 0/N flash).
+  const appStatusReady = !hcEnabled || hcStatusResult !== undefined;
   const { data: hcUptimeResult } = useQuery({
     queryKey: ["d-app-hc-uptime", hcIdKey],
     queryFn: () => prometheusService.instant(`avg_over_time(probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}[30d])`),
@@ -519,28 +559,11 @@ export function Dashboard() {
 
   const sevLast24h = stats?.sev_last_24h ?? 0;
   const throughputVal = scalar(rThroughput);
-  const cpuAvgVal = scalar(rCpuAvg);
-  const memAvgVal = scalar(rMemAvg);
   const netInVal = scalar(rNetIn);
   const netOutVal = scalar(rNetOut);
 
-  // Per-host CPU time-series, one row per timestamp, one key per machine
-  const hostPerfData = useMemo(() => {
-    if (!rCpuHost?.length) return { rows: [] as Record<string, string | number>[], keys: [] as string[] };
-    const keys = rCpuHost.map((s) => hostNameMap.get(Number(s.metric.machine_id)) ?? s.metric.machine_id ?? "?");
-    const timestamps = rCpuHost[0]?.values?.map(([ts]) => ts) ?? [];
-    const rows = timestamps.map((ts, i) => {
-      const row: Record<string, string | number> = {
-        time: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      rCpuHost.forEach((s, si) => {
-        const val = parseFloat(s.values[i]?.[1] ?? "0");
-        row[keys[si]] = isFinite(val) ? parseFloat(val.toFixed(1)) : 0;
-      });
-      return row;
-    });
-    return { rows, keys };
-  }, [rCpuHost, hostNameMap]);
+  const cpuPerfData = useMemo(() => toHostRows(rCpuHost, hostNameMap), [rCpuHost, hostNameMap]);
+  const memPerfData = useMemo(() => toHostRows(rMemHost, hostNameMap), [rMemHost, hostNameMap]);
 
   const visibleAlerts = alerts.filter((a) => a.id && !dismissed.has(a.id));
   function dismiss(id: string) {
@@ -568,7 +591,7 @@ export function Dashboard() {
         {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
         <div className='grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-[14px]'>
           <SevEventsCard count={sevLast24h} />
-          <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} />
+          <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} ready={appStatusReady} />
           <MetricCard
             label='Request Throughput'
             value={throughputVal != null ? fmtRate(throughputVal) : null}
@@ -581,32 +604,25 @@ export function Dashboard() {
           />
         </div>
 
-        {/* ── Row 2: Capacity Overview + Host Performance ──────────────── */}
-        <div className='grid grid-cols-5 gap-[14px]'>
-          {/* Capacity Overview */}
-          <div className='col-span-2 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[14px]'>
+        {/* ── Row 2: Memory Usage + Cpu Usage ───────────────────────────── */}
+        <div className='grid grid-cols-2 gap-[14px]'>
+          <div className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
             <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Capacity Overview
-              <InfoTooltip text='Live average CPU and memory across online hosts.' />
-            </p>
-            <div className='grid grid-cols-2 gap-2 flex-1'>
-              <Suspense fallback={<ChartSkeleton height={162} />}>
-                <RadialGauge label='CPU Avg' value={cpuAvgVal} />
-              </Suspense>
-              <Suspense fallback={<ChartSkeleton height={162} />}>
-                <RadialGauge label='Memory Avg' value={memAvgVal} />
-              </Suspense>
-            </div>
-          </div>
-
-          {/* Host Performance, per-host CPU time series */}
-          <div className='col-span-3 rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
-            <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Host CPU %
-              <InfoTooltip text='Live per-host CPU over time.' />
+              Memory Usage
+              <InfoTooltip text='Live per-host memory usage over the last hour.' />
             </p>
             <Suspense fallback={<ChartSkeleton height={234} />}>
-              <HostCpuLineChart rows={hostPerfData.rows} keys={hostPerfData.keys} />
+              <HostLineChart rows={memPerfData.rows} keys={memPerfData.keys} colors={hostColorMap} />
+            </Suspense>
+          </div>
+
+          <div className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
+            <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+              Cpu Usage
+              <InfoTooltip text='Live per-host CPU usage over the last hour.' />
+            </p>
+            <Suspense fallback={<ChartSkeleton height={234} />}>
+              <HostLineChart rows={cpuPerfData.rows} keys={cpuPerfData.keys} colors={hostColorMap} />
             </Suspense>
           </div>
         </div>

@@ -34,15 +34,39 @@ function healthCheckStatus(
   return { label, dot, text, uptimePct };
 }
 
-function StatusCell({ status }: { status: ReturnType<typeof healthCheckStatus> }) {
-  if (!status) return <span className='text-xs text-ink-faint'>N/A</span>;
+// Pool summary is always shown - it's the one health signal every application has.
+// Health-check status (above it) only exists when a URL is configured.
+function PoolSummary({ healthy, total }: { healthy: number; total: number }) {
+  const text =
+    total === 0 ? "text-ink-faint" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
   return (
-    <span className={cn("flex items-center gap-1.5 text-xs font-medium", status.text)}>
-      {status.label === "Up"
-        ? <CheckCircle2 className='size-3 shrink-0' />
-        : <span className={cn("size-2 rounded-full shrink-0", status.dot)} />}
-      {status.label}
+    <span className={cn("text-[0.75rem]", text)}>
+      {total === 0 ? "No pools" : `${healthy}/${total} healthy`}
     </span>
+  );
+}
+
+function StatusCell({
+  status,
+  healthy,
+  total,
+}: {
+  status: ReturnType<typeof healthCheckStatus>;
+  healthy: number;
+  total: number;
+}) {
+  return (
+    <div className='flex items-center gap-3'>
+      {status && (
+        <span className={cn("flex items-center gap-1.5 text-xs font-medium shrink-0", status.text)}>
+          {status.label === "Up"
+            ? <CheckCircle2 className='size-3 shrink-0' />
+            : <span className={cn("size-2 rounded-full shrink-0", status.dot)} />}
+          {status.label}
+        </span>
+      )}
+      <PoolSummary healthy={healthy} total={total} />
+    </div>
   );
 }
 
@@ -343,10 +367,15 @@ export function Applications() {
         // merely share the same grid-cols classes each size their own tracks
         // independently, so a long value (a URL, a long app name) in one row can widen
         // that row's columns without widening the header's - which is what was skewed.
-        <div className='grid grid-cols-[2fr_0.7fr_1.5fr_0.7fr_0.8fr_auto] rounded-lg border border-rim overflow-hidden'>
-          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Application Name</div>
-          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Instances</div>
-          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>URL</div>
+        //
+        // No items-center here - grid's default align-items:stretch makes every cell the
+        // full row height, and each cell centers its own content with its own
+        // `flex items-center`. Centering at the grid level instead would shrink each cell
+        // to its own content height and center that (differently-sized) box within the
+        // row, which looks inconsistent the moment cells have different content heights
+        // (e.g. a two-line Status next to single-line cells).
+        <div className='grid grid-cols-[1.3fr_1.5fr_0.8fr_auto] rounded-lg border border-rim overflow-hidden'>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Name</div>
           <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Status</div>
           <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Uptime</div>
           <div className='border-b border-rim bg-surface-alt px-4 py-2.5' />
@@ -371,29 +400,13 @@ export function Applications() {
                   <span className='font-mono text-xs text-ink truncate'>{app.Name}</span>
                 </div>
 
-                {/* Instances */}
-                <div className={cn("px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-                  <span className='text-xs text-ink-dim'>
-                    {total} {total === 1 ? "instance" : "instances"}
-                  </span>
-                </div>
-
-                {/* URL */}
-                <div className={cn("min-w-0 px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={app.HealthCheckURL ?? undefined}>
-                  {app.HealthCheckURL ? (
-                    <span className='block truncate font-mono text-xs text-ink-dim'>{app.HealthCheckURL}</span>
-                  ) : (
-                    <span className='text-xs text-ink-faint'>N/A</span>
-                  )}
-                </div>
-
                 {/* Status */}
-                <div className={cn("px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-                  <StatusCell status={status} />
+                <div className={cn("flex items-center px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                  <StatusCell status={status} healthy={app.pool_healthy ?? 0} total={total} />
                 </div>
 
                 {/* Uptime */}
-                <div className={cn("px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                <div className={cn("flex items-center px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
                   <span className='text-xs text-ink-dim'>{status?.uptimePct ?? "N/A"}</span>
                 </div>
 
