@@ -168,6 +168,13 @@ func (r *applicationRepository) UpdateCheckState(id uint, consecutiveFailures in
 	}).Error
 }
 
+func (r *applicationRepository) UpdateSlowState(id uint, consecutiveSlow int, slowAlertFired bool) error {
+	return r.db.Model(&application.Application{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"consecutive_slow": consecutiveSlow,
+		"slow_alert_fired": slowAlertFired,
+	}).Error
+}
+
 func (r *applicationRepository) FindAllWithHealthCheck() ([]application.Application, error) {
 	var apps []application.Application
 	if err := r.db.Where("health_check_url IS NOT NULL AND health_check_url != ''").Find(&apps).Error; err != nil {

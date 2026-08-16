@@ -12,6 +12,9 @@ const (
 	AlertMachineShutdown     AlertType = "machine_shutdown"     // planned
 	AlertMachineRestarting   AlertType = "machine_restarting"   // planned
 	AlertAgentUpdated        AlertType = "agent_updated"
+	// AlertMachineReassigned fires in the project a host just left, when that same
+	// physical box re-registers against a different machine row.
+	AlertMachineReassigned AlertType = "machine_reassigned"
 
 	AlertAppPoolStopped AlertType = "app_pool_stopped"
 	AlertAppPoolStarted AlertType = "app_pool_started"
@@ -26,6 +29,12 @@ const (
 
 	AlertHealthCheckDown AlertType = "health_check_down"
 	AlertHealthCheckUp   AlertType = "health_check_recovered"
+	// AlertHealthCheckSlow separates "responding, but too slowly to be healthy" from
+	// AlertHealthCheckDown ("not responding at all"). Without it a slow site trips the
+	// down alert, because a probe that exceeds its timeout is indistinguishable from a
+	// probe that got no answer.
+	AlertHealthCheckSlow AlertType = "health_check_slow"
+	AlertHealthCheckFast AlertType = "health_check_slow_recovered"
 
 	AlertHighCPU             AlertType = "high_cpu"
 	AlertHighCPURecovered    AlertType = "high_cpu_recovered"
@@ -49,6 +58,7 @@ var AlertTypeRegistry = map[AlertType]AlertTypeMeta{
 	AlertMachineShutdown:     {CategoryMachine, LevelInfo},
 	AlertMachineRestarting:   {CategoryMachine, LevelInfo},
 	AlertAgentUpdated:        {CategoryMachine, LevelInfo},
+	AlertMachineReassigned:   {CategoryMachine, LevelWarning},
 
 	AlertAppPoolStopped: {CategoryAppPool, LevelCritical},
 	AlertAppPoolStarted: {CategoryAppPool, LevelInfo},
@@ -63,6 +73,8 @@ var AlertTypeRegistry = map[AlertType]AlertTypeMeta{
 
 	AlertHealthCheckDown: {CategoryService, LevelCritical},
 	AlertHealthCheckUp:   {CategoryService, LevelInfo},
+	AlertHealthCheckSlow: {CategoryService, LevelCritical},
+	AlertHealthCheckFast: {CategoryService, LevelInfo},
 
 	AlertHighCPU:             {CategoryMetrics, LevelWarning},
 	AlertHighCPURecovered:    {CategoryMetrics, LevelInfo},

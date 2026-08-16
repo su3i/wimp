@@ -80,10 +80,25 @@ func AgentWebSocket(c *gin.Context) {
 
 	defer func() {
 		hub.Get().Deregister(m.ID)
+
+		// Re-read rather than trusting this loop's copy: the row's status can have been
+		// changed since the connection opened (deletion requested from the API, or the
+		// row retired because the same box was re-bootstrapped elsewhere), and those are
+		// terminal states that a blanket flip to offline would silently undo.
+		if current, err := repo.FindOneByID(m.ID); err == nil && current != nil {
+			m.Status = current.Status
+		}
+
 		if m.Status == machineDomain.Deleting {
 			if err := machineService.HardDelete(m.ID, cfg); err != nil {
 				log.Printf("machine (%d) hard delete failed: %v", m.ID, err)
 			}
+			return
+		}
+		if m.Status == machineDomain.Reassigned {
+			// The host moved on deliberately; it is not an outage and the reassignment
+			// alert has already been emitted by whichever connection superseded this one.
+			log.Printf("machine (%d) agent disconnected after being reassigned", m.ID)
 			return
 		}
 		m.Status = machineDomain.Offline
@@ -127,12 +142,34 @@ func AgentWebSocket(c *gin.Context) {
 				if reg.WindowsVersion != "" {
 					m.WindowsVersion = reg.WindowsVersion
 				}
+				if reg.MachineUID != "" {
+					m.MachineUID = reg.MachineUID
+				}
+				// Scoped column update rather than a full-row save: the row may be
+				// concurrently marked reassigned or deleting by another connection's
+				// reconcile, and a full save of this loop's copy would revert it.
+				if err := repo.SetIdentity(m.ID, m.Hostname, m.IPs, m.AgentVersion, m.WindowsVersion, m.MachineUID); err != nil {
+					log.Printf("machine (%d) identity update failed: %v", m.ID, err)
+				}
 				if reg.Version != "" && reg.Version != "dev" && reg.Version != prevVersion {
 					go notificationService.EmitAlert(notification.AlertAgentUpdated, m.ProjectID, m.ID, m.Hostname,
 						notificationService.AlertTitle(m.Hostname, "Agent Updated"), m.Hostname+" agent updated to "+reg.Version, cfg)
 				}
+
+				// Retire any row describing this same physical box. Runs after the
+				// identity write above so the hostname/UID being matched on is the one
+				// this agent just reported, not whatever the row held beforehand.
+				for _, old := range machineService.ReconcileReassignment(m, hub.Get().IsOnline, cfg) {
+					log.Printf("machine (%d) supersedes machine (%d) - same host re-bootstrapped", m.ID, old.ID)
+					name := old.Hostname
+					if name == "" {
+						name = m.Hostname
+					}
+					go notificationService.EmitAlert(notification.AlertMachineReassigned, old.ProjectID, old.ID, name,
+						notificationService.AlertTitle(name, "Host Reassigned"),
+						name+" was re-bootstrapped and now reports to another host entry. This entry is stale and will not come back online.", cfg)
+				}
 			}
-			repo.Update(m)
 
 			ack, _ := json.Marshal(protocol.Message{Type: protocol.TypeRegisterAck})
 			// Route through the hub's mutex-guarded write instead of writing to conn

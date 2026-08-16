@@ -140,7 +140,7 @@ function EditApplicationModal({
             value={hcUrl}
             onChange={(e) => setHcUrl(e.target.value)}
             placeholder='https://example.com/health'
-            className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-accent'
+            className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent'
           />
         </div>
 
@@ -255,7 +255,7 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
             rel='noopener noreferrer'
             className='flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink underline underline-offset-2 transition-colors'
           >
-            <span className='font-mono truncate max-w-[360px]'>{url}</span>
+            <span className='truncate max-w-[360px]'>{url}</span>
             <ExternalLink className='size-3 shrink-0' />
           </a>
         </div>
@@ -317,7 +317,6 @@ function EditLogPathModal({
   open,
   onClose,
   pool,
-  appName,
   projectKey,
   appId,
   onSuccess,
@@ -325,7 +324,6 @@ function EditLogPathModal({
   open: boolean;
   onClose: () => void;
   pool: AppPoolWithDetails;
-  appName: string;
   projectKey: string;
   appId: number;
   onSuccess: () => void;
@@ -357,26 +355,6 @@ function EditLogPathModal({
   return (
     <Modal open={open} onClose={onClose} title='Edit Log Path'>
       <div className='space-y-4'>
-        {/* Read-only context */}
-        <div className='rounded-lg border border-rim bg-surface-alt divide-y divide-rim text-xs'>
-          <div className='flex items-center justify-between px-4 py-2.5'>
-            <span className='text-ink-faint'>Application</span>
-            <span className='font-mono text-ink'>{appName}</span>
-          </div>
-          <div className='flex items-center justify-between px-4 py-2.5'>
-            <span className='text-ink-faint'>App Pool</span>
-            <span className='font-mono text-ink'>{pool.Name}</span>
-          </div>
-          <div className='flex items-center justify-between px-4 py-2.5'>
-            <span className='text-ink-faint'>Machine</span>
-            <span className='font-mono text-ink'>{pool.machine?.Hostname?.toLowerCase() ?? "N/A"}</span>
-          </div>
-          <div className='flex items-center justify-between px-4 py-2.5'>
-            <span className='text-ink-faint'>Status</span>
-            <PoolStatus state={pool.State} offline={pool.machine?.Status !== "online"} />
-          </div>
-        </div>
-
         {/* Editable field */}
         <div className='space-y-1.5'>
           <label className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
@@ -388,7 +366,7 @@ function EditLogPathModal({
             onChange={(e) => setLogPath(e.target.value)}
             placeholder='e.g. C:\inetpub\logs\LogFiles\W3SVC1'
             autoFocus
-            className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-accent'
+            className='w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent'
           />
           <p className='text-[0.625rem] text-ink-faint'>
             Windows path to the IIS log directory for this app pool.
@@ -413,26 +391,69 @@ function EditLogPathModal({
   );
 }
 
+interface PoolGroup {
+  machineId: number;
+  hostname: string;
+  online: boolean;
+  pools: AppPoolWithDetails[];
+}
+
+// Collapses the flat pool list the API returns into one node per host, sorted by hostname
+// and with each host's pools sorted by name, so the ordering is stable across the 5s
+// refetch instead of following whatever order the query happened to return.
+function groupPoolsByMachine(pools: AppPoolWithDetails[]): PoolGroup[] {
+  const byMachine = new Map<number, PoolGroup>();
+  for (const pool of pools) {
+    const machineId = pool.machine?.ID ?? 0;
+    let group = byMachine.get(machineId);
+    if (!group) {
+      group = {
+        machineId,
+        hostname: pool.machine?.Hostname?.toLowerCase() || "Unknown host",
+        online: pool.machine?.Status === "online",
+        pools: [],
+      };
+      byMachine.set(machineId, group);
+    }
+    group.pools.push(pool);
+  }
+  const groups = [...byMachine.values()];
+  for (const group of groups) group.pools.sort((a, b) => a.Name.localeCompare(b.Name));
+  return groups.sort((a, b) => a.hostname.localeCompare(b.hostname));
+}
+
 function PoolList({
   pools,
   projectKey,
   appId,
-  appName,
   queryKey,
 }: {
   pools: AppPoolWithDetails[];
   projectKey: string;
   appId: number;
-  appName: string;
   queryKey: unknown[];
 }) {
   const queryClient = useQueryClient();
   const [acting, setActing] = useState<Record<number, string>>({});
+  // Every host starts collapsed - the list reads as one line per host until the user asks
+  // for a specific one's pools, which is the point of the hierarchy.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  function toggleGroup(machineId: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(machineId)) next.delete(machineId);
+      else next.add(machineId);
+      return next;
+    });
+  }
+
   const [editingPool, setEditingPool] = useState<AppPoolWithDetails | null>(null);
   const [removeTarget, setRemoveTarget] = useState<AppPoolWithDetails | null>(null);
   const [removing, setRemoving] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ pool: AppPoolWithDetails; cmd: PoolCmd } | null>(null);
   const cooldown = useActionCooldown();
+
   async function runCmd(pool: AppPoolWithDetails, cmd: PoolCmd) {
     setActing((prev) => ({ ...prev, [pool.ID]: cmd }));
     cooldown.start(pool.ID);
@@ -478,7 +499,11 @@ function PoolList({
     }
   }
 
-  const cols = "grid-cols-[1fr_1fr_1fr_1fr_auto]";
+  // Pools are grouped under the host they run on rather than repeating the hostname in a
+  // column on every row - one application commonly has the same pool name on several
+  // machines, so the machine is the real parent in this hierarchy, not a per-row attribute.
+  const groups = groupPoolsByMachine(pools);
+  const cols = "grid-cols-[1.8fr_0.9fr_1.4fr_auto]";
 
   // No items-center on the grid - see Applications.tsx for why (each cell stretches to
   // the full row height via grid's default align-items:stretch, then centers its own
@@ -486,68 +511,113 @@ function PoolList({
   // each cell to its own content height first, which looks inconsistent).
   return (
     <div className={`grid ${cols} overflow-hidden`}>
-      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>App Pool</div>
-      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Machine</div>
+      <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Host / App Pool</div>
       <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Status</div>
       <div className={cn(TH, "sticky top-0 z-10 border-b border-rim bg-surface-alt")}>Log Path</div>
       <div className='sticky top-0 z-10 border-b border-rim bg-surface-alt px-4 py-2.5' />
 
-      {pools.map((pool, idx) => {
-        const busy = acting[pool.ID];
-        const transitional = pool.State === "Starting" || pool.State === "Stopping";
-        const cooling = cooldown.isCooling(pool.ID) || transitional;
-        const offline = pool.machine?.Status !== "online";
-        const started = pool.State === "Started";
-        const isLast = idx === pools.length - 1;
-        const cellBorder = !isLast && "border-b border-rim";
-        const menuItems: RowMenuItem[] = [
-          { icon: Pencil, label: "Edit Log Path", onClick: () => setEditingPool(pool) },
-          { type: "separator" },
-          ...(offline
-            ? []
-            : started
-              ? [
-                  {
-                    icon: Square,
-                    label: "Stop",
-                    variant: "danger" as const,
-                    onClick: () => requestCmd(pool, "stop"),
-                  },
-                  { icon: RotateCw, label: "Restart", onClick: () => requestCmd(pool, "restart") },
-                  { icon: RefreshCw, label: "Recycle", onClick: () => requestCmd(pool, "recycle") },
-                ]
-              : [{ icon: Play, label: "Start", onClick: () => requestCmd(pool, "start") }]),
-          ...(offline ? [] : [{ type: "separator" as const }]),
-          { icon: Trash2, label: "Remove", variant: "danger", onClick: () => setRemoveTarget(pool) },
-        ];
+      {groups.map((group, groupIdx) => {
+        const open = expanded.has(group.machineId);
+        // A stopped pool and a pool on an unreachable host are both "not running" as far
+        // as this count goes - same definition the application header's healthy count uses,
+        // so the two never disagree.
+        const running = group.online
+          ? group.pools.filter((p) => p.State === "Started").length
+          : 0;
+        const runningColor =
+          running === group.pools.length ? "text-success" : running === 0 ? "text-danger" : "text-warning";
+        // The container draws its own bottom border, so the last visible row inside it
+        // must not draw one too or the two stack into a double line.
+        const isLastGroup = groupIdx === groups.length - 1;
         return (
-          <div key={pool.ID} className={cn("contents group", cooling && "opacity-50")}>
-            <div className={cn("flex min-w-0 items-center gap-3 px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-              <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
-                <Cpu className='size-3 text-ink-faint' />
-              </div>
-              <span className='font-mono text-xs text-ink truncate'>{pool.Name}</span>
-            </div>
-
-            <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-              <span className='block min-w-0 truncate font-mono text-xs text-ink-dim'>
-                {pool.machine?.Hostname?.toLowerCase() ?? "N/A"}
+          <div key={group.machineId} className='contents'>
+            {/* Host row - the parent node. Spans every column; the pools below it are
+                its children. */}
+            <button
+              type='button'
+              onClick={() => toggleGroup(group.machineId)}
+              className={cn(
+                'col-span-full flex items-center gap-2.5 bg-surface-alt/40 px-4 py-2.5 text-left hover:bg-surface-alt transition-colors cursor-pointer',
+                !(isLastGroup && !open) && 'border-b border-rim',
+              )}
+            >
+              {open ? (
+                <ChevronDown className='size-3.5 shrink-0 text-ink-faint' />
+              ) : (
+                <ChevronRight className='size-3.5 shrink-0 text-ink-faint' />
+              )}
+              <Server className='size-3.5 shrink-0 text-ink-faint' />
+              <span className='font-mono text-xs text-ink truncate'>{group.hostname}</span>
+              <span className={cn("shrink-0 text-[0.625rem] font-medium tabular-nums", runningColor)}>
+                {running}/{group.pools.length} healthy
               </span>
-            </div>
+            </button>
 
-            <div className={cn("flex items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-              <PoolStatus state={pool.State} offline={offline} />
-            </div>
+            {open &&
+              group.pools.map((pool, idx) => {
+                const busy = acting[pool.ID];
+                const transitional = pool.State === "Starting" || pool.State === "Stopping";
+                const cooling = cooldown.isCooling(pool.ID) || transitional;
+                const offline = pool.machine?.Status !== "online";
+                const started = pool.State === "Started";
+                const isLastChild = idx === group.pools.length - 1;
+                const cellBorder = !(isLastGroup && isLastChild) && "border-b border-rim";
+                const menuItems: RowMenuItem[] = [
+                  { icon: Pencil, label: "Edit Log Path", onClick: () => setEditingPool(pool) },
+                  { type: "separator" },
+                  ...(offline
+                    ? []
+                    : started
+                      ? [
+                          {
+                            icon: Square,
+                            label: "Stop",
+                            variant: "danger" as const,
+                            onClick: () => requestCmd(pool, "stop"),
+                          },
+                          { icon: RotateCw, label: "Restart", onClick: () => requestCmd(pool, "restart") },
+                          { icon: RefreshCw, label: "Recycle", onClick: () => requestCmd(pool, "recycle") },
+                        ]
+                      : [{ icon: Play, label: "Start", onClick: () => requestCmd(pool, "start") }]),
+                  ...(offline ? [] : [{ type: "separator" as const }]),
+                  { icon: Trash2, label: "Remove", variant: "danger", onClick: () => setRemoveTarget(pool) },
+                ];
+                return (
+                  <div key={pool.ID} className={cn("contents group", cooling && "opacity-50")}>
+                    <div className={cn("flex min-w-0 items-stretch pr-4 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                      {/* Tree guide: a vertical spine dropping from the host row above,
+                          stopping halfway down on the last child so the branch visibly
+                          ends, plus a horizontal elbow into the pool itself. */}
+                      <span className='relative ml-6 w-5 shrink-0'>
+                        <span
+                          className={cn("absolute left-0 top-0 w-px bg-rim", isLastChild ? "h-1/2" : "h-full")}
+                        />
+                        <span className='absolute left-0 top-1/2 h-px w-4 bg-rim' />
+                      </span>
+                      <span className='flex min-w-0 items-center gap-2.5 py-3'>
+                        <span className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
+                          <Cpu className='size-3 text-ink-faint' />
+                        </span>
+                        <span className='font-mono text-xs text-ink truncate'>{pool.Name}</span>
+                      </span>
+                    </div>
 
-            <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
-              <span className='block min-w-0 truncate font-mono text-xs text-ink-dim'>
-                {pool.log_path || "—"}
-              </span>
-            </div>
+                    <div className={cn("flex items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                      <PoolStatus state={pool.State} offline={offline} />
+                    </div>
 
-            <div className={cn("flex items-center justify-center px-2 py-3 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-              <RowMenu items={menuItems} disabled={!!busy || cooling} />
-            </div>
+                    <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
+                      <span className='block min-w-0 truncate text-xs text-ink-dim'>
+                        {pool.log_path || "N/A"}
+                      </span>
+                    </div>
+
+                    <div className={cn("flex items-center justify-center px-2 py-3 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                      <RowMenu items={menuItems} disabled={!!busy || cooling} />
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         );
       })}
@@ -557,7 +627,6 @@ function PoolList({
           open={!!editingPool}
           onClose={() => setEditingPool(null)}
           pool={editingPool}
-          appName={appName}
           projectKey={projectKey}
           appId={appId}
           onSuccess={() => queryClient.invalidateQueries({ queryKey })}
@@ -964,12 +1033,11 @@ export function ApplicationDetail() {
           {!app.app_pools?.length ? (
             <EmptyPools onAdd={() => setModalOpen(true)} />
           ) : (
-            <div className='max-h-72 overflow-y-auto rounded-lg border border-rim'>
+            <div className='max-h-96 overflow-y-auto rounded-lg border border-rim'>
               <PoolList
                 pools={app.app_pools}
                 projectKey={activeProject.Key}
                 appId={numericId}
-                appName={app.Name}
                 queryKey={queryKey}
               />
             </div>

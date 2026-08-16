@@ -11,6 +11,12 @@ type Application struct {
 	HealthCheckIntervalSeconds int     `gorm:"not null;default:60"`
 	ConsecutiveFailures        int     `gorm:"not null;default:0"`
 	AlertFired                 bool    `gorm:"not null;default:false"`
+
+	// Slow-response state, tracked separately from the failure state above so a site that
+	// is up but degraded alerts on its own terms instead of being lumped in with a site
+	// that is not answering at all.
+	ConsecutiveSlow int  `gorm:"not null;default:0"`
+	SlowAlertFired  bool `gorm:"not null;default:false"`
 }
 
 type ApplicationAppPool struct {

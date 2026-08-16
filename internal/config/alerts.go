@@ -10,6 +10,7 @@ type AlertConfig struct {
 	SeverityMachineShutdown     string `envconfig:"ALERTSEVERITY_MACHINESHUTDOWN" required:"false"`
 	SeverityMachineRestarting   string `envconfig:"ALERTSEVERITY_MACHINERESTARTING" required:"false"`
 	SeverityAgentUpdated        string `envconfig:"ALERTSEVERITY_AGENTUPDATED" required:"false"`
+	SeverityMachineReassigned   string `envconfig:"ALERTSEVERITY_MACHINEREASSIGNED" required:"false"`
 
 	SeverityAppPoolStopped string `envconfig:"ALERTSEVERITY_APPPOOLSTOPPED" required:"false"`
 	SeverityAppPoolStarted string `envconfig:"ALERTSEVERITY_APPPOOLSTARTED" required:"false"`
@@ -24,6 +25,8 @@ type AlertConfig struct {
 
 	SeverityHealthCheckDown string `envconfig:"ALERTSEVERITY_HEALTHCHECKDOWN" required:"false"`
 	SeverityHealthCheckUp   string `envconfig:"ALERTSEVERITY_HEALTHCHECKUP" required:"false"`
+	SeverityHealthCheckSlow string `envconfig:"ALERTSEVERITY_HEALTHCHECKSLOW" required:"false"`
+	SeverityHealthCheckFast string `envconfig:"ALERTSEVERITY_HEALTHCHECKSLOWRECOVERED" required:"false"`
 
 	SeverityHighCPU             string `envconfig:"ALERTSEVERITY_HIGHCPU" required:"false"`
 	SeverityHighCPURecovered    string `envconfig:"ALERTSEVERITY_HIGHCPURECOVERED" required:"false"`
@@ -35,6 +38,17 @@ type AlertConfig struct {
 	ThresholdHighCPUPercent    int `envconfig:"THRESHOLD_HIGHCPU_PERCENT" required:"false"`
 	ThresholdHighMemoryPercent int `envconfig:"THRESHOLD_HIGHMEMORY_PERCENT" required:"false"`
 	ThresholdLowDiskPercent    int `envconfig:"THRESHOLD_LOWDISK_PERCENT" required:"false"`
+
+	// ThresholdHealthCheckSlowSeconds is the probe duration above which a responding
+	// endpoint counts as slow. Must stay comfortably below the probe timeout (see
+	// HealthCheckTimeoutSeconds) or a slow site times out and reports as down before it
+	// ever reports as slow.
+	ThresholdHealthCheckSlowSeconds int `envconfig:"THRESHOLD_HEALTHCHECK_SLOW_SECONDS" required:"false"`
+	// HealthCheckTimeoutSeconds caps how long a single blackbox probe may take before it
+	// is recorded as a failure. Prometheus requires a scrape timeout no larger than the
+	// scrape interval, so the effective value is also clamped against each application's
+	// own health check interval.
+	HealthCheckTimeoutSeconds int `envconfig:"HEALTHCHECK_TIMEOUT_SECONDS" required:"false"`
 
 	// ReceiverMinSeverity is the global cutoff: only alerts at or above this severity
 	// are forwarded to Alertmanager. Empty resolves to "warning" at the call site.

@@ -11,7 +11,7 @@ import iconSrc from '@/assets/icon.svg'
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Overview', end: true },
   { to: '/applications', icon: Boxes, label: 'Applications' },
-  { to: '/machines', icon: HardDrive, label: 'Hosts' },
+  { to: '/hosts', icon: HardDrive, label: 'Hosts' },
   { to: '/activity', icon: Bell, label: 'Activity' },
 ]
 

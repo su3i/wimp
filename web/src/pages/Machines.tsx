@@ -11,9 +11,11 @@ import { RowMenu } from "@/components/ui/RowMenu";
 import { Pagination } from "@/components/ui/Pagination";
 import { useProjectStore } from "@/store/project";
 import { machineService } from "@/services/machine.service";
+import { prometheusService } from "@/services/prometheus.service";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { useActionCooldown } from "@/utils/useActionCooldown";
+import { formatUptime } from "@/utils/time";
 import type { Machine } from "@/types";
 
 const PAGE_SIZE = 20;
@@ -31,41 +33,17 @@ function filterIPv4(ips: string[]) {
   return (ips ?? []).filter((ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip));
 }
 
-function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const ref = useRef<HTMLDivElement>(null);
-
-  function show() {
-    if (ref.current) {
-      const rect = ref.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
-    }
-    setOpen(true);
-  }
-
-  return (
-    <div ref={ref} className='inline-flex' onMouseEnter={show} onMouseLeave={() => setOpen(false)}>
-      {children}
-      {open &&
-        createPortal(
-          <div
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)" }}
-            className='pointer-events-none z-[9999] px-2 py-1 rounded border border-rim bg-surface-highest text-[0.625rem] text-ink whitespace-nowrap shadow-md'
-          >
-            {label}
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
-}
-
-const statusConfig: Record<string, { dot: string; text: string; label: string }> = {
+const statusConfig: Record<string, { dot: string; text: string; label: string; hint?: string }> = {
   online: { dot: "bg-success", text: "text-success", label: "Online" },
   offline: { dot: "bg-danger", text: "text-danger", label: "Offline" },
   pending: { dot: "bg-warning", text: "text-warning", label: "Pending" },
-  Deleting: { dot: "bg-ink-faint", text: "text-ink-faint", label: "Deleting" },
+  reassigned: {
+    dot: "bg-ink-faint",
+    text: "text-ink-faint",
+    label: "Reassigned",
+    hint: "This machine was re-bootstrapped and now reports to a different host entry. This entry is stale and will not come back online.",
+  },
+  deleting: { dot: "bg-ink-faint", text: "text-ink-faint", label: "Deleting" },
 };
 
 function IpCell({ ips }: { ips: string[] }) {
@@ -88,7 +66,7 @@ function IpCell({ ips }: { ips: string[] }) {
   return (
     <div className='flex items-center gap-1.5'>
       {visible.map((ip, i) => (
-        <span key={i} className='font-mono text-xs text-ink-dim'>
+        <span key={i} className='text-xs text-ink-dim tabular-nums'>
           {ip}
         </span>
       ))}
@@ -109,7 +87,7 @@ function IpCell({ ips }: { ips: string[] }) {
                 className='z-[9999] rounded-md border border-rim bg-surface-highest shadow-[0_4px_16px_rgba(1,4,9,0.6)] px-3 py-2 space-y-1 pointer-events-none'
               >
                 {rest.map((ip, i) => (
-                  <p key={i} className='font-mono text-xs text-ink-dim whitespace-nowrap'>
+                  <p key={i} className='text-xs text-ink-dim tabular-nums whitespace-nowrap'>
                     {ip}
                   </p>
                 ))}
@@ -125,7 +103,7 @@ function IpCell({ ips }: { ips: string[] }) {
 function StatusCell({ status }: { status: string }) {
   const cfg = statusConfig[status] ?? { dot: "bg-ink-faint", text: "text-ink-faint", label: status };
   return (
-    <div className='flex items-center gap-2'>
+    <div className='flex items-center gap-2' title={cfg.hint}>
       <span className={cn("size-1.5 rounded-full shrink-0", cfg.dot)} />
       <span className={cn("text-xs font-medium", cfg.text)}>{cfg.label}</span>
     </div>
@@ -136,7 +114,7 @@ function TableSkeleton() {
   return (
     <div className='rounded-lg border border-rim overflow-hidden'>
       <div className='border-b border-rim bg-surface-alt px-5 py-2.5 flex gap-8'>
-        {["w-28", "w-36", "w-20", "w-24"].map((w, i) => (
+        {["w-28", "w-36", "w-32", "w-20", "w-24"].map((w, i) => (
           <div key={i} className={cn("h-2.5 rounded bg-surface-high animate-pulse", w)} />
         ))}
       </div>
@@ -148,6 +126,7 @@ function TableSkeleton() {
           <div className='size-6 rounded border border-rim bg-surface-high' />
           <div className='flex-[2] h-3 w-40 rounded bg-surface-high' />
           <div className='flex-[2] h-2.5 w-36 rounded bg-surface-high' />
+          <div className='flex-[2] h-2.5 w-32 rounded bg-surface-high' />
           <div className='flex-1 h-2.5 w-16 rounded bg-surface-high' />
           <div className='flex-1 h-2.5 w-20 rounded bg-surface-high' />
         </div>
@@ -183,6 +162,9 @@ function NoProjectSelected() {
 }
 
 const TH = "px-5 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
+// Single source of truth for the column tracks - the header row and every data row must
+// use the identical template or the two grids size their tracks independently and skew.
+const COLS = "grid-cols-[1.6fr_1.2fr_1.6fr_0.9fr_0.9fr_auto]";
 
 export function Machines() {
   usePageTitle("Hosts");
@@ -217,6 +199,29 @@ export function Machines() {
       return data;
     },
   });
+
+  // Host uptime comes from windows_exporter's boot-time series, not from the control
+  // plane - one batched query for every machine on this page (same machine_id regex
+  // batching used on the dashboard) rather than one query per row.
+  const pageMachineIds = (machinesPage?.machines ?? []).map((m) => m.ID);
+  const uptimeIdKey = pageMachineIds.slice().sort((a, b) => a - b).join("|");
+
+  const { data: uptimeResult } = useQuery({
+    queryKey: ["machines-uptime", uptimeIdKey],
+    enabled: prometheusService.isConfigured() && pageMachineIds.length > 0,
+    refetchInterval: 30_000,
+    queryFn: () =>
+      prometheusService.instant(
+        `time() - windows_system_boot_time_timestamp{machine_id=~"${uptimeIdKey}"}`,
+      ),
+  });
+
+  const uptimeMap: Record<number, number> = {};
+  for (const r of uptimeResult ?? []) {
+    const id = Number(r.metric.machine_id);
+    const secs = Number(r.value[1]);
+    if (!Number.isNaN(id) && isFinite(secs)) uptimeMap[id] = secs;
+  }
 
   async function handleConfirmAdd() {
     setCreating(true);
@@ -309,9 +314,11 @@ export function Machines() {
         <EmptyState />
       ) : (
         <div className='rounded-lg border border-rim overflow-hidden'>
-          <div className='grid grid-cols-[2fr_2fr_1fr_auto] border-b border-rim bg-surface-alt'>
-            <div className={TH}>Host Name</div>
+          <div className={cn(COLS, 'grid border-b border-rim bg-surface-alt')}>
+            <div className={TH}>Name</div>
             <div className={TH}>IP Address</div>
+            <div className={TH}>Windows Version</div>
+            <div className={TH}>Uptime</div>
             <div className={TH}>Status</div>
             <div className='px-4 py-2.5' />
           </div>
@@ -319,27 +326,21 @@ export function Machines() {
           {(paginated as Machine[]).map((machine) => {
             const ipv4s = filterIPv4(machine.IPs);
             const cooling = cooldown.isCooling(machine.ID);
+            const uptimeSecs = uptimeMap[machine.ID];
             return (
               <div
                 key={machine.ID}
-                onClick={() => navigate(`/machines/${machine.ID}`)}
+                onClick={() => navigate(`/hosts/${machine.ID}`)}
                 className={cn(
-                  'grid grid-cols-[2fr_2fr_1fr_auto] items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer',
+                  COLS,
+                  'grid items-center border-b border-rim last:border-0 hover:bg-surface-alt transition-colors duration-100 cursor-pointer',
                   cooling && 'opacity-50',
                 )}
               >
-                <div className='flex items-center gap-3 px-5 py-3.5'>
-                  {machine.WindowsVersion ? (
-                    <Tooltip label={machine.WindowsVersion}>
-                      <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
-                        <Server className='size-3 text-ink-faint' />
-                      </div>
-                    </Tooltip>
-                  ) : (
-                    <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
-                      <Server className='size-3 text-ink-faint' />
-                    </div>
-                  )}
+                <div className='flex min-w-0 items-center gap-3 px-5 py-3.5'>
+                  <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
+                    <Server className='size-3 text-ink-faint' />
+                  </div>
                   {machine.Hostname ? (
                     <span className='font-mono text-xs text-ink truncate'>{machine.Hostname.toLowerCase()}</span>
                   ) : (
@@ -349,6 +350,18 @@ export function Machines() {
 
                 <div className='px-5 py-3.5'>
                   <IpCell ips={ipv4s} />
+                </div>
+
+                <div className='min-w-0 px-5 py-3.5' title={machine.WindowsVersion || undefined}>
+                  <span className='block truncate text-xs text-ink-dim'>
+                    {machine.WindowsVersion || "N/A"}
+                  </span>
+                </div>
+
+                <div className='px-5 py-3.5'>
+                  <span className='text-xs text-ink-dim tabular-nums'>
+                    {uptimeSecs != null ? formatUptime(uptimeSecs) : "N/A"}
+                  </span>
                 </div>
 
                 <div className='px-5 py-3.5'>

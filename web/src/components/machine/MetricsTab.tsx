@@ -20,6 +20,7 @@ import {
   type PromRangeResult,
   type PromInstantResult,
 } from "@/services/prometheus.service";
+import { formatUptime } from "@/utils/time";
 
 const C = {
   blue: "#3b82f6",
@@ -61,15 +62,6 @@ function fmtBytes(bytes: number): string {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-}
-
-function fmtUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
 }
 
 function fmtTime(ts: number) {
@@ -117,13 +109,13 @@ function DarkTooltip(fmt: (v: number) => string) {
     if (!active || !payload?.length) return null;
     return (
       <div className='rounded-md border border-rim bg-surface-highest px-3 py-2 text-xs shadow-xl min-w-[120px]'>
-        <p className='text-ink-faint mb-1.5 font-mono'>{label}</p>
+        <p className='text-ink-faint mb-1.5 tabular-nums'>{label}</p>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {payload.map((p: any) => (
           <div key={p.name} className='flex items-center gap-2 py-0.5'>
             <span className='size-1.5 rounded-full shrink-0' style={{ background: p.color }} />
             <span className='text-ink-dim'>{p.name}</span>
-            <span className='text-ink font-mono ml-auto pl-3'>{fmt(p.value)}</span>
+            <span className='text-ink tabular-nums ml-auto pl-3'>{fmt(p.value)}</span>
           </div>
         ))}
       </div>
@@ -164,7 +156,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   return (
     <div className='rounded-lg border border-rim bg-surface px-5 py-5'>
       <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint mb-2.5'>{label}</p>
-      <p className='text-2xl font-semibold text-ink font-mono leading-none'>{value}</p>
+      <p className='text-2xl font-semibold text-ink tabular-nums leading-none'>{value}</p>
       {sub && <p className='text-[0.625rem] text-ink-faint mt-1.5'>{sub}</p>}
     </div>
   );
@@ -303,7 +295,7 @@ export function MetricsTab({ machineId }: { machineId: number }) {
           value={memPct != null ? pctFmt(memPct) : "N/A"}
           sub={memAvailB != null ? `${fmtBytes(memAvailB)} available` : undefined}
         />
-        <StatCard label='Uptime' value={uptimeSecs != null ? fmtUptime(uptimeSecs) : "N/A"} />
+        <StatCard label='Uptime' value={uptimeSecs != null ? formatUptime(uptimeSecs) : "N/A"} />
       </div>
 
       {/* 2-column chart grid */}

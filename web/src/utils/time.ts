@@ -15,6 +15,19 @@ export function timeAgo(dateStr: string | null | undefined, emptyLabel = "Never"
   }
 }
 
+// Formats a duration in seconds as a coarse uptime string (e.g. "12d 4h 30m").
+// Shared by the host list and the per-host metrics tab, both of which derive it from
+// the same Prometheus windows_system_boot_time_timestamp series.
+export function formatUptime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "N/A";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 // Formats a timestamp as an exact, unambiguous, absolute moment (e.g.
 // "Aug 9, 3:45:12 PM GMT+1") - what admins actually need to line up against other
 // systems' logs, unlike the vague timeAgo(). Always in the browser's local timezone

@@ -587,11 +587,11 @@ export function LogsViewer({
           <div className='rounded-lg border border-rim bg-surface-alt divide-y divide-rim text-xs'>
             <div className='flex items-center gap-2.5 px-4 py-2.5'>
               <FileArchive className='size-3.5 text-ink-faint shrink-0' />
-              <span className='font-mono text-ink truncate'>{pendingDownload?.fileName}</span>
+              <span className='text-ink truncate'>{pendingDownload?.fileName}</span>
             </div>
             <div className='flex items-center justify-between px-4 py-2.5'>
               <span className='text-ink-faint'>Size</span>
-              <span className='font-mono text-ink'>
+              <span className='text-ink tabular-nums'>
                 {pendingDownload ? formatBytes(pendingDownload.fileSize) : ""}
               </span>
             </div>

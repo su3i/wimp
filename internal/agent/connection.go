@@ -81,6 +81,7 @@ func (a *Agent) dial(ctx context.Context) error {
 			IPs:            localIPs(),
 			Version:        Version,
 			WindowsVersion: windowsVersion(),
+			MachineUID:     machineUID(),
 		}),
 	}); err != nil {
 		return fmt.Errorf("registration send: %w", err)

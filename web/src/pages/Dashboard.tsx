@@ -1,10 +1,15 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { AlertTriangle, Monitor, Layers, X, ChevronRight, Info } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertTriangle, Monitor, Layers, X, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { DiskGauges } from "@/components/dashboard/DiskGauges";
 import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
+import { useUIStore } from "@/store/ui";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
 import { levelConfig, splitTitle } from "@/utils/notifications";
@@ -26,23 +31,89 @@ function mids(ids: number[]) {
 }
 
 const PQ = {
-  // Total IIS request rate across all hosts and sites (req/s)
-  throughput: (ids: number[]) => `sum(rate(windows_iis_requests_total{${mids(ids)}}[5m]))`,
-
   networkIn: (ids: number[]) =>
     `sum(rate(windows_net_bytes_received_total{${mids(ids)},nic!~".*isatap.*"}[5m]))`,
 
   networkOut: (ids: number[]) =>
     `sum(rate(windows_net_bytes_sent_total{${mids(ids)},nic!~".*isatap.*"}[5m]))`,
 
+  // Per-host IIS request rate, one result per machine_id label - used for the Request
+  // Throughput chart (the same metric as `throughput` above, just not summed down to one
+  // series so each host is its own line).
+  throughputPerHost: (ids: number[], win: string) =>
+    `sum by (machine_id) (rate(windows_iis_requests_total{${mids(ids)}}[${win}]))`,
+
   // Per-host CPU %, one result per machine_id label - used for the Cpu Usage chart
-  cpuPerHost: (ids: number[]) =>
-    `100 - (avg by (machine_id) (rate(windows_cpu_time_total{${mids(ids)},mode="idle"}[5m])) * 100)`,
+  cpuPerHost: (ids: number[], win: string) =>
+    `100 - (avg by (machine_id) (rate(windows_cpu_time_total{${mids(ids)},mode="idle"}[${win}])) * 100)`,
 
   // Per-host memory used %, one result per machine_id label - used for the Memory Usage chart
   memPerHost: (ids: number[]) =>
     `100 - (windows_memory_physical_free_bytes{${mids(ids)}} / windows_memory_physical_total_bytes{${mids(ids)}} * 100)`,
 };
+
+// Selectable windows for the three per-host line charts. `step` keeps every window at
+// roughly 60 points (so a 3-day chart isn't 4320 samples wide), and `rateWindow` scales
+// with it so each plotted point still averages over the gap it represents rather than a
+// fixed 5 minutes of a 15-minute step. `refetchMs` scales too: a 3-day chart moves by one
+// pixel every 15 minutes, so re-querying it every 5s would just hammer Prometheus with a
+// far more expensive query for no visible change.
+type RangeKey = "1h" | "24h" | "3d";
+
+const RANGES: Record<
+  RangeKey,
+  { label: string; seconds: number; step: number; rateWindow: string; refetchMs: number }
+> = {
+  "1h": { label: "1h", seconds: 60 * 60, step: 60, rateWindow: "5m", refetchMs: 5_000 },
+  "24h": { label: "24h", seconds: 24 * 60 * 60, step: 300, rateWindow: "10m", refetchMs: 30_000 },
+  "3d": { label: "3d", seconds: 3 * 24 * 60 * 60, step: 900, rateWindow: "30m", refetchMs: 60_000 },
+};
+
+const RANGE_KEYS: RangeKey[] = ["1h", "24h", "3d"];
+
+// Spelled out in the dropdown (unlike the compact axis-style "1h"/"24h"/"3d" keys) since
+// a closed select shows only the current choice, with no siblings to give it context.
+const RANGE_OPTION_LABELS: Record<RangeKey, string> = {
+  "1h": "Last hour",
+  "24h": "Last 24 hours",
+  "3d": "Last 3 days",
+};
+
+// Resolves a range key into the concrete arguments a Prometheus range query needs. Lives
+// at module scope and is called from inside the query function, never during render: the
+// window has to be anchored to the moment the request actually goes out, or a component
+// that re-renders without refetching would silently shift the window under a cached result.
+function rangeWindow(range: RangeKey) {
+  const { seconds, step, rateWindow } = RANGES[range];
+  const end = Math.floor(Date.now() / 1000);
+  return { start: end - seconds, end, step, rateWindow };
+}
+
+// A bare clock reads as ambiguous the moment the window spans more than one day, so
+// anything past 24h gets a weekday prefix.
+function fmtChartTime(ts: number, range: RangeKey) {
+  const d = new Date(ts * 1000);
+  const clock = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (range === "3d") return `${d.toLocaleDateString([], { weekday: "short" })} ${clock}`;
+  return clock;
+}
+
+function RangeToggle({ value, onChange }: { value: RangeKey; onChange: (v: RangeKey) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as RangeKey)}
+      aria-label='Chart time range'
+      className='cursor-pointer rounded-md border border-rim bg-surface-alt px-2 py-1 text-[0.625rem] font-medium tracking-normal normal-case text-ink-dim hover:text-ink focus:outline-none focus:border-primary transition-colors'
+    >
+      {RANGE_KEYS.map((key) => (
+        <option key={key} value={key}>
+          {RANGE_OPTION_LABELS[key]}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 // Extracts a single scalar from a Prometheus instant result (handles NaN/Inf)
 function scalar(r: PromInstantResult[] | undefined): number | null {
@@ -54,15 +125,17 @@ function scalar(r: PromInstantResult[] | undefined): number | null {
 
 // Reshapes a per-host Prometheus range result (one series per machine_id) into
 // one row per timestamp with one column per hostname - the shape HostLineChart needs.
-// Shared by the Cpu Usage and Memory Usage charts.
-function toHostRows(range: PromRangeResult[] | undefined, hostNameMap: Map<number, string>) {
+// Shared by the Request Throughput, Cpu Usage and Memory Usage charts.
+function toHostRows(
+  range: PromRangeResult[] | undefined,
+  hostNameMap: Map<number, string>,
+  rangeKey: RangeKey,
+) {
   if (!range?.length) return { rows: [] as Record<string, string | number>[], keys: [] as string[] };
   const keys = range.map((s) => hostNameMap.get(Number(s.metric.machine_id)) ?? s.metric.machine_id ?? "?");
   const timestamps = range[0]?.values?.map(([ts]) => ts) ?? [];
   const rows = timestamps.map((ts, i) => {
-    const row: Record<string, string | number> = {
-      time: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
+    const row: Record<string, string | number> = { time: fmtChartTime(ts, rangeKey) };
     range.forEach((s, si) => {
       const val = parseFloat(s.values[i]?.[1] ?? "0");
       row[keys[si]] = isFinite(val) ? parseFloat(val.toFixed(1)) : 0;
@@ -70,11 +143,6 @@ function toHostRows(range: PromRangeResult[] | undefined, hostNameMap: Map<numbe
     return row;
   });
   return { rows, keys };
-}
-
-function fmtRate(v: number) {
-  if (v >= 1000) return `${(v / 1000).toFixed(1)}k/s`;
-  return `${v.toFixed(1)}/s`;
 }
 
 function fmtBytes(v: number) {
@@ -110,48 +178,17 @@ function AlertRow({ alert, onDismiss }: { alert: ActiveAlert; onDismiss: () => v
   );
 }
 
-function InfoTooltip({ text }: { text: string }) {
-  return (
-    <span className='relative inline-flex group/info'>
-      <Info className='size-3 text-ink-faint hover:text-ink-dim transition-colors cursor-help' />
-      <span className='pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-max max-w-[190px] px-2 py-1.5 rounded border border-rim bg-surface-highest text-[0.5625rem] normal-case tracking-normal font-normal text-ink-dim leading-snug opacity-0 group-hover/info:opacity-100 transition-opacity z-20 shadow-md'>
-        {text}
-      </span>
-    </span>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  info,
-}: {
-  label: string;
-  value: string | null;
-  sub?: string;
-  info?: string;
-}) {
-  return (
-    <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
-      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
-        {label}
-        {info && <InfoTooltip text={info} />}
-      </span>
-      <span className='text-[27px] font-semibold font-mono leading-none text-ink'>
-        {value ?? "N/A"}
-      </span>
-      {sub && <span className='text-[0.625rem] text-ink-faint'>{sub}</span>}
-    </div>
-  );
-}
+// Shared shell for the aggregate tiles in the top row. justify-between rather than a
+// fixed gap: the row's height is set by the tallest card in it (the disk gauges), and
+// spreading label to top / value to bottom keeps the shorter tiles from stacking their
+// content up top with dead space underneath.
+const STAT_CARD =
+  "rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col justify-between gap-3 min-h-[124px]";
 
 function SevEventsCard({ count }: { count: number }) {
   const hot = count > 0;
   return (
-    <div className={cn(
-      'rounded-lg border bg-surface px-[18px] py-[18px] flex flex-col gap-3 transition-colors border-rim',
-    )}>
+    <div className={cn(STAT_CARD, 'transition-colors')}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Sev+ Events
         <InfoTooltip text='Distinct Sev incidents in the last 24h.' />
@@ -201,7 +238,7 @@ function ApplicationStatusCard({
     !showCount ? "text-ink" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
 
   return (
-    <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
+    <div className={STAT_CARD}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Applications
         <InfoTooltip text='Counts an app healthy via its health check URL when configured, otherwise by live app pool state.' />
@@ -225,7 +262,7 @@ function ApplicationStatusCard({
 
 function BandwidthCard({ inVal, outVal }: { inVal: number | null; outVal: number | null }) {
   return (
-    <div className='rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col gap-3'>
+    <div className={STAT_CARD}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Bandwidth
         <InfoTooltip text='Total network in/out across all hosts, 5-min average.' />
@@ -313,6 +350,67 @@ function ChartSkeleton({ height }: { height: number }) {
   );
 }
 
+// Shared shell for the three per-host line charts - title, info tooltip, window toggle,
+// and the Suspense boundary the lazily-loaded recharts chunk lands in.
+function ChartCard({
+  title,
+  info,
+  range,
+  onRangeChange,
+  children,
+}: {
+  title: string;
+  info: string;
+  range: RangeKey;
+  onRangeChange: (v: RangeKey) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
+      <div className='flex items-center justify-between gap-2'>
+        <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+          {title}
+          <InfoTooltip text={info} />
+        </p>
+        <RangeToggle value={range} onChange={onRangeChange} />
+      </div>
+      <Suspense fallback={<ChartSkeleton height={234} />}>{children}</Suspense>
+    </div>
+  );
+}
+
+// Nudges a fresh project toward its first host - a project with no hosts has nothing to
+// show anywhere in the app, and the fix is always the same one action. Shown once per
+// project (see useUIStore.emptyProjectPrompted), so switching away and back re-prompts
+// while staying put doesn't. Same shape as ui/ConfirmModal, just with its own decline
+// label; Continue drops the user on the hosts page rather than acting in place.
+function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <Modal open={open} onClose={onClose} title='Add your first host'>
+      <div className='space-y-4'>
+        <p className='text-sm text-ink-dim'>
+          Add your first host and this whole dashboard comes alive. It takes about a minute,
+          and all you run is one command on the machine.
+        </p>
+        <div className='flex justify-end gap-2'>
+          <Button variant='outline' onClick={onClose}>
+            I'll do this later
+          </Button>
+          <Button
+            onClick={() => {
+              onClose();
+              navigate("/hosts");
+            }}
+          >
+            Continue
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function Dashboard() {
   usePageTitle("Overview");
   const queryClient = useQueryClient();
@@ -321,6 +419,7 @@ export function Dashboard() {
 
   const [alerts, setAlerts] = useState<ActiveAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const { emptyProjectPrompted, markEmptyProjectPrompted } = useUIStore();
 
   const { data: machines } = useQuery({
     queryKey: ["machines", projectKey],
@@ -370,11 +469,6 @@ export function Dashboard() {
 
   const qOpts = { refetchInterval: 5_000, staleTime: 0, enabled: promEnabled } as const;
 
-  const { data: rThroughput } = useQuery({
-    queryKey: ["d-throughput", idKey],
-    queryFn: () => prometheusService.instant(PQ.throughput(machineIds)),
-    ...qOpts,
-  });
   const { data: rNetIn } = useQuery({
     queryKey: ["d-net-in", idKey],
     queryFn: () => prometheusService.instant(PQ.networkIn(machineIds)),
@@ -385,21 +479,38 @@ export function Dashboard() {
     queryFn: () => prometheusService.instant(PQ.networkOut(machineIds)),
     ...qOpts,
   });
-  const { data: rCpuHost } = useQuery({
-    queryKey: ["d-cpuhost", idKey],
+  // Each chart carries its own window so two metrics can be compared over different
+  // spans side by side (e.g. a 3-day CPU trend next to the last hour of throughput).
+  const [throughputRange, setThroughputRange] = useState<RangeKey>("1h");
+  const [memRange, setMemRange] = useState<RangeKey>("1h");
+  const [cpuRange, setCpuRange] = useState<RangeKey>("1h");
+
+  const { data: rThroughputHost } = useQuery({
+    queryKey: ["d-tphost", idKey, throughputRange],
     queryFn: () => {
-      const now = Math.floor(Date.now() / 1000);
-      return prometheusService.range(PQ.cpuPerHost(machineIds), now - 60 * 60, now, 60);
+      const { start, end, step, rateWindow } = rangeWindow(throughputRange);
+      return prometheusService.range(PQ.throughputPerHost(machineIds, rateWindow), start, end, step);
     },
     ...qOpts,
+    refetchInterval: RANGES[throughputRange].refetchMs,
+  });
+  const { data: rCpuHost } = useQuery({
+    queryKey: ["d-cpuhost", idKey, cpuRange],
+    queryFn: () => {
+      const { start, end, step, rateWindow } = rangeWindow(cpuRange);
+      return prometheusService.range(PQ.cpuPerHost(machineIds, rateWindow), start, end, step);
+    },
+    ...qOpts,
+    refetchInterval: RANGES[cpuRange].refetchMs,
   });
   const { data: rMemHost } = useQuery({
-    queryKey: ["d-memhost", idKey],
+    queryKey: ["d-memhost", idKey, memRange],
     queryFn: () => {
-      const now = Math.floor(Date.now() / 1000);
-      return prometheusService.range(PQ.memPerHost(machineIds), now - 60 * 60, now, 60);
+      const { start, end, step } = rangeWindow(memRange);
+      return prometheusService.range(PQ.memPerHost(machineIds), start, end, step);
     },
     ...qOpts,
+    refetchInterval: RANGES[memRange].refetchMs,
   });
 
   const { data: stats } = useQuery({
@@ -474,6 +585,15 @@ export function Dashboard() {
   useEffect(() => {
     void dashboardService.getActiveAlerts().then((d) => setAlerts(d ?? []));
   }, []);
+
+  // Derived rather than held in local state, so dismissing it is the single act of
+  // recording the prompt against this project key. `machines === undefined` means the
+  // host query is still in flight, which must not be mistaken for an empty project.
+  const showGetStarted =
+    !!projectKey &&
+    machines !== undefined &&
+    machines.length === 0 &&
+    emptyProjectPrompted !== projectKey;
 
   useEffect(() => {
     const { accessToken: rawAccessToken } = useAuthStore.getState();
@@ -558,12 +678,21 @@ export function Dashboard() {
   }, [queryClient, projectKey]);
 
   const sevLast24h = stats?.sev_last_24h ?? 0;
-  const throughputVal = scalar(rThroughput);
   const netInVal = scalar(rNetIn);
   const netOutVal = scalar(rNetOut);
 
-  const cpuPerfData = useMemo(() => toHostRows(rCpuHost, hostNameMap), [rCpuHost, hostNameMap]);
-  const memPerfData = useMemo(() => toHostRows(rMemHost, hostNameMap), [rMemHost, hostNameMap]);
+  const throughputPerfData = useMemo(
+    () => toHostRows(rThroughputHost, hostNameMap, throughputRange),
+    [rThroughputHost, hostNameMap, throughputRange],
+  );
+  const cpuPerfData = useMemo(
+    () => toHostRows(rCpuHost, hostNameMap, cpuRange),
+    [rCpuHost, hostNameMap, cpuRange],
+  );
+  const memPerfData = useMemo(
+    () => toHostRows(rMemHost, hostNameMap, memRange),
+    [rMemHost, hostNameMap, memRange],
+  );
 
   const visibleAlerts = alerts.filter((a) => a.id && !dismissed.has(a.id));
   function dismiss(id: string) {
@@ -572,6 +701,11 @@ export function Dashboard() {
 
   return (
     <>
+      <GetStartedModal
+        open={showGetStarted}
+        onClose={() => markEmptyProjectPrompted(projectKey)}
+      />
+
       {/* Alert Banner */}
       {visibleAlerts.length > 0 && (
         <div className='-mt-6 -mx-6 mb-4 sticky top-0 z-50 shadow-md'>
@@ -588,43 +722,57 @@ export function Dashboard() {
       </div>
 
       <div className='space-y-[14px]'>
-        {/* ── Row 1: 4 aggregate stat cards ───────────────────────────── */}
-        <div className='grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-[14px]'>
-          <SevEventsCard count={sevLast24h} />
-          <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} ready={appStatusReady} />
-          <MetricCard
-            label='Request Throughput'
-            value={throughputVal != null ? fmtRate(throughputVal) : null}
-            sub='last 5 min'
-            info='Total IIS request rate across this project, 5-min average.'
-          />
+        {/* ── Row 1: aggregate stat cards + per-host disk ─────────────── */}
+        {/* Same grid-cols-3 as the charts row below, so the column boundaries line up
+            between the two rows. The first third is a nested 2-up rather than four tracks
+            in one grid: four tracks would carry three gaps against the charts row's two,
+            and no ratio of fr units can reconcile that - the divisions would land a gap's
+            worth apart no matter how they were tuned. */}
+        <div className='grid grid-cols-3 gap-[14px]'>
+          <div className='grid grid-cols-2 gap-[14px]'>
+            <SevEventsCard count={sevLast24h} />
+            <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} ready={appStatusReady} />
+          </div>
           <BandwidthCard
             inVal={netInVal}
             outVal={netOutVal}
           />
+          <DiskGauges machineIds={machineIds} hostNames={hostNameMap} />
         </div>
 
-        {/* ── Row 2: Memory Usage + Cpu Usage ───────────────────────────── */}
-        <div className='grid grid-cols-2 gap-[14px]'>
-          <div className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
-            <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Memory Usage
-              <InfoTooltip text='Live per-host memory usage over the last hour.' />
-            </p>
-            <Suspense fallback={<ChartSkeleton height={234} />}>
-              <HostLineChart rows={memPerfData.rows} keys={memPerfData.keys} colors={hostColorMap} />
-            </Suspense>
-          </div>
+        {/* ── Row 2: Request Throughput + Cpu Usage + Memory Usage ──────── */}
+        <div className='grid grid-cols-3 gap-[14px]'>
+          <ChartCard
+            title='Request Throughput'
+            info='Live per-host IIS request rate.'
+            range={throughputRange}
+            onRangeChange={setThroughputRange}
+          >
+            <HostLineChart
+              rows={throughputPerfData.rows}
+              keys={throughputPerfData.keys}
+              colors={hostColorMap}
+              format='rate'
+            />
+          </ChartCard>
 
-          <div className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
-            <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-              Cpu Usage
-              <InfoTooltip text='Live per-host CPU usage over the last hour.' />
-            </p>
-            <Suspense fallback={<ChartSkeleton height={234} />}>
-              <HostLineChart rows={cpuPerfData.rows} keys={cpuPerfData.keys} colors={hostColorMap} />
-            </Suspense>
-          </div>
+          <ChartCard
+            title='Cpu Usage'
+            info='Live per-host CPU usage.'
+            range={cpuRange}
+            onRangeChange={setCpuRange}
+          >
+            <HostLineChart rows={cpuPerfData.rows} keys={cpuPerfData.keys} colors={hostColorMap} />
+          </ChartCard>
+
+          <ChartCard
+            title='Memory Usage'
+            info='Live per-host memory usage.'
+            range={memRange}
+            onRangeChange={setMemRange}
+          >
+            <HostLineChart rows={memPerfData.rows} keys={memPerfData.keys} colors={hostColorMap} />
+          </ChartCard>
         </div>
 
         {/* ── Row 3: Recent Alerts ─────────────────────────────────────── */}

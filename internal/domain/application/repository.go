@@ -13,6 +13,7 @@ type ApplicationRepository interface {
 	FindOneByID(id uint) (*Application, error)
 	Update(app *Application) error
 	UpdateCheckState(id uint, consecutiveFailures int, alertFired bool) error
+	UpdateSlowState(id uint, consecutiveSlow int, slowAlertFired bool) error
 	FindAllWithHealthCheck() ([]Application, error)
 	AddAppPool(rel *ApplicationAppPool) error
 	RemoveAppPool(applicationID, appPoolID uint) error

@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, redirect } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Login } from '@/pages/Login'
@@ -30,9 +30,19 @@ export const router = createBrowserRouter([
           { path: '/', element: <Dashboard /> },
           { path: '/applications', element: <Applications /> },
           { path: '/applications/:appId', element: <ApplicationDetail /> },
-          { path: '/machines', element: <Machines /> },
-          { path: '/machines/:machineId', element: <MachineDetail /> },
+          { path: '/hosts', element: <Machines /> },
+          { path: '/hosts/:machineId', element: <MachineDetail /> },
           { path: '/activity', element: <Activity /> },
+          // Legacy /machines URLs - kept as redirects so existing bookmarks and any link
+          // shared before the rename still land on the right page, with the machine id
+          // carried across so a deep link resolves to that same host, not just the list.
+          // Done as loaders rather than <Navigate> elements so the redirect happens before
+          // anything renders.
+          { path: '/machines', loader: () => redirect('/hosts') },
+          {
+            path: '/machines/:machineId',
+            loader: ({ params }) => redirect(`/hosts/${params.machineId ?? ''}`),
+          },
         ],
       },
     ],

@@ -57,7 +57,9 @@ export interface Project {
   UpdatedAt: string
 }
 
-export type MachineStatus = 'pending' | 'online' | 'offline'
+// 'reassigned' is terminal: the physical machine was re-bootstrapped and now reports to a
+// different host entry (usually in another project), so this one will never come back.
+export type MachineStatus = 'pending' | 'online' | 'offline' | 'reassigned'
 
 export interface Machine {
   ID: number
@@ -70,6 +72,9 @@ export interface Machine {
   LastSeenAt: string | null
   AgentVersion: string
   WindowsVersion: string
+  MachineUID: string
+  SupersededByID: number | null
+  ReassignedAt: string | null
   CreatedAt: string
   UpdatedAt: string
 }

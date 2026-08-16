@@ -35,6 +35,10 @@ spec:
               port: http
             initialDelaySeconds: 15
             periodSeconds: 30
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             # ── App ──────────────────────────────────────────
             - name: APPENV
@@ -114,6 +118,8 @@ spec:
               value: {{ .Values.config.alerts.severity.machineRestarting | quote }}
             - name: ALERTSEVERITY_AGENTUPDATED
               value: {{ .Values.config.alerts.severity.agentUpdated | quote }}
+            - name: ALERTSEVERITY_MACHINEREASSIGNED
+              value: {{ .Values.config.alerts.severity.machineReassigned | quote }}
             - name: ALERTSEVERITY_APPPOOLSTOPPED
               value: {{ .Values.config.alerts.severity.appPoolStopped | quote }}
             - name: ALERTSEVERITY_APPPOOLSTARTED
@@ -134,6 +140,10 @@ spec:
               value: {{ .Values.config.alerts.severity.healthCheckDown | quote }}
             - name: ALERTSEVERITY_HEALTHCHECKUP
               value: {{ .Values.config.alerts.severity.healthCheckUp | quote }}
+            - name: ALERTSEVERITY_HEALTHCHECKSLOW
+              value: {{ .Values.config.alerts.severity.healthCheckSlow | quote }}
+            - name: ALERTSEVERITY_HEALTHCHECKSLOWRECOVERED
+              value: {{ .Values.config.alerts.severity.healthCheckSlowRecovered | quote }}
             - name: ALERTSEVERITY_HIGHCPU
               value: {{ .Values.config.alerts.severity.highCpu | quote }}
             - name: ALERTSEVERITY_HIGHCPURECOVERED
@@ -152,6 +162,10 @@ spec:
               value: {{ .Values.config.alerts.threshold.highMemoryPercent | toString | quote }}
             - name: THRESHOLD_LOWDISK_PERCENT
               value: {{ .Values.config.alerts.threshold.lowDiskPercent | toString | quote }}
+            - name: THRESHOLD_HEALTHCHECK_SLOW_SECONDS
+              value: {{ .Values.config.alerts.threshold.healthCheckSlowSeconds | toString | quote }}
+            - name: HEALTHCHECK_TIMEOUT_SECONDS
+              value: {{ .Values.config.healthCheckTimeoutSeconds | toString | quote }}
             - name: ALERTRECEIVERMINSEVERITY
               value: {{ .Values.config.alerts.receiverMinSeverity | quote }}
 

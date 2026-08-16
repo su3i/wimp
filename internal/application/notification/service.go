@@ -117,6 +117,8 @@ func severityOverride(alertType notification.AlertType) string {
 		return a.SeverityMachineRestarting
 	case notification.AlertAgentUpdated:
 		return a.SeverityAgentUpdated
+	case notification.AlertMachineReassigned:
+		return a.SeverityMachineReassigned
 	case notification.AlertAppPoolStopped:
 		return a.SeverityAppPoolStopped
 	case notification.AlertAppPoolStarted:
@@ -137,6 +139,10 @@ func severityOverride(alertType notification.AlertType) string {
 		return a.SeverityHealthCheckDown
 	case notification.AlertHealthCheckUp:
 		return a.SeverityHealthCheckUp
+	case notification.AlertHealthCheckSlow:
+		return a.SeverityHealthCheckSlow
+	case notification.AlertHealthCheckFast:
+		return a.SeverityHealthCheckFast
 	case notification.AlertHighCPU:
 		return a.SeverityHighCPU
 	case notification.AlertHighCPURecovered:
@@ -175,7 +181,7 @@ func deepLink(webUrl string, machineID uint) string {
 	if machineID == 0 {
 		return base + "/activity"
 	}
-	return fmt.Sprintf("%s/machines/%d", base, machineID)
+	return fmt.Sprintf("%s/hosts/%d", base, machineID)
 }
 
 // Emit creates, persists, broadcasts, and (if it clears the receiver-min-severity

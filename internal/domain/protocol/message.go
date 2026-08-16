@@ -32,6 +32,12 @@ type RegisterPayload struct {
 	IPs            []string `json:"ips"`
 	Version        string   `json:"version"`
 	WindowsVersion string   `json:"windows_version"`
+	// MachineUID is a stable identifier for the physical box (Windows MachineGuid). It
+	// survives re-bootstrapping into a different project, which the machine id and token
+	// do not, and is what lets the control plane recognize a host it already knows under
+	// a different row. Empty when it can't be read, and empty from agents older than the
+	// build that started sending it.
+	MachineUID string `json:"machine_uid,omitempty"`
 }
 
 // DiscoveryPayload is sent by the agent after RegisterAck with full IIS state.

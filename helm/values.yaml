@@ -17,10 +17,23 @@ webUrl: ""
 
 image:
   repository: darksueii/wimp
-  tag: "1.0.3"
+  tag: "1.0.4"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
+
+# Control plane resource envelope. The process is a Go HTTP API holding one WebSocket per
+# agent, so memory scales with fleet size rather than with request volume - the defaults
+# below are sized for a fleet in the low hundreds of hosts. Raise `limits` before growing
+# past that. Set to {} to run unbounded (not recommended - an unbounded pod is the first
+# thing evicted under node pressure, and it takes every agent connection down with it).
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 service:
   type: LoadBalancer  # LoadBalancer | NodePort | ClusterIP
@@ -75,6 +88,9 @@ config:
       machineShutdown: info
       machineRestarting: info
       agentUpdated: info
+      # Fires in the project a host just left, when that same physical machine is
+      # re-bootstrapped into another project and starts reporting there instead.
+      machineReassigned: warning
       appPoolStopped: warning
       appPoolStarted: info
       siteStopped: warning
@@ -85,6 +101,10 @@ config:
       fluentBitUp: info
       healthCheckDown: sev
       healthCheckUp: info
+      # "Up but degraded" - distinct from healthCheckDown so a slow site and an
+      # unreachable one can be told apart and routed differently.
+      healthCheckSlow: critical
+      healthCheckSlowRecovered: info
       highCpu: critical
       highCpuRecovered: info
       highMemory: critical
@@ -98,10 +118,18 @@ config:
       highCpuPercent: 95
       highMemoryPercent: 95
       lowDiskPercent: 5  # alert fires when free space drops BELOW this
+      # Response time above which a responding endpoint is alerted on as slow.
+      healthCheckSlowSeconds: 5
 
     # Only alerts at or above this severity are forwarded to Alertmanager (everything
     # non-disabled is still stored/shown in-app regardless).
     receiverMinSeverity: critical
+
+  # How long a single health check probe may run before it is recorded as a failure. A
+  # probe that times out looks identical to one that was refused, so too small a value
+  # here reports a slow site as a down site. Automatically clamped to stay below each
+  # application's own health check interval, which Prometheus requires.
+  healthCheckTimeoutSeconds: 30
 
   database:
     type: postgres  # "sqlite" | "postgres"
@@ -130,10 +158,20 @@ config:
 web:
   image:
     repository: darksueii/wimp-web
-    tag: "1.0.3"
+    tag: "1.0.4"
     pullPolicy: IfNotPresent
 
   replicaCount: 1
+
+  # The web container is nginx serving a pre-built static bundle - it does no application
+  # work at all, so it needs very little. Set to {} to run unbounded (not recommended).
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
 
   service:
     type: LoadBalancer  # LoadBalancer | NodePort | ClusterIP

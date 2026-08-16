@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus, Pencil, CheckCircle2 } from "lucide-react";
+import { Layers, AppWindow, Trash2, AlertCircle, Boxes, Plus, Pencil, CheckCircle2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -74,7 +74,7 @@ function TableSkeleton() {
   return (
     <div className='rounded-lg border border-rim overflow-hidden'>
       <div className='border-b border-rim bg-surface-alt px-5 py-2.5 flex gap-8'>
-        {["w-32", "w-20", "w-24", "w-28"].map((w, i) => (
+        {["w-32", "w-36", "w-20", "w-24", "w-28"].map((w, i) => (
           <div key={i} className={cn("h-2.5 rounded bg-surface-high animate-pulse", w)} />
         ))}
       </div>
@@ -85,6 +85,7 @@ function TableSkeleton() {
         >
           <div className='size-6 rounded border border-rim bg-surface-high' />
           <div className='flex-[2] h-3 w-40 rounded bg-surface-high' />
+          <div className='flex-[2] h-2.5 w-36 rounded bg-surface-high' />
           <div className='flex-1 h-2.5 w-20 rounded bg-surface-high' />
           <div className='flex-1 h-2.5 w-24 rounded bg-surface-high' />
           <div className='flex gap-2'>
@@ -188,7 +189,7 @@ function EditApplicationModal({
             value={hcUrl}
             onChange={(e) => setHcUrl(e.target.value)}
             placeholder="https://example.com/health"
-            className="w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-accent"
+            className="w-full h-8 px-3 rounded-md border border-rim bg-surface text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent"
           />
         </div>
 
@@ -374,8 +375,9 @@ export function Applications() {
         // to its own content height and center that (differently-sized) box within the
         // row, which looks inconsistent the moment cells have different content heights
         // (e.g. a two-line Status next to single-line cells).
-        <div className='grid grid-cols-[1.3fr_1.5fr_0.8fr_auto] rounded-lg border border-rim overflow-hidden'>
+        <div className='grid grid-cols-[1.2fr_1.4fr_1.4fr_0.7fr_auto] rounded-lg border border-rim overflow-hidden'>
           <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Name</div>
+          <div className={cn(TH, "border-b border-rim bg-surface-alt")}>URL</div>
           <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Status</div>
           <div className={cn(TH, "border-b border-rim bg-surface-alt")}>Uptime</div>
           <div className='border-b border-rim bg-surface-alt px-4 py-2.5' />
@@ -397,7 +399,28 @@ export function Applications() {
                   <div className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
                     <AppWindow className='size-3 text-ink-faint' />
                   </div>
-                  <span className='font-mono text-xs text-ink truncate'>{app.Name}</span>
+                  <span className='text-xs text-ink truncate'>{app.Name}</span>
+                </div>
+
+                {/* URL - the application's health check URL, the only address the app
+                    itself is known by. Opens in a new tab rather than navigating into the
+                    row's detail page, hence the stopPropagation. */}
+                <div className={cn("flex min-w-0 items-center px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                  {app.HealthCheckURL ? (
+                    <a
+                      href={app.HealthCheckURL}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      title={app.HealthCheckURL}
+                      onClick={(e) => e.stopPropagation()}
+                      className='flex min-w-0 items-center gap-1.5 text-xs text-ink-dim hover:text-ink transition-colors'
+                    >
+                      <span className='truncate'>{app.HealthCheckURL}</span>
+                      <ExternalLink className='size-3 shrink-0' />
+                    </a>
+                  ) : (
+                    <span className='text-xs text-ink-faint'>N/A</span>
+                  )}
                 </div>
 
                 {/* Status */}

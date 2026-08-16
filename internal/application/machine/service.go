@@ -44,6 +44,47 @@ func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine
 	return repo.Create(m)
 }
 
+// ReconcileReassignment retires any machine row that refers to the same physical box as
+// the one that just registered. Re-running the bootstrap script on a host that is already
+// in WIMP (typically to move it into another project) leaves the old row behind: the agent
+// only ever holds one token, so it stops reporting against the old row entirely, and that
+// row would otherwise sit at "offline" forever, indistinguishable from a crashed host, and
+// keep serving Prometheus a scrape target for a box the project no longer owns.
+//
+// Called on every register. In the common case it finds nothing and costs one indexed query.
+//
+// Identity comes from the agent-reported machine UID. Rows that predate UID reporting are
+// matched on hostname instead, but only when they are not currently connected - a host
+// that is actively reporting is by definition not the box that just moved, and this is
+// what stops two unrelated machines that merely share a hostname across projects from
+// retiring each other.
+func ReconcileReassignment(newMachine *machine.Machine, isOnline func(uint) bool, cfg *config.DatabaseConfig) []machine.Machine {
+	if newMachine.MachineUID == "" && newMachine.Hostname == "" {
+		return nil
+	}
+
+	repo := database.NewMachineRepository(cfg)
+
+	candidates, err := repo.FindPredecessors(newMachine.ID, newMachine.MachineUID, newMachine.Hostname)
+	if err != nil || candidates == nil {
+		return nil
+	}
+
+	retired := make([]machine.Machine, 0, len(*candidates))
+	for _, old := range *candidates {
+		definite := newMachine.MachineUID != "" && old.MachineUID == newMachine.MachineUID
+		if !definite && isOnline(old.ID) {
+			continue
+		}
+		if err := repo.MarkReassigned(old.ID, newMachine.ID); err != nil {
+			continue
+		}
+		retired = append(retired, old)
+	}
+
+	return retired
+}
+
 // BelongsToProject verifies a machine exists and belongs to the given project. Use this
 // for a plain ownership check - GetBootstrapToken also does this check internally but
 // additionally builds install/uninstall PowerShell commands, which is wasted work (and

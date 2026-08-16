@@ -2,7 +2,7 @@ import { useState, lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Clock, Monitor, Network, Power, RotateCw, Server } from 'lucide-react'
+import { ArrowLeft, Info, Monitor, Network, Power, RotateCw, Server } from 'lucide-react'
 import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
@@ -12,7 +12,6 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { cn } from '@/utils/cn'
 import { usePageTitle } from '@/utils/usePageTitle'
 import { useActionCooldown } from '@/utils/useActionCooldown'
-import { timeAgo } from '@/utils/time'
 import type { MachineStatus } from '@/types'
 
 // MetricsTab pulls in recharts (a large dependency) - split into its own chunk so the
@@ -44,6 +43,7 @@ const machineStatusCfg: Record<MachineStatus, { dot: string; label: string; text
   online:  { dot: 'bg-success', label: 'Online',  text: 'text-success', pill: 'bg-success/10 text-success'  },
   offline: { dot: 'bg-danger',  label: 'Offline', text: 'text-danger',  pill: 'bg-danger/10 text-danger'   },
   pending: { dot: 'bg-warning', label: 'Pending', text: 'text-warning', pill: 'bg-warning/10 text-warning' },
+  reassigned: { dot: 'bg-ink-faint', label: 'Reassigned', text: 'text-ink-faint', pill: 'bg-surface-high text-ink-faint' },
 }
 
 type Tab = 'metrics' | 'pools' | 'sites'
@@ -81,6 +81,9 @@ export function MachineDetail() {
   const machineCfg = machine ? machineStatusCfg[machine.Status] : null
   const ipv4s = machine ? filterIPv4(machine.IPs) : []
   const isOffline = machine?.Status === 'offline'
+  // Reassigned rows are kept for their history but describe a machine that now reports
+  // elsewhere, so everything below the header is a frozen snapshot rather than live state.
+  const isReassigned = machine?.Status === 'reassigned'
   const cooling = cooldown.isCooling(numericId)
 
   async function handleMachineCommand() {
@@ -105,7 +108,7 @@ export function MachineDetail() {
     <div className="space-y-5">
       {/* Back */}
       <button
-        onClick={() => navigate('/machines')}
+        onClick={() => navigate('/hosts')}
         className="cursor-pointer flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink transition-colors"
       >
         <ArrowLeft className="size-3.5" />
@@ -131,7 +134,7 @@ export function MachineDetail() {
               </div>
               <div className="space-y-2">
                 {ipv4s.length > 0 && (
-                  <p className="flex items-center gap-1.5 text-xs text-ink-faint font-mono">
+                  <p className="flex items-center gap-1.5 text-xs text-ink-faint">
                     <Network className="size-3 shrink-0" />
                     {ipv4s.join(' · ')}
                   </p>
@@ -142,10 +145,6 @@ export function MachineDetail() {
                     {machine.WindowsVersion}
                   </p>
                 )}
-                <p className="flex items-center gap-1.5 text-xs text-ink-faint">
-                  <Clock className="size-3 shrink-0" />
-                  {timeAgo(machine.LastSeenAt)}
-                </p>
               </div>
             </div>
           </div>
@@ -187,6 +186,18 @@ export function MachineDetail() {
         </div>
       )}
 
+      {isReassigned && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-rim bg-surface-alt px-4 py-3 text-xs text-ink-dim">
+          <Info className="size-4 shrink-0 text-ink-faint" />
+          <p>
+            This host was re-bootstrapped and now reports to a different host entry
+            {machine?.SupersededByID ? ` (host #${machine.SupersededByID})` : ''}. Everything below
+            is the last state recorded before it moved, kept for reference. It will not come back
+            online here, and it no longer reports metrics or logs to this project.
+          </p>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-rim">
         {TABS.map(tab => (
@@ -206,7 +217,7 @@ export function MachineDetail() {
       </div>
 
       {/* Tab content */}
-      <div className={cn(isOffline && 'opacity-40 pointer-events-none select-none')}>
+      <div className={cn((isOffline || isReassigned) && 'opacity-40 pointer-events-none select-none')}>
         {activeTab === 'metrics' && (
           <Suspense fallback={<MetricsTabSkeleton />}>
             <MetricsTab machineId={numericId} />

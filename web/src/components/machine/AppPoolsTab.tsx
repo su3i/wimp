@@ -230,7 +230,7 @@ export function AppPoolsTab({ projectKey, machineId, isOffline }: { projectKey: 
                 </div>
 
                 <div className='px-4 py-3.5'>
-                  <span className='font-mono text-xs text-ink-dim'>{formatRuntime(pool.RuntimeVersion)}</span>
+                  <span className='text-xs text-ink-dim tabular-nums'>{formatRuntime(pool.RuntimeVersion)}</span>
                 </div>
 
                 <div className='px-4 py-3.5'>
