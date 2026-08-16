@@ -55,7 +55,7 @@ persistence:
 
 config:
   appEnv: production
-  agentVersion: "1.0.0"
+  agentVersion: "1.0.1"
   autoUpdateAgent: false
   enforceMfa: false
 
