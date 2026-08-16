@@ -737,7 +737,11 @@ export function Dashboard() {
             inVal={netInVal}
             outVal={netOutVal}
           />
-          <DiskGauges machineIds={machineIds} hostNames={hostNameMap} />
+          <DiskGauges
+            machineIds={machineIds}
+            hostNames={hostNameMap}
+            hostsLoading={machines === undefined}
+          />
         </div>
 
         {/* ── Row 2: Request Throughput + Cpu Usage + Memory Usage ──────── */}

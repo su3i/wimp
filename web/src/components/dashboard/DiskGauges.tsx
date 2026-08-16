@@ -128,9 +128,15 @@ function PagerButton({
 export function DiskGauges({
   machineIds,
   hostNames,
+  hostsLoading,
 }: {
   machineIds: number[];
   hostNames: Map<number, string>;
+  // Whether the host list itself is still in flight. Without it an empty machineIds is
+  // ambiguous - a project mid-load and a project with no hosts look identical from here,
+  // and the card would either flash "no data" on every load or spin forever on an empty
+  // project.
+  hostsLoading: boolean;
 }) {
   // 0 means "not measured yet" - rendering nothing for one frame beats guessing a page
   // size and reflowing the moment the real width arrives.
@@ -162,7 +168,8 @@ export function DiskGauges({
   }, []);
 
   const idKey = machineIds.slice().sort((a, b) => a - b).join("|");
-  const enabled = prometheusService.isConfigured() && machineIds.length > 0;
+  const promConfigured = prometheusService.isConfigured();
+  const enabled = promConfigured && machineIds.length > 0;
 
   const { data, isLoading } = useQuery({
     queryKey: ["d-disk-usage", idKey],
@@ -202,8 +209,10 @@ export function DiskGauges({
   const currentPage = Math.min(page, totalPages - 1);
   const visible = perPage > 0 ? hosts.slice(currentPage * perPage, currentPage * perPage + perPage) : [];
   const paged = totalPages > 1;
-
-  if (!enabled) return null;
+  // Still resolving if the host list hasn't arrived, or it has and their disks are being
+  // queried. The card renders throughout either way - it holds a column in the top row,
+  // and vanishing until its data lands would reflow the whole row on every page load.
+  const resolving = hostsLoading || (enabled && isLoading);
 
   return (
     // Padding matches the aggregate stat tiles it now shares a row with, so the four
@@ -234,12 +243,17 @@ export function DiskGauges({
       </div>
 
       <div ref={measureRef} className='flex flex-1 items-center overflow-hidden'>
-        {isLoading ? (
-          <div className='flex w-full items-center justify-center'>
-            <div className='size-4 animate-spin rounded-full border-2 border-primary border-t-transparent' />
-          </div>
-        ) : hosts.length === 0 ? (
-          <span className='w-full text-center text-xs text-ink-faint'>No disk data</span>
+        {!promConfigured ? (
+          // Matches how the other tiles report absent metrics rather than showing an
+          // error - Prometheus being unconfigured is a deployment choice, not a fault.
+          <span className='w-full text-center font-mono text-[27px] font-semibold leading-none text-ink'>
+            N/A
+          </span>
+        ) : resolving || hosts.length === 0 ? (
+          // One placeholder for both "still loading" and "nothing to show". The dials
+          // resolve in well under a second, and a spinner that brief reads as a flicker
+          // rather than as progress.
+          <span className='w-full text-center text-xs text-ink-faint'>No Data</span>
         ) : (
           <div className='flex w-full justify-center' style={{ gap: CELL_GAP }}>
             {visible.map((host) => (
