@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useLayoutEffect, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -147,16 +147,27 @@ function FilterSelect<T extends string | number>({
   );
 }
 
+// Lets the app pool tree open this viewer straight onto one pool, expanded. Exposed as an
+// imperative handle rather than controlled props because selection is otherwise entirely
+// the viewer's own business - hoisting machine/pool/expanded into the parent purely to
+// support one menu action would put three pieces of state a level above everything that
+// reads them.
+export interface LogsViewerHandle {
+  openFor: (machineId: number, poolId: number) => void;
+}
+
 export function LogsViewer({
   projectKey,
   appId,
   machines,
   pools,
+  ref,
 }: {
   projectKey: string;
   appId: number;
   machines: Machine[];
   pools: Pool[];
+  ref?: React.Ref<LogsViewerHandle>;
 }) {
   const [machineId, setMachineId] = useState("");
   const [poolId, setPoolId] = useState("");
@@ -179,6 +190,20 @@ export function LogsViewer({
   >(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openFor(machineId: number, poolId: number) {
+        setMachineId(String(machineId));
+        setPoolId(String(poolId));
+        // The previous pool's file selection means nothing on a different pool.
+        setFilename("");
+        setExpanded(true);
+      },
+    }),
+    [],
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef(0);

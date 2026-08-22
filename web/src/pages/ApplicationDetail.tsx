@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,18 +19,19 @@ import {
   RefreshCw,
   Pencil,
   Trash2,
-  ShieldCheck,
-  ShieldAlert,
   ExternalLink,
   CheckCircle2,
+  ScrollText,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { RowMenu } from "@/components/ui/RowMenu";
 import type { RowMenuItem } from "@/components/ui/RowMenu";
 import { Button } from "@/components/ui/Button";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { Modal } from "@/components/ui/Modal";
 import { useProjectStore } from "@/store/project";
-import { LogsViewer } from "@/components/application/LogsViewer";
+import { LogsViewer, type LogsViewerHandle } from "@/components/application/LogsViewer";
 import { applicationService } from "@/services/application.service";
 import { appPoolService } from "@/services/appPool.service";
 import { machineService } from "@/services/machine.service";
@@ -51,6 +52,13 @@ const poolConfirmCopy: Record<Exclude<PoolCmd, "start">, { title: string; verb: 
 };
 
 const TH = "px-4 py-2.5 text-left text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint";
+
+// Where the tree's vertical connector sits, in pixels from the left edge of the list. Set
+// to the centre of the host row's icon (pl-4 = 16px, plus half of a 14px icon), so the
+// line the children hang off genuinely descends from their parent. Shared by the stub
+// under the host row and the spine beside each pool - they have to agree or the tree
+// visibly kinks at every group boundary.
+const TREE_SPINE_X = 23;
 
 const poolStatusCfg: Record<string, { dot: string; text: string }> = {
   Started: { dot: "bg-success", text: "text-success" },
@@ -181,22 +189,51 @@ function sslDaysLeft(unixTs: number) {
   return Math.floor((unixTs - Date.now() / 1000) / 86400);
 }
 
-function SslBadge({ days }: { days: number | null }) {
-  if (days == null) return <span className='text-xs text-ink-faint'>--</span>;
-  if (days < 0) return (
-    <span className='flex items-center gap-1 text-danger text-xs font-medium'>
-      <ShieldAlert className='size-3' /> Expired
-    </span>
-  );
-  if (days <= 14) return (
-    <span className='flex items-center gap-1 text-[#d29922] text-xs font-medium'>
-      <ShieldAlert className='size-3' /> {days} Days
-    </span>
-  );
+// Certificate expiry as a value and a tone, rather than a self-rendering badge - the cards
+// below all present one figure the same way, and SSL should not be the odd one out.
+function sslDisplay(days: number | null): { value: string; tone: string } {
+  if (days == null) return { value: "N/A", tone: "text-ink" };
+  if (days < 0) return { value: "Expired", tone: "text-danger" };
+  if (days <= 14) return { value: `${days}d`, tone: "text-warning" };
+  return { value: `${days}d`, tone: "text-success" };
+}
+
+// Shared shell for the health figures. Same proportions as the Overview page's stat tiles
+// so the two pages read as one product: label pinned top, figure bottom, fixed floor height
+// so a row of them stays even regardless of how long each value is.
+const HEALTH_CARD =
+  "rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col justify-between gap-3 min-h-[112px]";
+
+function HealthCard({
+  label,
+  value,
+  sub,
+  info,
+  icon: Icon,
+  tone = "text-ink",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  info: string;
+  // Rendered beside the figure. Only the healthy state carries one - a green tick reads
+  // instantly, whereas an icon on every state would just be noise next to an already
+  // colour-coded value.
+  icon?: LucideIcon;
+  tone?: string;
+}) {
   return (
-    <span className='flex items-center gap-1 text-success text-xs font-medium'>
-      <ShieldCheck className='size-3' /> {days} Days
-    </span>
+    <div className={HEALTH_CARD}>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+        {label}
+        <InfoTooltip text={info} />
+      </span>
+      <span className={cn("flex items-center gap-2 font-mono text-[24px] font-semibold leading-none", tone)}>
+        {Icon && <Icon className='size-5 shrink-0' />}
+        {value}
+      </span>
+      <span className='text-[0.625rem] text-ink-faint'>{sub}</span>
+    </div>
   );
 }
 
@@ -235,62 +272,47 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
     statusVal === "1" ? "up" : statusVal === "0" ? "down" : "unknown";
 
   const uptimeRatio = uptimeData?.[0]?.value[1];
-  const uptimePct = uptimeRatio != null ? `${(Number(uptimeRatio) * 100).toFixed(2)}%` : "--";
+  const uptimePct = uptimeRatio != null ? `${(Number(uptimeRatio) * 100).toFixed(2)}%` : "N/A";
 
   const sslTs = sslData?.[0]?.value[1];
   const sslDays = sslTs != null ? sslDaysLeft(Number(sslTs)) : null;
+  const ssl = sslDisplay(sslDays);
 
   const statusColor =
     status === "up" ? "text-success" : status === "down" ? "text-danger" : "text-ink-faint";
-  const statusDot =
-    status === "up" ? "bg-success" : status === "down" ? "bg-danger animate-pulse" : "bg-ink-faint/40";
 
   return (
-    <div className='rounded-lg border border-rim bg-surface overflow-hidden'>
-      {url && (
-        <div className='flex items-center px-4 py-3 border-b border-rim bg-surface-alt'>
-          <a
-            href={url}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink underline underline-offset-2 transition-colors'
-          >
-            <span className='truncate max-w-[360px]'>{url}</span>
-            <ExternalLink className='size-3 shrink-0' />
-          </a>
-        </div>
-      )}
-
-      <div className='grid grid-cols-2 sm:grid-cols-4 divide-x divide-rim'>
-        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>Status</p>
-          {promEnabled ? (
-            <div className={cn('flex items-center gap-1.5 text-xs font-medium', statusColor)}>
-              {status === "up"
-                ? <CheckCircle2 className='size-3 shrink-0' />
-                : <span className={cn('size-2 rounded-full shrink-0', statusDot)} />}
-              {status === "up" ? "Up" : status === "down" ? "Down" : "No data"}
-            </div>
-          ) : (
-            <span className='text-xs text-ink-faint'>No Prometheus</span>
-          )}
-        </div>
-
-        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>Uptime (30d)</p>
-          <span className='text-xs font-medium text-ink'>{promEnabled ? uptimePct : "--"}</span>
-        </div>
-
-        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>SSL Expiry</p>
-          {promEnabled && isHttps ? <SslBadge days={sslDays} /> : <span className='text-xs text-ink-faint'>--</span>}
-        </div>
-
-        <div className='px-4 py-3.5 flex flex-col gap-1.5'>
-          <p className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>Interval</p>
-          <span className='text-xs font-medium text-ink'>{fmtInterval(interval)}</span>
-        </div>
-      </div>
+    // Four separate cards rather than one divided panel, matching the Overview page. The
+    // endpoint URL lives in the page header, so there is no panel chrome left to justify
+    // boxing these together.
+    <div className='grid grid-cols-2 sm:grid-cols-4 gap-[14px]'>
+      <HealthCard
+        label='Status'
+        value={promEnabled ? (status === "up" ? "Up" : status === "down" ? "Down" : "No data") : "N/A"}
+        sub={promEnabled ? "last probe" : "no prometheus"}
+        info="Whether the most recent probe of this application's health check URL succeeded."
+        icon={promEnabled && status === "up" ? CheckCircle2 : undefined}
+        tone={promEnabled ? statusColor : "text-ink"}
+      />
+      <HealthCard
+        label='Uptime'
+        value={promEnabled ? uptimePct : "N/A"}
+        sub='last 30 days'
+        info='Share of health check probes that succeeded over the last 30 days.'
+      />
+      <HealthCard
+        label='SSL Expiry'
+        value={promEnabled && isHttps ? ssl.value : "N/A"}
+        sub={isHttps ? "until expiry" : "http endpoint"}
+        info="Days left on the TLS certificate serving this endpoint. Only measured for https URLs."
+        tone={promEnabled && isHttps ? ssl.tone : "text-ink"}
+      />
+      <HealthCard
+        label='Interval'
+        value={fmtInterval(interval)}
+        sub='probe frequency'
+        info='How often the health check runs against this endpoint.'
+      />
     </div>
   );
 }
@@ -307,7 +329,7 @@ function EmptyPools({ onAdd }: { onAdd: () => void }) {
       </p>
       <Button size='sm' onClick={onAdd}>
         <Plus className='size-3.5' />
-        Add App Pools
+        Add App Pool
       </Button>
     </div>
   );
@@ -427,26 +449,17 @@ function PoolList({
   projectKey,
   appId,
   queryKey,
+  onViewLogs,
 }: {
   pools: AppPoolWithDetails[];
   projectKey: string;
   appId: number;
   queryKey: unknown[];
+  onViewLogs: (pool: AppPoolWithDetails) => void;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [acting, setActing] = useState<Record<number, string>>({});
-  // Every host starts collapsed - the list reads as one line per host until the user asks
-  // for a specific one's pools, which is the point of the hierarchy.
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-
-  function toggleGroup(machineId: number) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(machineId)) next.delete(machineId);
-      else next.add(machineId);
-      return next;
-    });
-  }
 
   const [editingPool, setEditingPool] = useState<AppPoolWithDetails | null>(null);
   const [removeTarget, setRemoveTarget] = useState<AppPoolWithDetails | null>(null);
@@ -517,107 +530,124 @@ function PoolList({
       <div className='sticky top-0 z-10 border-b border-rim bg-surface-alt px-4 py-2.5' />
 
       {groups.map((group, groupIdx) => {
-        const open = expanded.has(group.machineId);
-        // A stopped pool and a pool on an unreachable host are both "not running" as far
-        // as this count goes - same definition the application header's healthy count uses,
-        // so the two never disagree.
-        const running = group.online
-          ? group.pools.filter((p) => p.State === "Started").length
-          : 0;
-        const runningColor =
-          running === group.pools.length ? "text-success" : running === 0 ? "text-danger" : "text-warning";
-        // The container draws its own bottom border, so the last visible row inside it
-        // must not draw one too or the two stack into a double line.
+        // The container draws its own bottom border, so the last row inside it must not
+        // draw one too or the two stack into a double line.
         const isLastGroup = groupIdx === groups.length - 1;
         return (
           <div key={group.machineId} className='contents'>
-            {/* Host row - the parent node. Spans every column; the pools below it are
-                its children. */}
+            {/* Host row - the parent node, always showing its children, and a link to that
+                host's own page. The stub at the bottom is what makes this read as a tree
+                rather than as two unrelated row styles: without it the children's spine
+                starts in mid-air below the border, connected to nothing. It descends from
+                directly under the host icon, which is where TREE_SPINE_X is measured to. */}
             <button
               type='button'
-              onClick={() => toggleGroup(group.machineId)}
+              // groupPoolsByMachine buckets pools whose machine record is missing under id
+              // 0, and there is no host page to send those to.
+              disabled={!group.machineId}
+              onClick={() => navigate(`/hosts/${group.machineId}`)}
+              title={group.machineId ? `Open ${group.hostname}` : undefined}
               className={cn(
-                'col-span-full flex items-center gap-2.5 bg-surface-alt/40 px-4 py-2.5 text-left hover:bg-surface-alt transition-colors cursor-pointer',
-                !(isLastGroup && !open) && 'border-b border-rim',
+                'group/host relative col-span-full flex items-center gap-2.5 border-b border-rim bg-surface-alt/60 py-2.5 pl-4 pr-4 text-left transition-colors',
+                group.machineId ? 'cursor-pointer hover:bg-surface-alt' : 'cursor-default',
               )}
             >
-              {open ? (
-                <ChevronDown className='size-3.5 shrink-0 text-ink-faint' />
-              ) : (
-                <ChevronRight className='size-3.5 shrink-0 text-ink-faint' />
-              )}
               <Server className='size-3.5 shrink-0 text-ink-faint' />
-              <span className='font-mono text-xs text-ink truncate'>{group.hostname}</span>
-              <span className={cn("shrink-0 text-[0.625rem] font-medium tabular-nums", runningColor)}>
-                {running}/{group.pools.length} healthy
+              <span className='font-mono text-xs text-ink truncate underline decoration-transparent underline-offset-2 transition-colors group-hover/host:decoration-current'>
+                {group.hostname}
               </span>
+              {!!group.machineId && (
+                <ChevronRight className='size-3.5 shrink-0 text-ink-faint opacity-0 transition-opacity group-hover/host:opacity-100' />
+              )}
+              <span
+                className='absolute bottom-0 h-2.5 w-px bg-rim'
+                style={{ left: TREE_SPINE_X }}
+              />
             </button>
 
-            {open &&
-              group.pools.map((pool, idx) => {
-                const busy = acting[pool.ID];
-                const transitional = pool.State === "Starting" || pool.State === "Stopping";
-                const cooling = cooldown.isCooling(pool.ID) || transitional;
-                const offline = pool.machine?.Status !== "online";
-                const started = pool.State === "Started";
-                const isLastChild = idx === group.pools.length - 1;
-                const cellBorder = !(isLastGroup && isLastChild) && "border-b border-rim";
-                const menuItems: RowMenuItem[] = [
-                  { icon: Pencil, label: "Edit Log Path", onClick: () => setEditingPool(pool) },
-                  { type: "separator" },
-                  ...(offline
-                    ? []
-                    : started
-                      ? [
-                          {
-                            icon: Square,
-                            label: "Stop",
-                            variant: "danger" as const,
-                            onClick: () => requestCmd(pool, "stop"),
-                          },
-                          { icon: RotateCw, label: "Restart", onClick: () => requestCmd(pool, "restart") },
-                          { icon: RefreshCw, label: "Recycle", onClick: () => requestCmd(pool, "recycle") },
-                        ]
-                      : [{ icon: Play, label: "Start", onClick: () => requestCmd(pool, "start") }]),
-                  ...(offline ? [] : [{ type: "separator" as const }]),
-                  { icon: Trash2, label: "Remove", variant: "danger", onClick: () => setRemoveTarget(pool) },
-                ];
-                return (
-                  <div key={pool.ID} className={cn("contents group", cooling && "opacity-50")}>
-                    <div className={cn("flex min-w-0 items-stretch pr-4 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-                      {/* Tree guide: a vertical spine dropping from the host row above,
-                          stopping halfway down on the last child so the branch visibly
-                          ends, plus a horizontal elbow into the pool itself. */}
-                      <span className='relative ml-6 w-5 shrink-0'>
-                        <span
-                          className={cn("absolute left-0 top-0 w-px bg-rim", isLastChild ? "h-1/2" : "h-full")}
-                        />
-                        <span className='absolute left-0 top-1/2 h-px w-4 bg-rim' />
+            {group.pools.map((pool, idx) => {
+              const busy = acting[pool.ID];
+              const transitional = pool.State === "Starting" || pool.State === "Stopping";
+              const cooling = cooldown.isCooling(pool.ID) || transitional;
+              const offline = pool.machine?.Status !== "online";
+              const started = pool.State === "Started";
+              const isLastChild = idx === group.pools.length - 1;
+              const cellBorder = !(isLastGroup && isLastChild) && "border-b border-rim";
+              const hasLogPath = !!pool.log_path;
+              const menuItems: RowMenuItem[] = [
+                // Only offered once a log path is set - without one there is nothing to open.
+                ...(hasLogPath
+                  ? [{ icon: ScrollText, label: "View Logs", onClick: () => onViewLogs(pool) }]
+                  : []),
+                { icon: Pencil, label: "Edit", onClick: () => setEditingPool(pool) },
+                { type: "separator" },
+                ...(offline
+                  ? []
+                  : started
+                    ? [
+                        {
+                          icon: Square,
+                          label: "Stop",
+                          variant: "danger" as const,
+                          onClick: () => requestCmd(pool, "stop"),
+                        },
+                        { icon: RotateCw, label: "Restart", onClick: () => requestCmd(pool, "restart") },
+                        { icon: RefreshCw, label: "Recycle", onClick: () => requestCmd(pool, "recycle") },
+                      ]
+                    : [{ icon: Play, label: "Start", onClick: () => requestCmd(pool, "start") }]),
+                ...(offline ? [] : [{ type: "separator" as const }]),
+                { icon: Trash2, label: "Remove", variant: "danger", onClick: () => setRemoveTarget(pool) },
+              ];
+              return (
+                <div key={pool.ID} className={cn("contents group", cooling && "opacity-50")}>
+                  <div className={cn("flex min-w-0 items-stretch pr-4 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                    {/* Tree guide: a vertical spine dropping from the host row above,
+                        stopping halfway down on the last child so the branch visibly
+                        ends, plus a horizontal elbow into the pool itself. */}
+                    <span className='relative w-5 shrink-0' style={{ marginLeft: TREE_SPINE_X }}>
+                      <span
+                        className={cn("absolute left-0 top-0 w-px bg-rim", isLastChild ? "h-1/2" : "h-full")}
+                      />
+                      <span className='absolute left-0 top-1/2 h-px w-4 bg-rim' />
+                    </span>
+                    <span className='flex min-w-0 items-center gap-2.5 py-3'>
+                      <span className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
+                        <Cpu className='size-3 text-ink-faint' />
                       </span>
-                      <span className='flex min-w-0 items-center gap-2.5 py-3'>
-                        <span className='flex size-6 shrink-0 items-center justify-center rounded border border-rim bg-surface-high'>
-                          <Cpu className='size-3 text-ink-faint' />
-                        </span>
-                        <span className='font-mono text-xs text-ink truncate'>{pool.Name}</span>
-                      </span>
-                    </div>
-
-                    <div className={cn("flex items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-                      <PoolStatus state={pool.State} offline={offline} />
-                    </div>
-
-                    <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
-                      <span className='block min-w-0 truncate text-xs text-ink-dim'>
-                        {pool.log_path || "N/A"}
-                      </span>
-                    </div>
-
-                    <div className={cn("flex items-center justify-center px-2 py-3 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-                      <RowMenu items={menuItems} disabled={!!busy || cooling} />
-                    </div>
+                      <span className='font-mono text-xs text-ink truncate'>{pool.Name}</span>
+                    </span>
                   </div>
-                );
-              })}
+
+                  <div className={cn("flex items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                    <PoolStatus state={pool.State} offline={offline} />
+                  </div>
+
+                  <div className={cn("flex min-w-0 items-center px-4 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)} title={pool.log_path ?? undefined}>
+                    {hasLogPath ? (
+                      <button
+                        type='button'
+                        onClick={() => onViewLogs(pool)}
+                        className='block min-w-0 cursor-pointer truncate text-left text-xs text-ink-dim underline decoration-transparent underline-offset-2 transition-colors hover:text-ink hover:decoration-current'
+                      >
+                        {pool.log_path}
+                      </button>
+                    ) : (
+                      <button
+                        type='button'
+                        onClick={() => setEditingPool(pool)}
+                        className='cursor-pointer text-xs text-ink-faint underline decoration-dotted underline-offset-2 transition-colors hover:text-ink-dim'
+                      >
+                        Set a log path
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={cn("flex items-center justify-center px-2 py-3 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
+                    <RowMenu items={menuItems} disabled={!!busy || cooling} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       })}
@@ -694,6 +724,7 @@ function AddAppPoolModal({
     },
   });
 
+
   function toggleExpand(machineId: number) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -725,7 +756,7 @@ function AddAppPoolModal({
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "Failed to add app pools. Please try again.";
+        "Failed to add app pool(s). Please try again.";
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -735,7 +766,7 @@ function AddAppPoolModal({
   const hasChanges = selected.size > 0;
 
   return (
-    <Modal open={open} onClose={onClose} title='Add App Pools'>
+    <Modal open={open} onClose={onClose} title='Add App Pool'>
       <div className='space-y-4'>
         {isLoading ? (
           <div className='space-y-2'>
@@ -771,7 +802,7 @@ function AddAppPoolModal({
                       {machine.Hostname?.toLowerCase() ?? "N/A"}
                     </span>
                     <span className='text-[0.625rem] text-ink-faint'>
-                      {availableCount > 0 ? `${availableCount} available` : "all added"}
+                      {availableCount > 0 ? `${availableCount} available` : ""}
                     </span>
                   </button>
 
@@ -842,6 +873,7 @@ export function ApplicationDetail() {
   const { activeProject } = useProjectStore();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const logsRef = useRef<LogsViewerHandle>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [bulkActing, setBulkActing] = useState<"restart" | "recycle" | null>(null);
   const [bulkConfirm, setBulkConfirm] = useState<"restart" | "recycle" | null>(null);
@@ -978,14 +1010,26 @@ export function ApplicationDetail() {
                         </span>
                       )}
                     </div>
-                    <p className='text-xs text-ink-faint'>
-                      Created{' '}
-                      {new Date(app.CreatedAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </p>
+                    {app.HealthCheckURL ? (
+                      <a
+                        href={app.HealthCheckURL}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='flex min-w-0 items-center gap-1.5 text-xs text-ink-dim hover:text-ink underline underline-offset-2 transition-colors'
+                      >
+                        <span className='truncate max-w-[420px]'>{app.HealthCheckURL}</span>
+                        <ExternalLink className='size-3 shrink-0' />
+                      </a>
+                    ) : (
+                      <p className='text-xs text-ink-faint'>
+                        Created{' '}
+                        {new Date(app.CreatedAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className='flex items-center gap-2 shrink-0 pt-1'>
@@ -1017,9 +1061,12 @@ export function ApplicationDetail() {
                     <Pencil className='size-3' />
                     Edit
                   </Button>
-                  <Button size='sm' onClick={() => setModalOpen(true)}>
+                  <Button
+                    size='sm'
+                    onClick={() => setModalOpen(true)}
+                  >
                     <Plus className='size-3.5' />
-                    Add App Pools
+                    Add App Pool
                   </Button>
                 </div>
               </div>
@@ -1029,16 +1076,17 @@ export function ApplicationDetail() {
           {/* Health monitor - shown when health check URL is configured */}
           {app.HealthCheckURL && <HealthMonitor app={app} />}
 
-          {/* Pool list - capped height, sticky header */}
+          {/* Pool list - sticky header, flows to its full height */}
           {!app.app_pools?.length ? (
             <EmptyPools onAdd={() => setModalOpen(true)} />
           ) : (
-            <div className='max-h-96 overflow-y-auto rounded-lg border border-rim'>
+            <div className='rounded-lg border border-rim'>
               <PoolList
                 pools={app.app_pools}
                 projectKey={activeProject.Key}
                 appId={numericId}
                 queryKey={queryKey}
+                onViewLogs={(pool) => logsRef.current?.openFor(pool.machine.ID, pool.ID)}
               />
             </div>
           )}
@@ -1046,6 +1094,7 @@ export function ApplicationDetail() {
           {/* Logs - only shown when pools are assigned */}
           {(app.app_pools?.length ?? 0) > 0 && (
             <LogsViewer
+              ref={logsRef}
               projectKey={activeProject.Key}
               appId={numericId}
               machines={[

@@ -145,6 +145,49 @@ function toHostRows(
   return { rows, keys };
 }
 
+// Chart summaries. Both read the rows already plotted rather than issuing another query,
+// so the headline can never disagree with the line underneath it.
+
+// Mean of every plotted point across every host. Used for the percent charts, where a
+// per-host average is the number that answers "how loaded is the fleet".
+function seriesAverage(rows: Record<string, string | number>[], keys: string[]): number | null {
+  if (!rows.length || !keys.length) return null;
+  let sum = 0;
+  let count = 0;
+  for (const row of rows) {
+    for (const key of keys) {
+      const v = Number(row[key]);
+      if (!isFinite(v)) continue;
+      sum += v;
+      count++;
+    }
+  }
+  return count > 0 ? sum / count : null;
+}
+
+// Mean over time of the summed across hosts value. Averaging the fleet's request rate
+// would understate it - throughput is additive, so the fleet total is what matters.
+function seriesTotal(rows: Record<string, string | number>[], keys: string[]): number | null {
+  if (!rows.length || !keys.length) return null;
+  let sum = 0;
+  for (const row of rows) {
+    for (const key of keys) {
+      const v = Number(row[key]);
+      if (isFinite(v)) sum += v;
+    }
+  }
+  return sum / rows.length;
+}
+
+function fmtPercent(v: number) {
+  return `${v.toFixed(1)}%`;
+}
+
+function fmtRate(v: number) {
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k/s`;
+  return `${v.toFixed(1)}/s`;
+}
+
 function fmtBytes(v: number) {
   if (v >= 1_073_741_824) return `${(v / 1_073_741_824).toFixed(1)} GB/s`;
   if (v >= 1_048_576) return `${(v / 1_048_576).toFixed(1)} MB/s`;
@@ -357,21 +400,34 @@ function ChartCard({
   info,
   range,
   onRangeChange,
+  summary,
+  summaryLabel,
   children,
 }: {
   title: string;
   info: string;
   range: RangeKey;
   onRangeChange: (v: RangeKey) => void;
+  // Headline figure for the window on show. Given its own line under the title rather
+  // than squeezed into the header row: this is the number the chart exists to answer, and
+  // reading it should not depend on hovering a tooltip or summing lines by eye.
+  summary: string | null;
+  summaryLabel: string;
   children: React.ReactNode;
 }) {
   return (
     <div className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
-      <div className='flex items-center justify-between gap-2'>
-        <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-          {title}
-          <InfoTooltip text={info} />
-        </p>
+      <div className='flex items-start justify-between gap-2'>
+        <div className='flex min-w-0 flex-col gap-1.5'>
+          <p className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+            {title}
+            <InfoTooltip text={info} />
+          </p>
+          <p className='flex items-baseline gap-1.5 leading-none'>
+            <span className='font-mono text-[14px] font-semibold text-ink'>{summary ?? "N/A"}</span>
+            <span className='text-[0.625rem] text-ink-faint'>{summaryLabel}</span>
+          </p>
+        </div>
         <RangeToggle value={range} onChange={onRangeChange} />
       </div>
       <Suspense fallback={<ChartSkeleton height={234} />}>{children}</Suspense>
@@ -694,6 +750,19 @@ export function Dashboard() {
     [rMemHost, hostNameMap, memRange],
   );
 
+  const throughputTotal = useMemo(
+    () => seriesTotal(throughputPerfData.rows, throughputPerfData.keys),
+    [throughputPerfData],
+  );
+  const cpuAverage = useMemo(
+    () => seriesAverage(cpuPerfData.rows, cpuPerfData.keys),
+    [cpuPerfData],
+  );
+  const memAverage = useMemo(
+    () => seriesAverage(memPerfData.rows, memPerfData.keys),
+    [memPerfData],
+  );
+
   const visibleAlerts = alerts.filter((a) => a.id && !dismissed.has(a.id));
   function dismiss(id: string) {
     setDismissed((prev) => new Set([...prev, id]));
@@ -747,10 +816,12 @@ export function Dashboard() {
         {/* ── Row 2: Request Throughput + Cpu Usage + Memory Usage ──────── */}
         <div className='grid grid-cols-3 gap-[14px]'>
           <ChartCard
-            title='Request Throughput'
-            info='Live per-host IIS request rate.'
+            title='Request Rate'
+            info='Live per-host IIS request rate. The headline is the fleet total, averaged across the selected window.'
             range={throughputRange}
             onRangeChange={setThroughputRange}
+            summary={throughputTotal != null ? fmtRate(throughputTotal) : null}
+            summaryLabel='total'
           >
             <HostLineChart
               rows={throughputPerfData.rows}
@@ -762,18 +833,22 @@ export function Dashboard() {
 
           <ChartCard
             title='Cpu Usage'
-            info='Live per-host CPU usage.'
+            info='Live per-host CPU usage. The headline averages every host across the selected window.'
             range={cpuRange}
             onRangeChange={setCpuRange}
+            summary={cpuAverage != null ? fmtPercent(cpuAverage) : null}
+            summaryLabel='avg'
           >
             <HostLineChart rows={cpuPerfData.rows} keys={cpuPerfData.keys} colors={hostColorMap} />
           </ChartCard>
 
           <ChartCard
             title='Memory Usage'
-            info='Live per-host memory usage.'
+            info='Live per-host memory usage. The headline averages every host across the selected window.'
             range={memRange}
             onRangeChange={setMemRange}
+            summary={memAverage != null ? fmtPercent(memAverage) : null}
+            summaryLabel='avg'
           >
             <HostLineChart rows={memPerfData.rows} keys={memPerfData.keys} colors={hostColorMap} />
           </ChartCard>

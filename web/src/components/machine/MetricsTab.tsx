@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AreaChart,
   Area,
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
@@ -31,8 +29,6 @@ const C = {
   cyan: "#06b6d4",
 };
 
-const MULTI_PALETTE = [C.blue, C.green, C.amber, C.red, C.purple, C.cyan];
-
 function mid(machineId: number) {
   return `machine_id="${machineId}"`;
 }
@@ -40,7 +36,6 @@ function mid(machineId: number) {
 const Q = {
   cpuTotal: (id: number) =>
     `100 - (avg by (hostname) (rate(windows_cpu_time_total{${mid(id)},mode="idle"}[5m])) * 100)`,
-  cpuPerCore: (id: number) => `100 - (rate(windows_cpu_time_total{${mid(id)},mode="idle"}[5m]) * 100)`,
   memUsedPct: (id: number) =>
     `100 - (windows_memory_physical_free_bytes{${mid(id)}} / windows_memory_physical_total_bytes{${mid(id)}} * 100)`,
   memAvail: (id: number) => `windows_memory_physical_free_bytes{${mid(id)}}`,
@@ -73,17 +68,6 @@ type ChartRow = Record<string, string | number>;
 function singleSeries(results: PromRangeResult[]): ChartRow[] {
   const data = results[0]?.values ?? [];
   return data.map(([ts, val]) => ({ time: fmtTime(ts), value: parseFloat(val) }));
-}
-
-function multiSeries(results: PromRangeResult[], getKey: (m: Record<string, string>) => string): ChartRow[] {
-  if (!results.length) return [];
-  return (results[0].values ?? []).map(([ts], i) => {
-    const row: ChartRow = { time: fmtTime(ts) };
-    for (const r of results) {
-      row[getKey(r.metric)] = parseFloat(r.values[i]?.[1] ?? "0");
-    }
-    return row;
-  });
 }
 
 function mergedSeries(a: PromRangeResult[], aKey: string, b: PromRangeResult[], bKey: string): ChartRow[] {
@@ -237,10 +221,6 @@ export function MetricsTab({ machineId }: { machineId: number }) {
     const n = ts();
     return prometheusService.range(Q.cpuTotal(machineId), n - RANGE_SECS, n, STEP);
   });
-  const { data: rCpuCore, isLoading: lCpuCore } = range("cpu-core", () => {
-    const n = ts();
-    return prometheusService.range(Q.cpuPerCore(machineId), n - RANGE_SECS, n, STEP);
-  });
   const { data: rMem, isLoading: lMem } = range("mem", () => {
     const n = ts();
     return prometheusService.range(Q.memUsedPct(machineId), n - RANGE_SECS, n, STEP);
@@ -276,8 +256,6 @@ export function MetricsTab({ machineId }: { machineId: number }) {
   const memData = singleSeries(rMem ?? []);
   const diskIoData = mergedSeries(rDiskR ?? [], "Read", rDiskW ?? [], "Write");
   const netData = mergedSeries(rNetIn ?? [], "In", rNetOut ?? [], "Out");
-  const coreKeys = (rCpuCore ?? []).map((r) => `Core ${r.metric.core ?? r.metric.cpu ?? "?"}`);
-  const coreData = multiSeries(rCpuCore ?? [], (m) => `Core ${m.core ?? m.cpu ?? "?"}`);
   const diskSpcData = (iDiskSpc ?? [])
     .map((r) => ({ volume: r.metric.volume ?? "?", used: parseFloat(r.value[1]) }))
     .sort((a, b) => a.volume.localeCompare(b.volume));
@@ -478,43 +456,6 @@ export function MetricsTab({ machineId }: { machineId: number }) {
         </ResponsiveContainer>
       </ChartCard>
 
-      {/* CPU per core - only when multi-core */}
-      {coreKeys.length > 1 && (
-        <ChartCard title='CPU Per Core %' loading={lCpuCore} empty={!coreData.length}>
-          <ResponsiveContainer width='100%' height={160}>
-            <LineChart data={coreData}>
-              <CartesianGrid stroke='#2a2a2a' strokeDasharray='3 3' vertical={false} />
-              <XAxis
-                dataKey='time'
-                tick={TICK}
-                axisLine={false}
-                tickLine={false}
-                interval='preserveStartEnd'
-              />
-              <YAxis
-                tick={TICK}
-                axisLine={false}
-                tickLine={false}
-                domain={[0, 100]}
-                tickFormatter={(v) => `${v}%`}
-                width={36}
-              />
-              <Tooltip content={DarkTooltip(pctFmt)} />
-              <Legend wrapperStyle={LEGEND_STYLE} />
-              {coreKeys.map((key, i) => (
-                <Line
-                  key={key}
-                  type='monotone'
-                  dataKey={key}
-                  stroke={MULTI_PALETTE[i % MULTI_PALETTE.length]}
-                  strokeWidth={1}
-                  dot={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      )}
     </div>
   );
 }
