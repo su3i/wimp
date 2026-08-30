@@ -273,14 +273,14 @@ function OpenIncidentsCard({ count, loaded }: { count: number; loaded: boolean }
   return (
     <Link to='/incidents' className={cn(STAT_CARD, 'transition-colors hover:border-rim-strong')}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
-        Open Incidents
+        Incidents
         <InfoTooltip text='Failures that have not yet reported a recovery. Click through for the full timeline.' />
       </span>
       <span className={cn('text-[27px] font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-success')}>
         {loaded ? count : "N/A"}
       </span>
       <span className='text-[0.625rem] text-ink-faint'>
-        {!loaded ? "loading" : hot ? "needs attention" : "all clear"}
+        unresolved
       </span>
     </Link>
   );
@@ -323,10 +323,10 @@ function ApplicationStatusCard({
     !showCount ? "text-ink" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
 
   return (
-    <div className={STAT_CARD}>
+    <Link to='/applications' className={cn(STAT_CARD, 'transition-colors hover:border-rim-strong')}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
         Applications
-        <InfoTooltip text='Counts an app healthy via its health check URL when configured, otherwise by live app pool state.' />
+        <InfoTooltip text='Counts an app healthy via its health check URL when configured, otherwise by live app pool state. Click through for the full list.' />
       </span>
       <span className={cn('flex items-baseline gap-1.5', color)}>
         {!showCount ? (
@@ -341,7 +341,7 @@ function ApplicationStatusCard({
       <span className='text-[0.625rem] text-ink-faint'>
         {avgUptime != null ? `${avgUptime.toFixed(2)}% avg uptime` : "no data"}
       </span>
-    </div>
+    </Link>
   );
 }
 

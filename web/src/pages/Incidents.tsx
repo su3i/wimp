@@ -51,7 +51,6 @@ export function Incidents() {
     });
 
   const incidents = data?.pages.flatMap((p) => p.incidents) ?? [];
-  const windowDays = data?.pages[0]?.window_days ?? 7;
 
   // A callback ref rather than an effect: the sentinel only exists once there is a page to
   // hang it under, and an effect with a ref that starts null would never get a second
@@ -114,14 +113,10 @@ export function Incidents() {
         onResolve={(incident) => void handleResolve(incident)}
         resolvingId={resolvingId}
         footer={
-          hasNextPage ? (
+          hasNextPage && (
             <div ref={sentinelRef} className='flex items-center justify-center gap-2 py-6 text-[0.6875rem] text-ink-faint'>
               {isFetchingNextPage && <Loader2 className='size-3 animate-spin' />}
               {isFetchingNextPage ? "Loading more" : ""}
-            </div>
-          ) : (
-            <div className='py-6 text-center text-[0.6875rem] text-ink-faint'>
-              That's all the incidents in the last {windowDays} days.
             </div>
           )
         }

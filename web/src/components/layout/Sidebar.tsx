@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Boxes, HardDrive, Bell, ShieldAlert, Settings, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+import { LayoutDashboard, Boxes, HardDrive, Bell, CircleAlert, Settings, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/auth'
@@ -21,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Overview', end: true },
   { to: '/applications', icon: Boxes, label: 'Applications' },
   { to: '/hosts', icon: HardDrive, label: 'Hosts' },
-  { to: '/incidents', icon: ShieldAlert, label: 'Incidents' },
+  { to: '/incidents', icon: CircleAlert, label: 'Incidents' },
 ]
 
 // Supporting destinations, pinned to the bottom. Neither is somewhere you go to do the

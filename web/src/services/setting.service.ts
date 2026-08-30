@@ -28,20 +28,12 @@ export interface AgentSettings {
   release_base: string;
 }
 
-export interface ServiceStatus {
-  name: string;
-  configured: boolean;
-  reachable: boolean;
-  detail: string;
-}
-
 export interface Settings {
   alerting_enabled: ToggleSetting;
   receiver_min_severity: LevelSetting;
   enforce_mfa: ToggleSetting;
   alert_severities: AlertSeverity[];
   agent: AgentSettings;
-  services: ServiceStatus[];
 }
 
 // A null value resets the key to its deployment default, which is a different outcome

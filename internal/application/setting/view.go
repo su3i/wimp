@@ -1,10 +1,7 @@
 package setting
 
 import (
-	"net/http"
 	"sort"
-	"sync"
-	"time"
 
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/notification"
@@ -41,22 +38,12 @@ type AgentView struct {
 	ReleaseBase string `json:"release_base"`
 }
 
-// ServiceView reports one dependency's configuration and reachability. Deliberately no
-// credentials, hosts or connection strings - this answers "is it working", not "what is it".
-type ServiceView struct {
-	Name       string `json:"name"`
-	Configured bool   `json:"configured"`
-	Reachable  bool   `json:"reachable"`
-	Detail     string `json:"detail"`
-}
-
 type View struct {
 	AlertingEnabled     ToggleView          `json:"alerting_enabled"`
 	ReceiverMinSeverity LevelView           `json:"receiver_min_severity"`
 	EnforceMfa          ToggleView          `json:"enforce_mfa"`
 	AlertSeverities     []AlertSeverityView `json:"alert_severities"`
 	Agent               AgentView           `json:"agent"`
-	Services            []ServiceView       `json:"services"`
 }
 
 // Levels is the set a severity may be set to, in ascending order of urgency. Disabled is
@@ -123,66 +110,5 @@ func Current() View {
 			AutoUpdate:  common.AutoUpdateAgent,
 			ReleaseBase: config.AgentReleaseBaseURL,
 		},
-		Services: serviceStatuses(common),
 	}
-}
-
-// probeTimeout keeps a settings page load from hanging on a dependency that is down. The
-// checks run concurrently, so this is the worst case for the whole set, not per service.
-const probeTimeout = 2 * time.Second
-
-func serviceStatuses(common *config.CommonConfig) []ServiceView {
-	lokiURL := ""
-	if common.LokiHost != "" {
-		scheme := "http"
-		if common.LokiTlsEnabled {
-			scheme = "https"
-		}
-		lokiURL = scheme + "://" + common.LokiHost + ":" + common.LokiPort + "/ready"
-	}
-
-	targets := []struct {
-		name  string
-		url   string
-		probe string
-	}{
-		{"Prometheus", common.PrometheusUrl, common.PrometheusUrl + "/-/healthy"},
-		{"Alertmanager", common.AlertmanagerUrl, common.AlertmanagerUrl + "/-/healthy"},
-		{"Loki", common.LokiHost, lokiURL},
-	}
-
-	out := make([]ServiceView, len(targets))
-	var wg sync.WaitGroup
-	for i, t := range targets {
-		out[i] = ServiceView{Name: t.name, Configured: t.url != ""}
-		if t.url == "" {
-			out[i].Detail = "not configured"
-			continue
-		}
-		wg.Add(1)
-		go func(i int, probe string) {
-			defer wg.Done()
-			if reachable, detail := probeHealth(probe); reachable {
-				out[i].Reachable = true
-				out[i].Detail = "reachable"
-			} else {
-				out[i].Detail = detail
-			}
-		}(i, t.probe)
-	}
-	wg.Wait()
-	return out
-}
-
-func probeHealth(url string) (bool, string) {
-	client := &http.Client{Timeout: probeTimeout}
-	resp, err := client.Get(url) //nolint:gosec
-	if err != nil {
-		return false, "unreachable"
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return false, "unhealthy"
-	}
-	return true, "reachable"
 }

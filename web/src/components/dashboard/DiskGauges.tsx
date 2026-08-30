@@ -225,9 +225,6 @@ export function DiskGauges({
         </span>
         {paged && (
           <div className='flex items-center gap-1.5'>
-            <span className='text-[0.625rem] text-ink-faint tabular-nums'>
-              {currentPage + 1}/{totalPages}
-            </span>
             <PagerButton
               direction='prev'
               disabled={currentPage === 0}

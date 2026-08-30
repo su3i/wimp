@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, RotateCcw, Settings as SettingsIcon } from "lucide-react";
+import { AlertTriangle, Check, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { usePageTitle } from "@/utils/usePageTitle";
@@ -69,8 +69,9 @@ function OverrideMark({
   onReset: () => void;
 }) {
   if (!overridden) {
-    return <span className='text-[0.625rem] text-ink-faint'>from deployment</span>;
+    return;
   }
+
   return (
     <button
       type='button'
@@ -79,7 +80,7 @@ function OverrideMark({
       className='flex cursor-pointer items-center gap-1 text-[0.625rem] text-ink-faint transition-colors hover:text-ink'
     >
       <RotateCcw className='size-2.5' />
-      overridden · reset to {fallback}
+      overridden · click here to reset
     </button>
   );
 }
@@ -147,21 +148,6 @@ function LevelSelect({
   );
 }
 
-function ServiceRow({ name, detail, reachable, configured }: {
-  name: string;
-  detail: string;
-  reachable: boolean;
-  configured: boolean;
-}) {
-  const tone = !configured ? "bg-ink-faint" : reachable ? "bg-success" : "bg-danger";
-  return (
-    <div className='flex items-center gap-2.5 py-2'>
-      <span className={cn("size-1.5 shrink-0 rounded-full", tone)} />
-      <span className='text-xs text-ink'>{name}</span>
-      <span className='ml-auto text-[0.6875rem] text-ink-faint'>{detail}</span>
-    </div>
-  );
-}
 
 function SeverityTable({
   severities,
@@ -291,7 +277,7 @@ export function Settings() {
 
       <SectionCard
         title='Alerting'
-        description="Outbound delivery to Alertmanager. Switching it off does not stop alerts being recorded or incidents being tracked - only the hand-off to your receivers stops."
+        description="Outbound delivery to Alertmanager. Switching it off does not stop alerts being recorded or incidents being tracked."
       >
         <div className='space-y-4'>
           <div className='flex items-center gap-3'>
@@ -354,22 +340,25 @@ export function Settings() {
         />
       </SectionCard>
 
-      <SectionCard
-        title='Security'
-        description='Read-only for now. Enforcing MFA needs an enrolment step at sign-in first, or accounts without it would be refused with no way to add it.'
-      >
-        <div className='flex items-center justify-between gap-3 text-xs'>
-          <span className='flex items-center gap-1.5 text-ink-faint'>
-            Require MFA for all accounts
-            <InfoTooltip text='Set in the deployment configuration. Becomes editable here once account enrolment exists.' />
-          </span>
-          <span className={cn(settings.enforce_mfa.value ? "text-success" : "text-ink-dim")}>
-            {settings.enforce_mfa.value ? "Enabled" : "Disabled"}
-          </span>
-        </div>
-      </SectionCard>
-
       <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
+        <SectionCard
+          title='Security'
+          description='Read-only for now. Enforcing MFA needs an enrolment step at sign-in first, or accounts without it would be refused with no way to add it.'
+        >
+          <div className='flex items-center gap-3'>
+            <div className='min-w-0 flex-1'>
+              <p className='flex items-center gap-1.5 text-xs text-ink'>
+                Require MFA for all accounts
+                <InfoTooltip text='Set in the deployment configuration. Becomes editable here once account enrolment exists.' />
+              </p>
+              <span className='text-[0.625rem] text-ink-faint'>from deployment</span>
+            </div>
+            {/* A disabled toggle rather than a text label: the control being present but
+                inert reads as "not yet", where text reads as "never". */}
+            <Toggle checked={settings.enforce_mfa.value} disabled onChange={() => {}} />
+          </div>
+        </SectionCard>
+
         <SectionCard
           title='Agent'
           description='Read-only. The agent build every host downloads is a deployment decision, so it is set in the chart rather than here.'
@@ -388,23 +377,8 @@ export function Settings() {
             </div>
           </div>
         </SectionCard>
-
-        <SectionCard
-          title='Services'
-          description='Whether each dependency is configured and answering. Addresses and credentials are deliberately not shown.'
-        >
-          <div className='divide-y divide-rim'>
-            {settings.services.map((s) => (
-              <ServiceRow key={s.name} {...s} />
-            ))}
-          </div>
-        </SectionCard>
       </div>
 
-      <p className='flex items-center gap-1.5 pb-2 text-[0.625rem] text-ink-faint'>
-        <SettingsIcon className='size-3' />
-        Database, cache and credential configuration is not editable here by design.
-      </p>
     </div>
   );
 }
