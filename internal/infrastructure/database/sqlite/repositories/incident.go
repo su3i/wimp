@@ -55,23 +55,39 @@ func (r *incidentRepository) Resolve(id uint, resolvedAt any, title, detail stri
 		Updates(updates).Error
 }
 
-func (r *incidentRepository) FindPaginated(f incident.Filter) ([]incident.Incident, int64, error) {
+// openFirst sorts everything still open above everything resolved, each half newest first.
+// A CASE rather than ordering on the status text, which would sort alphabetically and put
+// "open" after "resolved" - the wrong way round.
+const openFirst = "CASE WHEN status = 'open' THEN 0 ELSE 1 END, started_at DESC"
+
+func (r *incidentRepository) FindTimeline(f incident.Filter) ([]incident.Incident, int64, error) {
 	var incidents []incident.Incident
 	var total int64
 
-	q := r.db.Model(&incident.Incident{}).Where("project_id = ?", f.ProjectID)
-	if f.Status != "" {
-		q = q.Where("status = ?", f.Status)
-	}
+	q := r.db.Model(&incident.Incident{}).
+		Where("project_id = ?", f.ProjectID).
+		Where("status = ? OR started_at >= ?", incident.StatusOpen, f.ResolvedSince)
+
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (f.Page - 1) * f.PerPage
-	if err := q.Order("started_at DESC").Offset(offset).Limit(f.PerPage).Find(&incidents).Error; err != nil {
+	if err := q.Order(openFirst).Offset(offset).Limit(f.PerPage).Find(&incidents).Error; err != nil {
 		return nil, 0, err
 	}
 	return incidents, total, nil
+}
+
+func (r *incidentRepository) FindOneByID(id uint) (*incident.Incident, error) {
+	var found incident.Incident
+	if err := r.db.First(&found, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &found, nil
 }
 
 func (r *incidentRepository) CountByStatus(projectID uint) (incident.Counts, error) {

@@ -78,6 +78,11 @@ function DeleteProjectModal({
   )
 }
 
+// Mirrors project.DefaultKey in internal/domain/project/enum.go. The default project is
+// where the switcher lands a user whose current project has just been deleted, so it must
+// always exist - the API refuses to delete it and the UI does not offer to.
+const DEFAULT_PROJECT_KEY = 'default'
+
 export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
   const [open, setOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -130,9 +135,20 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
   function handleDeleted(project: Project) {
     queryClient.invalidateQueries({ queryKey: ['projects'] })
     queryClient.removeQueries({ predicate: q => q.queryKey[0] !== 'projects' })
-    if (activeProject?.ID === project.ID) {
+
+    if (activeProject?.ID !== project.ID) return
+
+    // Land on the default project explicitly rather than clearing and letting the
+    // auto-select effect pick projects[0] - that is whatever order the API returned, so
+    // the user would end up somewhere arbitrary. Falling back to a clear covers the
+    // case where the list has not refetched yet; the effect then picks it up.
+    const fallback = projects?.find(p => p.Key === DEFAULT_PROJECT_KEY && p.ID !== project.ID)
+    if (fallback) {
+      setActiveProject(fallback)
+    } else {
       clearActiveProject()
     }
+    navigate('/')
   }
 
   return (
@@ -217,18 +233,20 @@ export function ProjectSwitcher({ expanded = false }: { expanded?: boolean }) {
                         {isActive && <Check className='size-3 text-primary' />}
                       </span>
                     </button>
-                    <button
-                      type='button'
-                      onClick={e => {
-                        e.stopPropagation()
-                        setOpen(false)
-                        setDeleteTarget(project)
-                      }}
-                      className='cursor-pointer shrink-0 mr-2 p-1 rounded opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-danger transition-all'
-                      title='Delete project'
-                    >
-                      <Trash2 className='size-3' />
-                    </button>
+                    {project.Key !== DEFAULT_PROJECT_KEY && (
+                      <button
+                        type='button'
+                        onClick={e => {
+                          e.stopPropagation()
+                          setOpen(false)
+                          setDeleteTarget(project)
+                        }}
+                        className='cursor-pointer shrink-0 mr-2 p-1 rounded opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-danger transition-all'
+                        title='Delete project'
+                      >
+                        <Trash2 className='size-3' />
+                      </button>
+                    )}
                   </div>
                 )
               })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleDot, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, CircleDot, Loader2, ShieldAlert } from "lucide-react";
 import type { Incident } from "@/types";
 import { levelConfig, splitTitle } from "@/utils/notifications";
 import { absoluteTime, timeAgo } from "@/utils/time";
@@ -58,7 +58,19 @@ function LevelBadge({ level }: { level: string }) {
   );
 }
 
-function IncidentNode({ incident, isLast, now }: { incident: Incident; isLast: boolean; now: number }) {
+function IncidentNode({
+  incident,
+  isLast,
+  now,
+  onResolve,
+  resolving,
+}: {
+  incident: Incident;
+  isLast: boolean;
+  now: number;
+  onResolve: (incident: Incident) => void;
+  resolving: boolean;
+}) {
   const resolved = incident.Status === "resolved";
   const { event: openedEvent } = splitTitle(incident.OpenedTitle);
   const { event: resolvedEvent } = splitTitle(incident.ResolvedTitle);
@@ -141,6 +153,26 @@ function IncidentNode({ incident, isLast, now }: { incident: Incident; isLast: b
           <span className='text-[0.6875rem] font-medium text-danger'>
             Ongoing for {incidentDuration(incident, now)}
           </span>
+          {/* Not every condition reports its own recovery - a decommissioned host or a
+              silenced recovery alert leaves an incident with nothing to close it. */}
+          <button
+            type='button'
+            disabled={resolving}
+            onClick={() => onResolve(incident)}
+            className={cn(
+              "ml-auto flex shrink-0 items-center gap-1.5 rounded-md border border-rim px-2 py-1 text-[0.625rem] font-medium transition-colors",
+              resolving
+                ? "cursor-not-allowed text-ink-faint"
+                : "cursor-pointer text-ink-faint hover:border-success/40 hover:bg-surface-high hover:text-success",
+            )}
+          >
+            {resolving ? (
+              <Loader2 className='size-3 animate-spin' />
+            ) : (
+              <Check className='size-3' />
+            )}
+            Mark as resolved
+          </button>
         </div>
       )}
     </div>
@@ -151,10 +183,18 @@ export function IncidentTimeline({
   incidents,
   isLoading,
   isError,
+  onResolve,
+  resolvingId,
+  footer,
 }: {
   incidents: Incident[];
   isLoading: boolean;
   isError: boolean;
+  onResolve: (incident: Incident) => void;
+  resolvingId: number | null;
+  // Rendered under the last node: the loading sentinel while more pages exist, or the
+  // end-of-window notice once they run out.
+  footer?: React.ReactNode;
 }) {
   // One clock for the whole list, so every duration on screen is measured from the same
   // instant. Minute resolution is all fmtDuration renders, so ticking faster would just be
@@ -194,8 +234,11 @@ export function IncidentTimeline({
                 incident={incident}
                 isLast={i === incidents.length - 1}
                 now={now}
+                onResolve={onResolve}
+                resolving={resolvingId === incident.ID}
               />
             ))}
+            {footer}
           </div>
         )}
       </div>

@@ -15,6 +15,7 @@ import (
 	"github.com/su3i/wimp/internal/application/metadata"
 	metricsService "github.com/su3i/wimp/internal/application/metrics"
 	monitorService "github.com/su3i/wimp/internal/application/monitor"
+	settingService "github.com/su3i/wimp/internal/application/setting"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 	"github.com/su3i/wimp/internal/infrastructure/server"
@@ -39,6 +40,11 @@ func main() {
 	database.Migrate(config.Database())
 
 	metadata.LoadBootstrapToken(config.Common().BootstrapToken, config.Database())
+
+	// Operator overrides are read into memory once, before anything can serve a request or
+	// emit an alert - both read settings on their hot path and neither should hit the
+	// database for it.
+	settingService.Load(config.Database())
 
 	if _, err := accountService.NewAccount("Administrator", config.Common().DefaultAdminUsername, config.Common().DefaultAdminPassword, account.SuperAdmin, config.Database()); err != nil {
 		log.Printf("Seed account: %v", err)

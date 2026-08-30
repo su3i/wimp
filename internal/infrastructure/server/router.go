@@ -47,6 +47,9 @@ func InitializeRouter() *gin.Engine {
 
 	router.GET("/config", handlers.RetrieveConfig)
 
+	router.GET("/settings", middleware.AuthMiddleware(), handlers.RetrieveSettings)
+	router.PUT("/settings", middleware.AuthMiddleware(), handlers.UpdateSettings)
+
 	router.GET("/supported-languages", handlers.SupportedLanguages)
 	router.PUT("/set-language", handlers.SetLanguagePreference)
 	router.GET("/get-language", handlers.RetrieveLanguagePreference)
@@ -119,6 +122,7 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
 
 	router.GET("/projects/:key/incidents", middleware.AuthMiddleware(), handlers.ListIncidents)
+	router.POST("/projects/:key/incidents/:incidentId/resolve", middleware.AuthMiddleware(), handlers.ResolveIncident)
 
 	router.GET("/notifications", middleware.AuthMiddleware(), handlers.ListNotifications)
 	router.GET("/notifications/unread-count", middleware.AuthMiddleware(), handlers.GetUnreadCount)

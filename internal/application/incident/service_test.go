@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"errors"
 	"testing"
 
 	"gorm.io/driver/sqlite"
@@ -52,7 +53,7 @@ func alert(t notification.AlertType, machineID uint, subject string) Event {
 
 func list(t *testing.T, cfg *config.DatabaseConfig) []incidentDomain.Incident {
 	t.Helper()
-	out, _, err := List(1, "", 1, 100, cfg)
+	out, _, err := List(1, 1, 100, cfg)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -228,5 +229,76 @@ func TestCountsSplitByStatus(t *testing.T) {
 	}
 	if counts.Open != 1 || counts.Resolved != 1 {
 		t.Fatalf("counts = %+v, want 1 open / 1 resolved", counts)
+	}
+}
+
+func TestTimelinePutsOpenIncidentsFirst(t *testing.T) {
+	cfg := setupDB(t)
+
+	// Opened oldest-first, then one of them resolved, so neither plain id order nor plain
+	// start order would produce the expected result on its own.
+	Record(alert(notification.AlertHighCPU, 1, ""), cfg)
+	Record(alert(notification.AlertHighCPU, 2, ""), cfg)
+	Record(alert(notification.AlertHighCPU, 3, ""), cfg)
+	Record(alert(notification.AlertHighCPURecovered, 3, ""), cfg)
+
+	got := list(t, cfg)
+	if len(got) != 3 {
+		t.Fatalf("expected three incidents, got %d", len(got))
+	}
+
+	// Everything open comes first...
+	if got[0].Status != incidentDomain.StatusOpen || got[1].Status != incidentDomain.StatusOpen {
+		t.Fatalf("open incidents must sort above resolved ones, got %q then %q",
+			got[0].Status, got[1].Status)
+	}
+	if got[2].Status != incidentDomain.StatusResolved {
+		t.Fatalf("resolved incident should be last, got %q", got[2].Status)
+	}
+	// ...newest first within the open half. Machine 2 opened after machine 1.
+	if got[0].MachineID != 2 || got[1].MachineID != 1 {
+		t.Fatalf("open half should be newest first, got machines %d then %d",
+			got[0].MachineID, got[1].MachineID)
+	}
+}
+
+func TestResolveManuallyClosesAnOpenIncident(t *testing.T) {
+	cfg := setupDB(t)
+
+	Record(alert(notification.AlertHighCPU, 7, ""), cfg)
+	open := list(t, cfg)[0]
+
+	if err := ResolveManually(open.ID, 1, "folarin", cfg); err != nil {
+		t.Fatalf("ResolveManually: %v", err)
+	}
+
+	got := list(t, cfg)[0]
+	if got.Status != incidentDomain.StatusResolved {
+		t.Fatalf("status = %q, want resolved", got.Status)
+	}
+	if got.ResolvedAt == nil {
+		t.Fatal("ResolvedAt was not set")
+	}
+	if got.ResolvedDetail != "Marked resolved by folarin" {
+		t.Fatalf("ResolvedDetail = %q, want it to name who resolved it", got.ResolvedDetail)
+	}
+}
+
+func TestResolveManuallyRejectsWrongProjectAndDoubleResolve(t *testing.T) {
+	cfg := setupDB(t)
+
+	Record(alert(notification.AlertHighCPU, 7, ""), cfg)
+	open := list(t, cfg)[0]
+
+	// An incident belonging to another project must not be closable through this one.
+	if err := ResolveManually(open.ID, 999, "folarin", cfg); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-project resolve error = %v, want ErrNotFound", err)
+	}
+
+	if err := ResolveManually(open.ID, 1, "folarin", cfg); err != nil {
+		t.Fatalf("first resolve: %v", err)
+	}
+	if err := ResolveManually(open.ID, 1, "folarin", cfg); !errors.Is(err, ErrNotOpen) {
+		t.Fatalf("second resolve error = %v, want ErrNotOpen", err)
 	}
 }

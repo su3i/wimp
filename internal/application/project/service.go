@@ -62,7 +62,15 @@ func RetrieveProjects(cfg *config.DatabaseConfig) (*[]project.Project, error) {
 	return _projectRepository.Find()
 }
 
+// ErrCannotDeleteDefault is returned rather than a plain error string so the handler can
+// answer 409 instead of 500 - refusing this is a rule, not a failure.
+var ErrCannotDeleteDefault = errors.New("the default project cannot be deleted")
+
 func DeleteProject(key string, cfg *config.DatabaseConfig) error {
+	if key == project.DefaultKey {
+		return ErrCannotDeleteDefault
+	}
+
 	repo := database.NewProjectRepository(cfg)
 	p, err := repo.FindOneByKey(key)
 	if err != nil {
@@ -75,32 +83,32 @@ func DeleteProject(key string, cfg *config.DatabaseConfig) error {
 }
 
 func UpdateProject(
-    key string,
-    name *string,
-    newKey *string,
-    cfg *config.DatabaseConfig,
+	key string,
+	name *string,
+	newKey *string,
+	cfg *config.DatabaseConfig,
 ) (*project.Project, error) {
-    _projectRepository := database.NewProjectRepository(cfg)
+	_projectRepository := database.NewProjectRepository(cfg)
 
-    _project, err := _projectRepository.FindOneByKey(key)
-    if err != nil {
-        return nil, err
-    }
+	_project, err := _projectRepository.FindOneByKey(key)
+	if err != nil {
+		return nil, err
+	}
 
-    if _project == nil {
-        return nil, errors.New("Project not found")
-    }
+	if _project == nil {
+		return nil, errors.New("Project not found")
+	}
 
-    if name != nil {
-        _project.Name = *name
-    }
-    if newKey != nil {
-        _project.Key = *newKey
-    }
+	if name != nil {
+		_project.Name = *name
+	}
+	if newKey != nil {
+		_project.Key = *newKey
+	}
 
-    if err := _projectRepository.Update(_project); err != nil {
-        return nil, err
-    }
+	if err := _projectRepository.Update(_project); err != nil {
+		return nil, err
+	}
 
-    return _project, nil
+	return _project, nil
 }

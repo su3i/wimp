@@ -10,6 +10,7 @@ import (
 	"github.com/su3i/wimp/internal/application/alertmanager"
 	incidentService "github.com/su3i/wimp/internal/application/incident"
 	"github.com/su3i/wimp/internal/application/recovery"
+	settingService "github.com/su3i/wimp/internal/application/setting"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/hub"
@@ -101,104 +102,17 @@ func emitAlert(alertType notification.AlertType, projectID, machineID uint, inst
 	}
 }
 
-// SeverityFor resolves an alert type's effective severity: a configured override from
-// internal/config/alerts.go if set, else the registry's default.
+// SeverityFor resolves an alert type's effective severity. Operator overrides win, then
+// the deployment's environment, then the registry default - see internal/application/setting.
 func SeverityFor(alertType notification.AlertType) notification.Level {
-	if override := severityOverride(alertType); override != "" {
-		if lvl, ok := parseLevel(override); ok {
-			return lvl
-		}
-		log.Printf("notification: invalid severity override %q for %s, using default", override, alertType)
-	}
-	if meta, ok := notification.AlertTypeRegistry[alertType]; ok {
-		return meta.DefaultSeverity
-	}
-	return notification.LevelInfo
+	level, _ := settingService.SeverityFor(alertType)
+	return level
 }
 
-func parseLevel(s string) (notification.Level, bool) {
-	switch notification.Level(strings.ToLower(strings.TrimSpace(s))) {
-	case notification.LevelInfo:
-		return notification.LevelInfo, true
-	case notification.LevelWarning:
-		return notification.LevelWarning, true
-	case notification.LevelCritical:
-		return notification.LevelCritical, true
-	case notification.LevelSev:
-		return notification.LevelSev, true
-	case notification.LevelDisabled:
-		return notification.LevelDisabled, true
-	default:
-		return "", false
-	}
-}
-
-// severityOverride returns the configured severity string for an alert type, or "" if
-// unset. One explicit case per alert type - deliberately not reflection-based, so
-// every mapping is greppable and traceable.
-func severityOverride(alertType notification.AlertType) string {
-	a := config.Alerts()
-	switch alertType {
-	case notification.AlertMachineConnected:
-		return a.SeverityMachineConnected
-	case notification.AlertMachineDisconnected:
-		return a.SeverityMachineDisconnected
-	case notification.AlertMachineShutdown:
-		return a.SeverityMachineShutdown
-	case notification.AlertMachineRestarting:
-		return a.SeverityMachineRestarting
-	case notification.AlertAgentUpdated:
-		return a.SeverityAgentUpdated
-	case notification.AlertMachineReassigned:
-		return a.SeverityMachineReassigned
-	case notification.AlertAppPoolStopped:
-		return a.SeverityAppPoolStopped
-	case notification.AlertAppPoolStarted:
-		return a.SeverityAppPoolStarted
-	case notification.AlertSiteStopped:
-		return a.SeveritySiteStopped
-	case notification.AlertSiteStarted:
-		return a.SeveritySiteStarted
-	case notification.AlertWindowsExporterDown:
-		return a.SeverityWindowsExporterDown
-	case notification.AlertWindowsExporterUp:
-		return a.SeverityWindowsExporterUp
-	case notification.AlertFluentBitDown:
-		return a.SeverityFluentBitDown
-	case notification.AlertFluentBitUp:
-		return a.SeverityFluentBitUp
-	case notification.AlertHealthCheckDown:
-		return a.SeverityHealthCheckDown
-	case notification.AlertHealthCheckUp:
-		return a.SeverityHealthCheckUp
-	case notification.AlertHealthCheckSlow:
-		return a.SeverityHealthCheckSlow
-	case notification.AlertHealthCheckFast:
-		return a.SeverityHealthCheckFast
-	case notification.AlertHighCPU:
-		return a.SeverityHighCPU
-	case notification.AlertHighCPURecovered:
-		return a.SeverityHighCPURecovered
-	case notification.AlertHighMemory:
-		return a.SeverityHighMemory
-	case notification.AlertHighMemoryRecovered:
-		return a.SeverityHighMemoryRecovered
-	case notification.AlertLowDisk:
-		return a.SeverityLowDisk
-	case notification.AlertLowDiskRecovered:
-		return a.SeverityLowDiskRecovered
-	default:
-		return ""
-	}
-}
-
-// receiverMinSeverity resolves the configured cutoff for external delivery, defaulting
-// to Warning when unset.
+// receiverMinSeverity resolves the cutoff for external delivery.
 func receiverMinSeverity() notification.Level {
-	if lvl, ok := parseLevel(config.Alerts().ReceiverMinSeverity); ok {
-		return lvl
-	}
-	return notification.LevelWarning
+	level, _ := settingService.ReceiverMinSeverity()
+	return level
 }
 
 // deepLink builds a link back into the web frontend for an outbound alert, or "" if
@@ -246,6 +160,10 @@ func Emit(projectID, machineID uint, level notification.Level, category notifica
 		common := config.Common()
 		generatorURL := deepLink(common.WebUrl, machineID)
 		go func() {
+			if !settingService.AlertingEnabled() {
+				log.Printf("alertmanager: skipped (outbound alerting is switched off) - alert: %s", title)
+				return
+			}
 			if common.AlertmanagerUrl == "" {
 				log.Printf("alertmanager: skipped (ALERTMANAGERURL not set) - alert: %s", title)
 				return

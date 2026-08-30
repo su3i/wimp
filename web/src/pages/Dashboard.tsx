@@ -18,6 +18,7 @@ import { machineService } from "@/services/machine.service";
 import { applicationService } from "@/services/application.service";
 import { prometheusService, type PromInstantResult, type PromRangeResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
+import { incidentService } from "@/services/incident.service";
 import type { Application } from "@/types";
 
 // Split out from pages/Dashboard.tsx into their own chunk since recharts is a large
@@ -132,16 +133,46 @@ function toHostRows(
   rangeKey: RangeKey,
 ) {
   if (!range?.length) return { rows: [] as Record<string, string | number>[], keys: [] as string[] };
-  const keys = range.map((s) => hostNameMap.get(Number(s.metric.machine_id)) ?? s.metric.machine_id ?? "?");
-  const timestamps = range[0]?.values?.map(([ts]) => ts) ?? [];
-  const rows = timestamps.map((ts, i) => {
-    const row: Record<string, string | number> = { time: fmtChartTime(ts, rangeKey) };
-    range.forEach((s, si) => {
-      const val = parseFloat(s.values[i]?.[1] ?? "0");
-      row[keys[si]] = isFinite(val) ? parseFloat(val.toFixed(1)) : 0;
-    });
-    return row;
+
+  // One key per series, made unique. Two hosts can carry the same name - a duplicate
+  // hostname across environments, or a machine that has registered but not yet reported
+  // one - and colliding keys would overwrite each other in the row while still being
+  // counted twice by the summaries below.
+  const keys: string[] = [];
+  const seenNames = new Map<string, number>();
+  for (const series of range) {
+    const machineId = series.metric.machine_id ?? "?";
+    const base = hostNameMap.get(Number(machineId)) || machineId;
+    const seen = seenNames.get(base) ?? 0;
+    seenNames.set(base, seen + 1);
+    keys.push(seen === 0 ? base : `${base} (${machineId})`);
+  }
+
+  // Grouped by timestamp rather than by array index. Prometheus does not guarantee every
+  // series in a range response has the same samples: a host whose exporter was down for
+  // part of the window, or one that came up midway, returns fewer. Indexing all series by
+  // one series' positions therefore lines values up under the wrong timestamps and pads
+  // the short ones with zeroes, which is what made the fleet total disagree with the lines
+  // it was supposedly summing.
+  const byTimestamp = new Map<number, Record<string, string | number>>();
+  range.forEach((series, si) => {
+    for (const [ts, raw] of series.values ?? []) {
+      let row = byTimestamp.get(ts);
+      if (!row) {
+        row = { time: fmtChartTime(ts, rangeKey) };
+        byTimestamp.set(ts, row);
+      }
+      const val = parseFloat(raw);
+      // Left absent rather than zeroed when a host has no sample here. Zero is a
+      // measurement; missing is not, and the summaries must not average one in as the other.
+      if (isFinite(val)) row[keys[si]] = val;
+    }
   });
+
+  const rows = [...byTimestamp.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, row]) => row);
+
   return { rows, keys };
 }
 
@@ -165,18 +196,23 @@ function seriesAverage(rows: Record<string, string | number>[], keys: string[]):
   return count > 0 ? sum / count : null;
 }
 
-// Mean over time of the summed across hosts value. Averaging the fleet's request rate
-// would understate it - throughput is additive, so the fleet total is what matters.
-function seriesTotal(rows: Record<string, string | number>[], keys: string[]): number | null {
+// The fleet total at the most recent sample. Deliberately the latest point rather than the
+// mean of the window: throughput is additive and spiky, so a window mean sits far below the
+// peaks the chart is drawing and reads as though the two disagree. This is the number at
+// the right-hand edge of the chart, which is exactly what it can be checked against.
+function seriesLatest(rows: Record<string, string | number>[], keys: string[]): number | null {
   if (!rows.length || !keys.length) return null;
+  const last = rows[rows.length - 1];
   let sum = 0;
-  for (const row of rows) {
-    for (const key of keys) {
-      const v = Number(row[key]);
-      if (isFinite(v)) sum += v;
+  let counted = 0;
+  for (const key of keys) {
+    const v = Number(last[key]);
+    if (isFinite(v)) {
+      sum += v;
+      counted++;
     }
   }
-  return sum / rows.length;
+  return counted > 0 ? sum : null;
 }
 
 function fmtPercent(v: number) {
@@ -228,19 +264,25 @@ function AlertRow({ alert, onDismiss }: { alert: ActiveAlert; onDismiss: () => v
 const STAT_CARD =
   "rounded-lg border border-rim bg-surface px-[18px] py-[18px] flex flex-col justify-between gap-3 min-h-[124px]";
 
-function SevEventsCard({ count }: { count: number }) {
+// Open incidents rather than a rolling count of Sev activity. An alert count answers "how
+// noisy was the last day"; this answers "what is broken right now", which is the question
+// worth putting on a dashboard. Links through to the timeline, since a non-zero count is
+// only useful if you can act on it.
+function OpenIncidentsCard({ count, loaded }: { count: number; loaded: boolean }) {
   const hot = count > 0;
   return (
-    <div className={cn(STAT_CARD, 'transition-colors')}>
+    <Link to='/incidents' className={cn(STAT_CARD, 'transition-colors hover:border-rim-strong')}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
-        Sev+ Events
-        <InfoTooltip text='Distinct Sev incidents in the last 24h.' />
+        Open Incidents
+        <InfoTooltip text='Failures that have not yet reported a recovery. Click through for the full timeline.' />
       </span>
-      <span className={cn('text-[27px] font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-ink')}>
-        {count}
+      <span className={cn('text-[27px] font-semibold font-mono leading-none', hot ? 'text-danger' : 'text-success')}>
+        {loaded ? count : "N/A"}
       </span>
-      <span className='text-[0.625rem] text-ink-faint'>last 24h</span>
-    </div>
+      <span className='text-[0.625rem] text-ink-faint'>
+        {!loaded ? "loading" : hot ? "needs attention" : "all clear"}
+      </span>
+    </Link>
   );
 }
 
@@ -569,12 +611,11 @@ export function Dashboard() {
     refetchInterval: RANGES[memRange].refetchMs,
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", projectKey],
-    queryFn: () => dashboardService.getStats(projectKey!),
+  const { data: incidentCounts } = useQuery({
+    queryKey: ["incident-counts", projectKey],
+    queryFn: () => incidentService.list(projectKey, { page: 1, per_page: 1 }),
     enabled: !!projectKey,
     refetchInterval: 30_000,
-    staleTime: 0,
   });
 
   const { data: dashboardApps = [] } = useQuery({
@@ -733,7 +774,7 @@ export function Dashboard() {
     };
   }, [queryClient, projectKey]);
 
-  const sevLast24h = stats?.sev_last_24h ?? 0;
+  const openIncidents = incidentCounts?.counts.open ?? 0;
   const netInVal = scalar(rNetIn);
   const netOutVal = scalar(rNetOut);
 
@@ -751,7 +792,7 @@ export function Dashboard() {
   );
 
   const throughputTotal = useMemo(
-    () => seriesTotal(throughputPerfData.rows, throughputPerfData.keys),
+    () => seriesLatest(throughputPerfData.rows, throughputPerfData.keys),
     [throughputPerfData],
   );
   const cpuAverage = useMemo(
@@ -799,7 +840,7 @@ export function Dashboard() {
             worth apart no matter how they were tuned. */}
         <div className='grid grid-cols-3 gap-[14px]'>
           <div className='grid grid-cols-2 gap-[14px]'>
-            <SevEventsCard count={sevLast24h} />
+            <OpenIncidentsCard count={openIncidents} loaded={incidentCounts !== undefined} />
             <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} ready={appStatusReady} />
           </div>
           <BandwidthCard
@@ -817,11 +858,11 @@ export function Dashboard() {
         <div className='grid grid-cols-3 gap-[14px]'>
           <ChartCard
             title='Request Rate'
-            info='Live per-host IIS request rate. The headline is the fleet total, averaged across the selected window.'
+            info='Live per-host IIS request rate. The headline sums every host at the most recent sample, matching the right-hand edge of the chart.'
             range={throughputRange}
             onRangeChange={setThroughputRange}
             summary={throughputTotal != null ? fmtRate(throughputTotal) : null}
-            summaryLabel='total'
+            summaryLabel='total now'
           >
             <HostLineChart
               rows={throughputPerfData.rows}

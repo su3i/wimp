@@ -15,6 +15,8 @@ const ApplicationDetail = lazy(() => import('@/pages/ApplicationDetail').then(m 
 const Machines = lazy(() => import('@/pages/Machines').then(m => ({ default: m.Machines })))
 const MachineDetail = lazy(() => import('@/pages/MachineDetail').then(m => ({ default: m.MachineDetail })))
 const Activity = lazy(() => import('@/pages/Alerts').then(m => ({ default: m.Activity })))
+const Incidents = lazy(() => import('@/pages/Incidents').then(m => ({ default: m.Incidents })))
+const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
 
 export const router = createBrowserRouter([
   {
@@ -33,6 +35,8 @@ export const router = createBrowserRouter([
           { path: '/hosts', element: <Machines /> },
           { path: '/hosts/:machineId', element: <MachineDetail /> },
           { path: '/activity', element: <Activity /> },
+          { path: '/incidents', element: <Incidents /> },
+          { path: '/settings', element: <Settings /> },
           // Legacy /machines URLs - kept as redirects so existing bookmarks and any link
           // shared before the rename still land on the right page, with the machine id
           // carried across so a deep link resolves to that same host, not just the list.

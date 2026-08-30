@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Boxes, HardDrive, Bell, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+import { LayoutDashboard, Boxes, HardDrive, Bell, ShieldAlert, Settings, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/auth'
 import { useUIStore } from '@/store/ui'
@@ -8,11 +9,27 @@ import { authService } from '@/services/auth.service'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import iconSrc from '@/assets/icon.svg'
 
-const NAV_ITEMS = [
+interface NavItem {
+  to: string
+  icon: LucideIcon
+  label: string
+  end?: boolean
+}
+
+// What the platform is for: the fleet, what runs on it, and what is broken.
+const NAV_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Overview', end: true },
   { to: '/applications', icon: Boxes, label: 'Applications' },
   { to: '/hosts', icon: HardDrive, label: 'Hosts' },
+  { to: '/incidents', icon: ShieldAlert, label: 'Incidents' },
+]
+
+// Supporting destinations, pinned to the bottom. Neither is somewhere you go to do the
+// job - the raw event feed is what incidents are assembled from, and settings is
+// configuration - so neither should compete with the four above for the top of the list.
+const SECONDARY_NAV_ITEMS: NavItem[] = [
   { to: '/activity', icon: Bell, label: 'Activity' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 const tooltip = cn(
@@ -22,6 +39,27 @@ const tooltip = cn(
   'opacity-0 -translate-x-1.5 group-hover:opacity-100 group-hover:translate-x-0',
   'transition-all duration-150 ease-out',
 )
+
+function NavItemLink({ item, expanded }: { item: NavItem; expanded: boolean }) {
+  const { to, icon: Icon, label, end } = item
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) => cn(
+        'relative group cursor-pointer flex items-center h-8 w-full rounded-md transition-colors',
+        expanded ? 'gap-2.5 px-3' : 'justify-center',
+        isActive ? 'bg-primary/10 text-primary' : 'text-ink-dim hover:bg-surface-high hover:text-ink',
+      )}
+    >
+      <Icon className='size-3.5 shrink-0' />
+      {expanded
+        ? <span className='text-xs font-medium truncate'>{label}</span>
+        : <span className={tooltip}>{label}</span>
+      }
+    </NavLink>
+  )
+}
 
 export function Sidebar() {
   const { user, refreshToken, clearAuth } = useAuthStore()
@@ -57,27 +95,20 @@ export function Sidebar() {
         <ProjectSwitcher expanded={expanded} />
       </div>
 
-      {/* Nav */}
+      {/* Primary nav. flex-1 so it takes the slack, which is what pushes the secondary
+          group down to sit against the account row. */}
       <nav className='flex-1 py-3 px-2 space-y-0.5 overflow-hidden'>
-        {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) => cn(
-              'relative group cursor-pointer flex items-center h-8 w-full rounded-md transition-colors',
-              expanded ? 'gap-2.5 px-3' : 'justify-center',
-              isActive ? 'bg-primary/10 text-primary' : 'text-ink-dim hover:bg-surface-high hover:text-ink',
-            )}
-          >
-            <Icon className='size-3.5 shrink-0' />
-            {expanded
-              ? <span className='text-xs font-medium truncate'>{label}</span>
-              : <span className={tooltip}>{label}</span>
-            }
-          </NavLink>
+        {NAV_ITEMS.map((item) => (
+          <NavItemLink key={item.to} item={item} expanded={expanded} />
         ))}
       </nav>
+
+      {/* Secondary nav */}
+      <div className='shrink-0 border-t border-rim px-2 py-2 space-y-0.5'>
+        {SECONDARY_NAV_ITEMS.map((item) => (
+          <NavItemLink key={item.to} item={item} expanded={expanded} />
+        ))}
+      </div>
 
       {/* Bottom */}
       <div className='shrink-0 border-t border-rim px-2 py-3'>

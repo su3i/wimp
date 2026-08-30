@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -169,6 +170,10 @@ func DeleteProject(c *gin.Context) {
 
 	key := c.Param("key")
 	if err := project.DeleteProject(key, config.Database()); err != nil {
+		if errors.Is(err, project.ErrCannotDeleteDefault) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		log.Printf("Error deleting project: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

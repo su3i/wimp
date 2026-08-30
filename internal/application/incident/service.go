@@ -2,6 +2,7 @@
 package incident
 
 import (
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -24,6 +25,11 @@ import (
 // is what the Helm chart deploys; running several would need this moved into the database
 // as a conditional insert.
 var mu sync.Mutex
+
+var (
+	ErrNotFound = errors.New("incident not found")
+	ErrNotOpen  = errors.New("incident is already resolved")
+)
 
 // Event is one alert offered to the incident tracker. Whether it opens anything, closes
 // anything, or is ignored is decided entirely by notification.IncidentBindings.
@@ -111,13 +117,54 @@ func Record(e Event, cfg *config.DatabaseConfig) {
 	}
 }
 
-func List(projectID uint, status incident.Status, page, perPage int, cfg *config.DatabaseConfig) ([]incident.Incident, int64, error) {
-	return database.NewIncidentRepository(cfg).FindPaginated(incident.Filter{
-		ProjectID: projectID,
-		Status:    status,
-		Page:      page,
-		PerPage:   perPage,
+// TimelineWindow is how far back resolved incidents are kept in the feed. Long enough to
+// cover "what happened over the weekend", short enough that the list stays finite without
+// the reader having to filter it. Incidents still open are exempt - see FindTimeline.
+const TimelineWindow = 7 * 24 * time.Hour
+
+// List returns the incident timeline: open first, newest first within each half.
+func List(projectID uint, page, perPage int, cfg *config.DatabaseConfig) ([]incident.Incident, int64, error) {
+	return database.NewIncidentRepository(cfg).FindTimeline(incident.Filter{
+		ProjectID:     projectID,
+		ResolvedSince: time.Now().Add(-TimelineWindow),
+		Page:          page,
+		PerPage:       perPage,
 	})
+}
+
+// ResolveManually closes an incident by hand.
+//
+// This exists because not every condition reports its own recovery: an app pool removed
+// from an application, a host decommissioned mid-outage, or a threshold alert whose
+// recovery was silenced all leave an incident with nothing left to close it. The operator
+// needs a way to say "this is over" without editing the database.
+//
+// Note it resolves the incident record only. It does not touch the underlying condition,
+// and it does not reset the checker's in-memory breach state - so if the condition is
+// genuinely still breached, the eventual real recovery alert will arrive and find the
+// incident already closed, which is a no-op.
+func ResolveManually(id, projectID uint, resolvedBy string, cfg *config.DatabaseConfig) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	repo := database.NewIncidentRepository(cfg)
+
+	found, err := repo.FindOneByID(id)
+	if err != nil {
+		return err
+	}
+	if found == nil || found.ProjectID != projectID {
+		return ErrNotFound
+	}
+	if found.Status != incident.StatusOpen {
+		return ErrNotOpen
+	}
+
+	detail := "Marked resolved manually"
+	if resolvedBy != "" {
+		detail = "Marked resolved by " + resolvedBy
+	}
+	return repo.Resolve(found.ID, time.Now(), "Resolved manually", detail, 0)
 }
 
 func Counts(projectID uint, cfg *config.DatabaseConfig) (incident.Counts, error) {

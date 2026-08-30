@@ -13,6 +13,7 @@ import (
 	"github.com/su3i/wimp/internal/domain/notification"
 	"github.com/su3i/wimp/internal/domain/organization"
 	"github.com/su3i/wimp/internal/domain/project"
+	"github.com/su3i/wimp/internal/domain/setting"
 	"github.com/su3i/wimp/internal/domain/site"
 	"github.com/su3i/wimp/internal/infrastructure/database/postgres"
 	postgresRepository "github.com/su3i/wimp/internal/infrastructure/database/postgres/repositories"
@@ -86,6 +87,10 @@ func NewProjectRepository(config *config.DatabaseConfig) project.ProjectReposito
 
 func NewIncidentRepository(config *config.DatabaseConfig) incident.Repository {
 	return newRepository(config, postgresRepository.NewIncidentRepository, sqliteRepository.NewIncidentRepository)
+}
+
+func NewSettingRepository(config *config.DatabaseConfig) setting.Repository {
+	return newRepository(config, postgresRepository.NewSettingRepository, sqliteRepository.NewSettingRepository)
 }
 
 func NewMachineRepository(config *config.DatabaseConfig) machine.MachineRepository {
