@@ -113,6 +113,13 @@ func queryByApplication(prometheusUrl, query string) (map[uint]float64, error) {
 	return out, nil
 }
 
+// applicationSubject keys an application's incidents. Health checks carry machine id 0 -
+// they are about an endpoint, not a host - so without this every application in a project
+// would share one incident per condition and the first recovery would close them all.
+func applicationSubject(appID uint) string {
+	return fmt.Sprintf("application:%d", appID)
+}
+
 func slowThresholdSeconds() float64 {
 	if configured := config.Alerts().ThresholdHealthCheckSlowSeconds; configured > 0 {
 		return float64(configured)
@@ -166,7 +173,7 @@ func checkDown(app *applicationDomain.Application, appRepo applicationDomain.App
 	if failures >= consecutiveBreachesBeforeAlert && !alertFired {
 		notification.EmitAlert(
 			notificationDomain.AlertHealthCheckDown,
-			app.ProjectID, 0, app.Name,
+			app.ProjectID, 0, app.Name, applicationSubject(app.ID),
 			notification.AlertTitle(app.Name, "Health Check Failing"),
 			fmt.Sprintf("Endpoint %s is not responding", *app.HealthCheckURL),
 			dbCfg,
@@ -186,7 +193,7 @@ func checkUp(app *applicationDomain.Application, appRepo applicationDomain.Appli
 	if app.AlertFired {
 		notification.EmitAlert(
 			notificationDomain.AlertHealthCheckUp,
-			app.ProjectID, 0, app.Name,
+			app.ProjectID, 0, app.Name, applicationSubject(app.ID),
 			notification.AlertTitle(app.Name, "Health Check recovered"),
 			fmt.Sprintf("Endpoint %s is responding again", *app.HealthCheckURL),
 			dbCfg,
@@ -205,7 +212,7 @@ func checkSlow(app *applicationDomain.Application, duration, threshold float64, 
 		if slow >= consecutiveBreachesBeforeAlert && !fired {
 			notification.EmitAlert(
 				notificationDomain.AlertHealthCheckSlow,
-				app.ProjectID, 0, app.Name,
+				app.ProjectID, 0, app.Name, applicationSubject(app.ID),
 				notification.AlertTitle(app.Name, "Site Slow"),
 				fmt.Sprintf("Endpoint %s is responding in %.1fs (threshold %.1fs). The site is up but degraded.",
 					*app.HealthCheckURL, duration, threshold),
@@ -220,7 +227,7 @@ func checkSlow(app *applicationDomain.Application, duration, threshold float64, 
 	if app.SlowAlertFired {
 		notification.EmitAlert(
 			notificationDomain.AlertHealthCheckFast,
-			app.ProjectID, 0, app.Name,
+			app.ProjectID, 0, app.Name, applicationSubject(app.ID),
 			notification.AlertTitle(app.Name, "Site Slow recovered"),
 			fmt.Sprintf("Endpoint %s is back to %.1fs (threshold %.1fs)", *app.HealthCheckURL, duration, threshold),
 			dbCfg,

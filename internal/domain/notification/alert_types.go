@@ -83,3 +83,78 @@ var AlertTypeRegistry = map[AlertType]AlertTypeMeta{
 	AlertLowDisk:             {CategoryMetrics, LevelCritical},
 	AlertLowDiskRecovered:    {CategoryMetrics, LevelInfo},
 }
+
+// ── Incident bindings ──────────────────────────────────────────────────────────
+//
+// Which alerts begin and end a fault condition. This lives beside AlertTypeRegistry
+// deliberately: adding an alert type without deciding whether it opens, closes, or does
+// neither is exactly the omission that leaves incidents dangling, and keeping both tables
+// in one file makes that omission visible in review.
+
+// IncidentKind names a condition. The alert that opens an incident and the alert that
+// closes it share one, and that shared value is how a recovery finds its failure.
+type IncidentKind string
+
+const (
+	IncidentMachineDown     IncidentKind = "machine_down"
+	IncidentAppPoolDown     IncidentKind = "app_pool_down"
+	IncidentSiteDown        IncidentKind = "site_down"
+	IncidentWindowsExporter IncidentKind = "windows_exporter_down"
+	IncidentFluentBit       IncidentKind = "fluent_bit_down"
+	IncidentHealthCheckDown IncidentKind = "health_check_down"
+	IncidentHealthCheckSlow IncidentKind = "health_check_slow"
+	IncidentHighCPU         IncidentKind = "high_cpu"
+	IncidentHighMemory      IncidentKind = "high_memory"
+	IncidentLowDisk         IncidentKind = "low_disk"
+)
+
+type IncidentRole string
+
+const (
+	// RoleOpens starts an incident if one is not already running for that kind and subject.
+	RoleOpens IncidentRole = "opens"
+	// RoleCloses resolves the matching open incident, and does nothing if there is none -
+	// a recovery with no preceding failure is normal after a restart.
+	RoleCloses IncidentRole = "closes"
+)
+
+type IncidentBinding struct {
+	Kind IncidentKind
+	Role IncidentRole
+}
+
+// IncidentBindings maps the alert types that participate in an incident lifecycle. Types
+// absent from this map are informational and never open or close anything: an agent
+// updating, a planned shutdown, or a machine being reassigned are all events worth
+// recording in the activity feed but none of them is a fault with a duration.
+//
+// Note machine_shutdown and machine_restarting are deliberately excluded while
+// machine_disconnected opens an incident - the difference between a host going away
+// because someone asked it to and a host going away on its own is the entire point.
+var IncidentBindings = map[AlertType]IncidentBinding{
+	AlertMachineDisconnected: {IncidentMachineDown, RoleOpens},
+	AlertMachineConnected:    {IncidentMachineDown, RoleCloses},
+
+	AlertAppPoolStopped: {IncidentAppPoolDown, RoleOpens},
+	AlertAppPoolStarted: {IncidentAppPoolDown, RoleCloses},
+
+	AlertSiteStopped: {IncidentSiteDown, RoleOpens},
+	AlertSiteStarted: {IncidentSiteDown, RoleCloses},
+
+	AlertWindowsExporterDown: {IncidentWindowsExporter, RoleOpens},
+	AlertWindowsExporterUp:   {IncidentWindowsExporter, RoleCloses},
+	AlertFluentBitDown:       {IncidentFluentBit, RoleOpens},
+	AlertFluentBitUp:         {IncidentFluentBit, RoleCloses},
+
+	AlertHealthCheckDown: {IncidentHealthCheckDown, RoleOpens},
+	AlertHealthCheckUp:   {IncidentHealthCheckDown, RoleCloses},
+	AlertHealthCheckSlow: {IncidentHealthCheckSlow, RoleOpens},
+	AlertHealthCheckFast: {IncidentHealthCheckSlow, RoleCloses},
+
+	AlertHighCPU:             {IncidentHighCPU, RoleOpens},
+	AlertHighCPURecovered:    {IncidentHighCPU, RoleCloses},
+	AlertHighMemory:          {IncidentHighMemory, RoleOpens},
+	AlertHighMemoryRecovered: {IncidentHighMemory, RoleCloses},
+	AlertLowDisk:             {IncidentLowDisk, RoleOpens},
+	AlertLowDiskRecovered:    {IncidentLowDisk, RoleCloses},
+}

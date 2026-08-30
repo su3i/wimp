@@ -30,4 +30,4 @@ jobs:
           context: ./web
           file: ./web/dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/wimp-web:1.0.6
+          tags: ${{ secrets.DOCKER_USERNAME }}/wimp-web:1.0.7

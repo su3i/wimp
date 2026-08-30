@@ -75,7 +75,7 @@ func AgentWebSocket(c *gin.Context) {
 	log.Printf("machine (%d) agent connected", m.ID)
 
 	cfg := config.Database()
-	go notificationService.EmitAlert(notification.AlertMachineConnected, m.ProjectID, m.ID, m.Hostname,
+	go notificationService.EmitAlert(notification.AlertMachineConnected, m.ProjectID, m.ID, m.Hostname, "",
 		notificationService.AlertTitle(m.Hostname, "Machine Online"), m.Hostname+" came online", cfg)
 
 	defer func() {
@@ -107,14 +107,14 @@ func AgentWebSocket(c *gin.Context) {
 		if action, ok := cache.GetMachineActionPending(m.ID); ok {
 			cache.ClearMachineActionPending(m.ID)
 			if action == "shutdown" {
-				go notificationService.EmitAlert(notification.AlertMachineShutdown, m.ProjectID, m.ID, m.Hostname,
+				go notificationService.EmitAlert(notification.AlertMachineShutdown, m.ProjectID, m.ID, m.Hostname, "",
 					notificationService.AlertTitle(m.Hostname, "Machine Shut Down"), m.Hostname+" was shut down", cfg)
 			} else {
-				go notificationService.EmitAlert(notification.AlertMachineRestarting, m.ProjectID, m.ID, m.Hostname,
+				go notificationService.EmitAlert(notification.AlertMachineRestarting, m.ProjectID, m.ID, m.Hostname, "",
 					notificationService.AlertTitle(m.Hostname, "Machine Restarting"), m.Hostname+" is restarting", cfg)
 			}
 		} else {
-			go notificationService.EmitAlert(notification.AlertMachineDisconnected, m.ProjectID, m.ID, m.Hostname,
+			go notificationService.EmitAlert(notification.AlertMachineDisconnected, m.ProjectID, m.ID, m.Hostname, "",
 				notificationService.AlertTitle(m.Hostname, "Machine Offline"), m.Hostname+" went offline unexpectedly", cfg)
 		}
 	}()
@@ -152,7 +152,7 @@ func AgentWebSocket(c *gin.Context) {
 					log.Printf("machine (%d) identity update failed: %v", m.ID, err)
 				}
 				if reg.Version != "" && reg.Version != "dev" && reg.Version != prevVersion {
-					go notificationService.EmitAlert(notification.AlertAgentUpdated, m.ProjectID, m.ID, m.Hostname,
+					go notificationService.EmitAlert(notification.AlertAgentUpdated, m.ProjectID, m.ID, m.Hostname, "",
 						notificationService.AlertTitle(m.Hostname, "Agent Updated"), m.Hostname+" agent updated to "+reg.Version, cfg)
 				}
 
@@ -165,7 +165,7 @@ func AgentWebSocket(c *gin.Context) {
 					if name == "" {
 						name = m.Hostname
 					}
-					go notificationService.EmitAlert(notification.AlertMachineReassigned, old.ProjectID, old.ID, name,
+					go notificationService.EmitAlert(notification.AlertMachineReassigned, old.ProjectID, old.ID, name, "",
 						notificationService.AlertTitle(name, "Host Reassigned"),
 						name+" was re-bootstrapped and now reports to another host entry. This entry is stale and will not come back online.", cfg)
 				}
@@ -220,35 +220,35 @@ func AgentWebSocket(c *gin.Context) {
 			stoppedSites, startedSites, _ := siteService.SyncHeartbeat(m.ID, hb.Sites, cfg)
 			cache.InvalidateSitesByMachine(m.ID)
 			for _, name := range stoppedPools {
-				go notificationService.EmitAlert(notification.AlertAppPoolStopped, m.ProjectID, m.ID, m.Hostname,
+				go notificationService.EmitAlert(notification.AlertAppPoolStopped, m.ProjectID, m.ID, m.Hostname, name,
 					notificationService.AlertTitle(m.Hostname, "App Pool Stopped: "+name), name+" stopped on "+m.Hostname, cfg)
 			}
 			for _, name := range startedPools {
-				go notificationService.EmitAlert(notification.AlertAppPoolStarted, m.ProjectID, m.ID, m.Hostname,
+				go notificationService.EmitAlert(notification.AlertAppPoolStarted, m.ProjectID, m.ID, m.Hostname, name,
 					notificationService.AlertTitle(m.Hostname, "App Pool Started: "+name), name+" started on "+m.Hostname, cfg)
 			}
 			for _, name := range stoppedSites {
-				go notificationService.EmitAlert(notification.AlertSiteStopped, m.ProjectID, m.ID, m.Hostname,
+				go notificationService.EmitAlert(notification.AlertSiteStopped, m.ProjectID, m.ID, m.Hostname, name,
 					notificationService.AlertTitle(m.Hostname, "Site Stopped: "+name), name+" stopped on "+m.Hostname, cfg)
 			}
 			for _, name := range startedSites {
-				go notificationService.EmitAlert(notification.AlertSiteStarted, m.ProjectID, m.ID, m.Hostname,
+				go notificationService.EmitAlert(notification.AlertSiteStarted, m.ProjectID, m.ID, m.Hostname, name,
 					notificationService.AlertTitle(m.Hostname, "Site Started: "+name), name+" started on "+m.Hostname, cfg)
 			}
 
 			if prevWE, prevFB, known := cache.GetSidecarHealth(m.ID); known {
 				if prevWE && !hb.WindowsExporterHealthy {
-					go notificationService.EmitAlert(notification.AlertWindowsExporterDown, m.ProjectID, m.ID, m.Hostname,
+					go notificationService.EmitAlert(notification.AlertWindowsExporterDown, m.ProjectID, m.ID, m.Hostname, "",
 						notificationService.AlertTitle(m.Hostname, "windows_exporter Down"), "windows_exporter service is not running on "+m.Hostname, cfg)
 				} else if !prevWE && hb.WindowsExporterHealthy {
-					go notificationService.EmitAlert(notification.AlertWindowsExporterUp, m.ProjectID, m.ID, m.Hostname,
+					go notificationService.EmitAlert(notification.AlertWindowsExporterUp, m.ProjectID, m.ID, m.Hostname, "",
 						notificationService.AlertTitle(m.Hostname, "windows_exporter recovered"), "windows_exporter service is running again on "+m.Hostname, cfg)
 				}
 				if prevFB && !hb.FluentBitHealthy {
-					go notificationService.EmitAlert(notification.AlertFluentBitDown, m.ProjectID, m.ID, m.Hostname,
+					go notificationService.EmitAlert(notification.AlertFluentBitDown, m.ProjectID, m.ID, m.Hostname, "",
 						notificationService.AlertTitle(m.Hostname, "fluent-bit Down"), "fluent-bit service is not running on "+m.Hostname, cfg)
 				} else if !prevFB && hb.FluentBitHealthy {
-					go notificationService.EmitAlert(notification.AlertFluentBitUp, m.ProjectID, m.ID, m.Hostname,
+					go notificationService.EmitAlert(notification.AlertFluentBitUp, m.ProjectID, m.ID, m.Hostname, "",
 						notificationService.AlertTitle(m.Hostname, "fluent-bit recovered"), "fluent-bit service is running again on "+m.Hostname, cfg)
 				}
 			}

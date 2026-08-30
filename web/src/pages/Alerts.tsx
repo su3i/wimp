@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Bell, Info, ExternalLink, ShieldAlert, X } from "lucide-react";
 import { useProjectStore } from "@/store/project";
 import { dashboardService } from "@/services/dashboard.service";
+import { incidentService } from "@/services/incident.service";
+import { IncidentTimeline } from "@/components/activity/IncidentTimeline";
+import type { IncidentStatus } from "@/types";
 import type { DashboardNotification } from "@/services/dashboard.service";
 import { Pagination } from "@/components/ui/Pagination";
 import { usePageTitle } from "@/utils/usePageTitle";
@@ -112,18 +115,100 @@ function NoProjectSelected() {
   );
 }
 
-export function Activity() {
-  usePageTitle("Activity");
-  const { activeProject } = useProjectStore();
+
+type IncidentFilter = "all" | IncidentStatus;
+
+const INCIDENT_FILTERS: { label: string; value: IncidentFilter }[] = [
+  { label: "All", value: "all" },
+  { label: "Open", value: "open" },
+  { label: "Resolved", value: "resolved" },
+];
+
+function IncidentsPanel({ projectKey }: { projectKey: string }) {
+  const [status, setStatus] = useState<IncidentFilter>("all");
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["incidents", projectKey, status, page],
+    // Open incidents are live state, not history - an ongoing outage should tick over
+    // without the operator reloading the page.
+    refetchInterval: 15_000,
+    queryFn: () =>
+      incidentService.list(projectKey, {
+        page,
+        per_page: PAGE_SIZE,
+        ...(status !== "all" ? { status } : {}),
+      }),
+  });
+
+  const incidents = data?.incidents ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const counts = data?.counts;
+
+  function changeStatus(next: IncidentFilter) {
+    setStatus(next);
+    setPage(1);
+  }
+
+  return (
+    <div className='space-y-4'>
+      <div className='flex items-center justify-between gap-3'>
+        <div className='flex items-center gap-1'>
+          {INCIDENT_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type='button'
+              onClick={() => changeStatus(f.value)}
+              className={cn(
+                "cursor-pointer h-7 px-3 rounded-md text-xs font-medium transition-colors",
+                status === f.value
+                  ? "bg-primary/10 text-primary"
+                  : "text-ink-faint hover:text-ink hover:bg-surface-high",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {counts && (
+          <div className='flex items-center gap-3 text-[0.6875rem]'>
+            <span className='flex items-center gap-1.5'>
+              <span className='size-1.5 rounded-full bg-danger' />
+              <span className='text-ink-dim tabular-nums'>{counts.open}</span>
+              <span className='text-ink-faint'>open</span>
+            </span>
+            <span className='flex items-center gap-1.5'>
+              <span className='size-1.5 rounded-full bg-success' />
+              <span className='text-ink-dim tabular-nums'>{counts.resolved}</span>
+              <span className='text-ink-faint'>resolved</span>
+            </span>
+          </div>
+        )}
+      </div>
+
+      <IncidentTimeline incidents={incidents} isLoading={isLoading} isError={isError} />
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+      />
+    </div>
+  );
+}
+
+function ActivityPanel({ projectKey }: { projectKey: string }) {
   const [level, setLevel] = useState<Level>("all");
   const [page, setPage] = useState(1);
   const [showHint, setShowHint] = useState(true);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["notifications-full", activeProject?.Key, level, page],
-    enabled: !!activeProject,
+    queryKey: ["notifications-full", projectKey, level, page],
     queryFn: () =>
-      dashboardService.listNotifications(activeProject!.Key, {
+      dashboardService.listNotifications(projectKey, {
         page,
         limit: PAGE_SIZE,
         ...(level !== "all" ? { level } : {}),
@@ -139,19 +224,8 @@ export function Activity() {
     setPage(1);
   }
 
-  if (!activeProject) return <NoProjectSelected />;
-
   return (
     <div className='space-y-4'>
-      {/* Header */}
-      <div>
-        <h1 className='text-base font-semibold text-ink'>Activity</h1>
-        <p className='mt-0.5 text-xs text-ink-faint'>{activeProject.Name}</p>
-        <p className='mt-1 max-w-xl text-[0.6875rem] text-ink-faint'>
-          A live feed of host connects, app pool and site changes, and alerts across this project, newest first.
-        </p>
-      </div>
-
       {/* Alertmanager hint */}
       {showHint && (
         <div className='flex items-start gap-2.5 rounded-lg border border-rim bg-surface px-4 py-3'>
@@ -226,6 +300,72 @@ export function Activity() {
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
       />
+    </div>
+  );
+}
+
+type Tab = "activity" | "incidents";
+
+const TABS: { id: Tab; label: string; blurb: string }[] = [
+  {
+    id: "activity",
+    label: "Activity",
+    blurb:
+      "A live feed of host connects, app pool and site changes, and alerts across this project, newest first.",
+  },
+  {
+    id: "incidents",
+    label: "Incidents",
+    blurb:
+      "Every failure paired with its recovery. An incident opens when something breaks and closes when the matching all-clear arrives.",
+  },
+];
+
+export function Activity() {
+  const [tab, setTab] = useState<Tab>("activity");
+  const { activeProject } = useProjectStore();
+
+  usePageTitle(tab === "incidents" ? "Incidents" : "Activity");
+
+  if (!activeProject) return <NoProjectSelected />;
+
+  const active = TABS.find((t) => t.id === tab) ?? TABS[0];
+
+  return (
+    <div className='space-y-4'>
+      {/* Header */}
+      <div>
+        <h1 className='text-base font-semibold text-ink'>{active.label}</h1>
+        <p className='mt-0.5 text-xs text-ink-faint'>{activeProject.Name}</p>
+        <p className='mt-1 max-w-xl text-[0.6875rem] text-ink-faint'>{active.blurb}</p>
+      </div>
+
+      {/* Tabs - same treatment as the Host Detail page's tab bar */}
+      <div className='flex items-center gap-1 border-b border-rim'>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type='button'
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "cursor-pointer px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px",
+              tab === t.id
+                ? "border-primary text-primary"
+                : "border-transparent text-ink-faint hover:text-ink",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Keyed so switching projects resets each panel's own filters and page rather than
+          carrying one project's paging state into another's data. */}
+      {tab === "activity" ? (
+        <ActivityPanel key={activeProject.Key} projectKey={activeProject.Key} />
+      ) : (
+        <IncidentsPanel key={activeProject.Key} projectKey={activeProject.Key} />
+      )}
     </div>
   );
 }

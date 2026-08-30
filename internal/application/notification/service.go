@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/su3i/wimp/internal/application/alertmanager"
+	incidentService "github.com/su3i/wimp/internal/application/incident"
 	"github.com/su3i/wimp/internal/application/recovery"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/notification"
@@ -27,12 +28,18 @@ func AlertTitle(instance, event string) string {
 }
 
 // EmitAlert is the single chokepoint every alert-worthy event in the system should go
-// through. It resolves the configured (or default) severity for the alert type, skips
-// entirely if that resolves to Disabled, otherwise creates+broadcasts+delivers the
-// notification and - for Sev-level alerts - calls into the (currently inert) recovery
-// seam.
-func EmitAlert(alertType notification.AlertType, projectID, machineID uint, instance, title, detail string, cfg *config.DatabaseConfig) {
-	emitAlert(alertType, projectID, machineID, instance, title, detail, cfg, false)
+// through. It resolves the configured (or default) severity for the alert type, creates,
+// broadcasts and delivers the notification unless that severity is Disabled, folds the
+// event into the incident timeline, and - for Sev-level alerts - calls into the
+// (currently inert) recovery seam.
+//
+// `subject` names the specific thing the alert is about within its machine - an app pool
+// name, a site name, an application. It is what lets a recovery be paired with the failure
+// it recovers from: two app pools failing on one host produce two incidents, and each
+// recovery closes the right one. Pass "" when the condition is about the machine as a
+// whole (high CPU, host offline), where the machine id is already the whole identity.
+func EmitAlert(alertType notification.AlertType, projectID, machineID uint, instance, subject, title, detail string, cfg *config.DatabaseConfig) {
+	emitAlert(alertType, projectID, machineID, instance, subject, title, detail, cfg, false)
 }
 
 // EmitRepeatAlert behaves like EmitAlert but marks the notification as a reminder for
@@ -40,11 +47,11 @@ func EmitAlert(alertType notification.AlertType, projectID, machineID uint, inst
 // doesn't re-trigger recovery and doesn't get double-counted by incident-count metrics
 // like the dashboard's Sev Events card. Used by internal/application/metrics/checker.go
 // for the 15-minute sustained-Sev-breach reminder.
-func EmitRepeatAlert(alertType notification.AlertType, projectID, machineID uint, instance, title, detail string, cfg *config.DatabaseConfig) {
-	emitAlert(alertType, projectID, machineID, instance, title, detail, cfg, true)
+func EmitRepeatAlert(alertType notification.AlertType, projectID, machineID uint, instance, subject, title, detail string, cfg *config.DatabaseConfig) {
+	emitAlert(alertType, projectID, machineID, instance, subject, title, detail, cfg, true)
 }
 
-func emitAlert(alertType notification.AlertType, projectID, machineID uint, instance, title, detail string, cfg *config.DatabaseConfig, isRepeat bool) {
+func emitAlert(alertType notification.AlertType, projectID, machineID uint, instance, subject, title, detail string, cfg *config.DatabaseConfig, isRepeat bool) {
 	meta, ok := notification.AlertTypeRegistry[alertType]
 	if !ok {
 		log.Printf("notification: unknown alert type %q, dropping", alertType)
@@ -52,11 +59,36 @@ func emitAlert(alertType notification.AlertType, projectID, machineID uint, inst
 	}
 
 	level := SeverityFor(alertType)
-	if level == notification.LevelDisabled {
-		return
+	suppressed := level == notification.LevelDisabled
+
+	var notificationID uint
+	if !suppressed {
+		if saved := Emit(projectID, machineID, level, meta.Category, title, detail, cfg, instance, isRepeat); saved != nil {
+			notificationID = saved.ID
+		}
 	}
 
-	Emit(projectID, machineID, level, meta.Category, title, detail, cfg, instance, isRepeat)
+	// Repeats are reminders about a condition already being tracked, so they must not open
+	// a second incident or close the one that is running.
+	if !isRepeat {
+		incidentService.Record(incidentService.Event{
+			AlertType:      alertType,
+			ProjectID:      projectID,
+			MachineID:      machineID,
+			Instance:       instance,
+			Subject:        subject,
+			Level:          level,
+			Category:       meta.Category,
+			Title:          title,
+			Detail:         detail,
+			NotificationID: notificationID,
+			Suppressed:     suppressed,
+		}, cfg)
+	}
+
+	if suppressed {
+		return
+	}
 
 	if level == notification.LevelSev && !isRepeat {
 		recovery.Trigger(recovery.IncidentContext{
@@ -187,7 +219,7 @@ func deepLink(webUrl string, machineID uint) string {
 // Emit creates, persists, broadcasts, and (if it clears the receiver-min-severity
 // cutoff) delivers a notification to Alertmanager. Most callers should use EmitAlert
 // instead - this is the lower-level primitive it's built on.
-func Emit(projectID, machineID uint, level notification.Level, category notification.Category, title, detail string, cfg *config.DatabaseConfig, instance string, isRepeat bool) {
+func Emit(projectID, machineID uint, level notification.Level, category notification.Category, title, detail string, cfg *config.DatabaseConfig, instance string, isRepeat bool) *notification.Notification {
 	n := &notification.Notification{
 		ProjectID: projectID,
 		MachineID: machineID,
@@ -201,12 +233,12 @@ func Emit(projectID, machineID uint, level notification.Level, category notifica
 	saved, err := database.NewNotificationRepository(cfg).Create(n)
 	if err != nil {
 		log.Printf("notification emit: failed to save: %v", err)
-		return
+		return nil
 	}
 
 	msg, err := json.Marshal(wsMessage{Type: "notification", Payload: saved})
 	if err != nil {
-		return
+		return saved
 	}
 	hub.Clients().Broadcast(msg)
 
@@ -225,6 +257,8 @@ func Emit(projectID, machineID uint, level notification.Level, category notifica
 			log.Printf("alertmanager: fired alert %q to %s", title, common.AlertmanagerUrl)
 		}()
 	}
+
+	return saved
 }
 
 func List(f notification.Filter, cfg *config.DatabaseConfig) ([]notification.Notification, int64, error) {

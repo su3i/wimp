@@ -162,3 +162,28 @@ export interface Monitor {
   CreatedAt: string
   UpdatedAt: string
 }
+
+export type IncidentStatus = 'open' | 'resolved'
+
+// An incident is the span between an alert that reports a fault and the alert that reports
+// it recovered. Both ends are denormalized onto the row, so the timeline renders without
+// joining back to the notifications the incident was assembled from.
+export interface Incident {
+  ID: number
+  ProjectID: number
+  MachineID: number
+  Kind: string
+  Subject: string
+  Instance: string
+  Level: 'info' | 'warning' | 'critical' | 'sev'
+  Category: string
+  Status: IncidentStatus
+  StartedAt: string
+  ResolvedAt: string | null
+  OpenedTitle: string
+  OpenedDetail: string
+  ResolvedTitle: string
+  ResolvedDetail: string
+  CreatedAt: string
+  UpdatedAt: string
+}

@@ -140,7 +140,7 @@ func checkThreshold(dbCfg *config.DatabaseConfig, prometheusUrl string, online m
 
 		if breached && !wasBreached {
 			setBreach(key, true)
-			notification.EmitAlert(alertType, m.ProjectID, m.ID, m.Hostname,
+			notification.EmitAlert(alertType, m.ProjectID, m.ID, m.Hostname, "",
 				notification.AlertTitle(m.Hostname, titleFor(alertType)),
 				fmt.Sprintf("%s %s is %.1f%% (threshold %.1f%%)", m.Hostname, label, val, threshold),
 				dbCfg)
@@ -149,7 +149,7 @@ func checkThreshold(dbCfg *config.DatabaseConfig, prometheusUrl string, online m
 			// most once per cache.SevRepeatDue's interval, so a machine stuck above
 			// threshold doesn't go silent until it recovers.
 			if notification.SeverityFor(alertType) == notificationDomain.LevelSev && cache.SevRepeatDue(repeatKey) {
-				notification.EmitRepeatAlert(alertType, m.ProjectID, m.ID, m.Hostname,
+				notification.EmitRepeatAlert(alertType, m.ProjectID, m.ID, m.Hostname, "",
 					notification.AlertTitle(m.Hostname, titleFor(alertType)),
 					fmt.Sprintf("%s %s is still %.1f%% (threshold %.1f%%)", m.Hostname, label, val, threshold),
 					dbCfg)
@@ -157,7 +157,7 @@ func checkThreshold(dbCfg *config.DatabaseConfig, prometheusUrl string, online m
 		} else if !breached && wasBreached {
 			setBreach(key, false)
 			cache.ClearSevRepeat(repeatKey)
-			notification.EmitAlert(recoveredType, m.ProjectID, m.ID, m.Hostname,
+			notification.EmitAlert(recoveredType, m.ProjectID, m.ID, m.Hostname, "",
 				notification.AlertTitle(m.Hostname, titleFor(alertType)+" recovered"),
 				fmt.Sprintf("%s %s is back to %.1f%%", m.Hostname, label, val),
 				dbCfg)

@@ -118,6 +118,8 @@ func InitializeRouter() *gin.Engine {
 
 	router.GET("/projects/:key/dashboard/stats", middleware.AuthMiddleware(), handlers.DashboardStats)
 
+	router.GET("/projects/:key/incidents", middleware.AuthMiddleware(), handlers.ListIncidents)
+
 	router.GET("/notifications", middleware.AuthMiddleware(), handlers.ListNotifications)
 	router.GET("/notifications/unread-count", middleware.AuthMiddleware(), handlers.GetUnreadCount)
 	router.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MarkNotificationRead)
