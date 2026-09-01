@@ -19,6 +19,7 @@ import { applicationService } from "@/services/application.service";
 import { prometheusService, type PromInstantResult, type PromRangeResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
 import { incidentService } from "@/services/incident.service";
+import { appMatcher, byApplicationId, statusQuery, uptimeQuery } from "@/utils/healthQueries";
 import type { Application } from "@/types";
 
 // Split out from pages/Dashboard.tsx into their own chunk since recharts is a large
@@ -633,12 +634,12 @@ export function Dashboard() {
   // for a single app, batched here across every app_id at once via a regex label match
   // (same batching trick as PQ.cpuPerHost for machine_id).
   const hcAppIds = dashboardApps.filter((a) => !!a.HealthCheckURL).map((a) => a.ID);
-  const hcIdKey = hcAppIds.slice().sort((a, b) => a - b).join(",");
+  const hcIdKey = appMatcher(hcAppIds);
   const hcEnabled = promOk && hcAppIds.length > 0;
 
   const { data: hcStatusResult } = useQuery({
     queryKey: ["d-app-hc-status", hcIdKey],
-    queryFn: () => prometheusService.instant(`probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}`),
+    queryFn: () => prometheusService.instant(statusQuery(hcIdKey)),
     enabled: hcEnabled,
     refetchInterval: 30_000,
   });
@@ -648,28 +649,20 @@ export function Dashboard() {
   const appStatusReady = !hcEnabled || hcStatusResult !== undefined;
   const { data: hcUptimeResult } = useQuery({
     queryKey: ["d-app-hc-uptime", hcIdKey],
-    queryFn: () => prometheusService.instant(`avg_over_time(probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}[30d])`),
+    queryFn: () => prometheusService.instant(uptimeQuery(hcIdKey)),
     enabled: hcEnabled,
     refetchInterval: 60_000,
   });
 
   const hcStatusMap = useMemo(() => {
     const m: Record<number, "up" | "down"> = {};
-    for (const r of hcStatusResult ?? []) {
-      const id = Number(r.metric.application_id);
-      if (!Number.isNaN(id)) m[id] = r.value[1] === "1" ? "up" : "down";
+    for (const [id, value] of Object.entries(byApplicationId(hcStatusResult))) {
+      m[Number(id)] = value === 1 ? "up" : "down";
     }
     return m;
   }, [hcStatusResult]);
 
-  const hcUptimeMap = useMemo(() => {
-    const m: Record<number, number> = {};
-    for (const r of hcUptimeResult ?? []) {
-      const id = Number(r.metric.application_id);
-      if (!Number.isNaN(id)) m[id] = Number(r.value[1]);
-    }
-    return m;
-  }, [hcUptimeResult]);
+  const hcUptimeMap = useMemo(() => byApplicationId(hcUptimeResult), [hcUptimeResult]);
 
   const { data: notifications = [], isLoading: notificationsLoading } = useQuery({
     queryKey: ["dashboard-notifications", projectKey],

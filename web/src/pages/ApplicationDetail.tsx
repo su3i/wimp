@@ -36,6 +36,7 @@ import { applicationService } from "@/services/application.service";
 import { appPoolService } from "@/services/appPool.service";
 import { machineService } from "@/services/machine.service";
 import { prometheusService } from "@/services/prometheus.service";
+import { appMatcher, sslExpiryQuery, statusQuery, uptimeQuery } from "@/utils/healthQueries";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { useActionCooldown } from "@/utils/useActionCooldown";
@@ -244,27 +245,29 @@ function HealthMonitor({ app }: { app: AppDetailType }) {
   const isHttps = url?.toLowerCase().startsWith("https://");
   const promEnabled = prometheusService.isConfigured();
 
-  const idFilter = `job="blackbox_http", application_id="${appId}"`;
+  // The same expressions the dashboard and the applications list use, so an application's
+  // uptime reads identically wherever it is shown.
+  const matcher = appMatcher([app.ID]);
 
   const { data: statusData } = useQuery({
     queryKey: ["hc-status", appId],
     enabled: promEnabled,
     refetchInterval: 30_000,
-    queryFn: () => prometheusService.instant(`probe_success{${idFilter}}`),
+    queryFn: () => prometheusService.instant(statusQuery(matcher)),
   });
 
   const { data: uptimeData } = useQuery({
     queryKey: ["hc-uptime", appId],
     enabled: promEnabled,
     refetchInterval: 60_000,
-    queryFn: () => prometheusService.instant(`avg_over_time(probe_success{${idFilter}}[30d])`),
+    queryFn: () => prometheusService.instant(uptimeQuery(matcher)),
   });
 
   const { data: sslData } = useQuery({
     queryKey: ["hc-ssl", appId],
     enabled: promEnabled && !!isHttps,
     refetchInterval: 60_000,
-    queryFn: () => prometheusService.instant(`probe_ssl_earliest_cert_expiry{${idFilter}}`),
+    queryFn: () => prometheusService.instant(sslExpiryQuery(matcher)),
   });
 
   const statusVal = statusData?.[0]?.value[1];

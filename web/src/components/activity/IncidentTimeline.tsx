@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CheckCircle2, CircleAlert, CircleDot, Clock, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, CircleDot, Clock, ExternalLink, Loader2 } from "lucide-react";
 import type { Incident } from "@/types";
 import { levelConfig, splitTitle } from "@/utils/notifications";
 import { absoluteTime, timeAgo } from "@/utils/time";
 import { cn } from "@/utils/cn";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 
 // A nested tree, two rails deep. The outer spine belongs to the day and runs from its
 // heading down to the last entry under it. Each incident branches off that spine, and its
@@ -131,6 +134,23 @@ function groupByDate(incidents: Incident[]): Group[] {
   return groups;
 }
 
+// Severity as a colour, applied to an incident's nodes. The rails stay neutral: they are
+// structure, and colouring them made the whole tree read as an alarm rather than as the
+// frame the alarms hang on.
+//
+// Sev and critical share the danger tone deliberately - there is no fifth hue that reads
+// as "worse than red", and the badge already names which of the two it is.
+const LEVEL_TONE: Record<string, { border: string; text: string }> = {
+  sev: { border: "border-danger", text: "text-danger" },
+  critical: { border: "border-danger", text: "text-danger" },
+  warning: { border: "border-warning", text: "text-warning" },
+  info: { border: "border-ink-dim", text: "text-ink-dim" },
+};
+
+function levelTone(level: string) {
+  return LEVEL_TONE[level] ?? LEVEL_TONE.info;
+}
+
 function LevelBadge({ level }: { level: string }) {
   const cfg = levelConfig(level);
   return (
@@ -178,6 +198,7 @@ function EventRow({
   className,
   children,
 }: {
+  // Severity colour, applied to the node only.
   tone: string;
   filled?: boolean;
   // False only on the last event of a day, where the spine has nothing further to reach.
@@ -238,15 +259,22 @@ function IncidentEntry({
   incident,
   now,
   onResolve,
+  onOpenDetail,
   resolving,
   isLastInGroup,
 }: {
   incident: Incident;
   now: number;
   onResolve: (incident: Incident) => void;
+  onOpenDetail: (incident: Incident) => void;
   resolving: boolean;
   isLastInGroup: boolean;
 }) {
+  // Collapsed by default. The detail is the measurement behind the alert, which is worth
+  // having but not worth reading on every row while scanning a day.
+  const [showDetail, setShowDetail] = useState(false);
+  const tone = levelTone(incident.Level);
+  const hasDetail = !!incident.OpenedDetail;
   const resolved = incident.Status === "resolved";
   const { event: openedEvent } = splitTitle(incident.OpenedTitle);
   const { event: resolvedEvent } = splitTitle(incident.ResolvedTitle);
@@ -255,7 +283,7 @@ function IncidentEntry({
     <>
       {/* ── Outcome: the newer of the two events ─────────────────────────── */}
       <EventRow
-        tone={resolved ? "border-success text-success" : "border-danger text-danger"}
+        tone={resolved ? "border-success text-success" : cn(tone.border, tone.text)}
         filled={!resolved}
         spineToBottom
         innerAbove={false}
@@ -273,8 +301,8 @@ function IncidentEntry({
               </Lead>
             ) : (
               <Lead>
-                <CircleDot className='size-3 shrink-0 animate-pulse text-danger' />
-                <span className='text-xs font-medium text-danger'>
+                <CircleDot className={cn("size-3 shrink-0 animate-pulse", tone.text)} />
+                <span className={cn("text-xs font-medium", tone.text)}>
                   Ongoing for {incidentDuration(incident, now)}
                 </span>
                 {/* Not every condition reports its own recovery - a decommissioned host or
@@ -302,7 +330,7 @@ function IncidentEntry({
 
       {/* ── Trigger: what started it ─────────────────────────────────────── */}
       <EventRow
-        tone={resolved ? "border-ink-faint" : "border-danger"}
+        tone={tone.border}
         filled={!resolved}
         spineToBottom={!isLastInGroup}
         innerAbove
@@ -313,8 +341,16 @@ function IncidentEntry({
           <div className='min-w-0 flex-1'>
             <Lead>
               <LevelBadge level={incident.Level} />
-              <span className='text-xs font-medium text-ink'>{openedEvent || incident.Kind}</span>
-              <span className='font-mono text-[0.6875rem] text-ink-dim'>{incident.Instance}</span>
+              {/* Two distinct affordances rather than one row that does both: the title
+                  opens the full incident, the chevron only peeks at the measurement. */}
+              <button
+                type='button'
+                onClick={() => onOpenDetail(incident)}
+                className='cursor-pointer text-xs font-medium text-ink underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current'
+              >
+                {openedEvent || incident.Kind}
+              </button>
+              <span className='font-mono text-[0.6875rem] text-ink-dim uppercase'>{incident.Instance}</span>
               {incident.Subject && !incident.Subject.startsWith("application:") && (
                 <span className='rounded border border-rim bg-surface-high px-1.5 py-0.5 font-mono text-[0.625rem] text-ink-faint'>
                   {incident.Subject}
@@ -324,14 +360,154 @@ function IncidentEntry({
             {/* Only the trigger keeps its detail. It carries the measurement that explains
                 why the alert fired at all; the recovery's detail only restates that things
                 are fine again, which the row above has already said. */}
-            {incident.OpenedDetail && (
-              <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.OpenedDetail}</p>
+            {hasDetail && (
+              <>
+                <button
+                  type='button'
+                  onClick={() => setShowDetail((v) => !v)}
+                  aria-expanded={showDetail}
+                  className='mt-1 flex cursor-pointer items-center gap-1 text-[0.625rem] text-ink-faint transition-colors hover:text-ink-dim'
+                >
+                  <ChevronRight
+                    className={cn("size-3 transition-transform", showDetail && "rotate-90")}
+                  />
+                  {showDetail ? "Hide detail" : "Show detail"}
+                </button>
+                {showDetail && (
+                  <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.OpenedDetail}</p>
+                )}
+              </>
             )}
           </div>
           <Timestamp at={incident.StartedAt} />
         </div>
       </EventRow>
     </>
+  );
+}
+
+
+// The full incident, with its actions. The timeline is built for scanning a day; this is
+// where a single incident is read end to end - both events with their details, how long it
+// ran, and what can be done about it.
+function IncidentDetailModal({
+  incident,
+  now,
+  onClose,
+  onResolve,
+  resolving,
+}: {
+  incident: Incident | null;
+  now: number;
+  onClose: () => void;
+  onResolve: (incident: Incident) => void;
+  resolving: boolean;
+}) {
+  if (!incident) return null;
+
+  const resolved = incident.Status === "resolved";
+  const tone = levelTone(incident.Level);
+  const { event: openedEvent } = splitTitle(incident.OpenedTitle);
+  const { event: resolvedEvent } = splitTitle(incident.ResolvedTitle);
+
+  return (
+    <Modal open onClose={onClose} title={openedEvent || incident.Kind}>
+      <div className='space-y-4'>
+        <div className='flex flex-wrap items-center gap-2'>
+          <LevelBadge level={incident.Level} />
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide",
+              resolved ? "bg-success/10 text-success" : cn("bg-danger/10", tone.text),
+            )}
+          >
+            {resolved ? "Resolved" : "Ongoing"}
+          </span>
+          <span className='font-mono text-[0.6875rem] text-ink-dim uppercase'>{incident.Instance}</span>
+        </div>
+
+        <dl className='divide-y divide-rim rounded-md border border-rim text-xs'>
+          <div className='flex items-center justify-between px-3 py-2'>
+            <dt className='text-ink-faint'>Condition</dt>
+            <dd className='font-mono text-ink'>{incident.Kind}</dd>
+          </div>
+          {incident.Subject && !incident.Subject.startsWith("application:") && (
+            <div className='flex items-center justify-between px-3 py-2'>
+              <dt className='text-ink-faint'>Target</dt>
+              <dd className='font-mono text-ink'>{incident.Subject}</dd>
+            </div>
+          )}
+          <div className='flex items-center justify-between px-3 py-2'>
+            <dt className='text-ink-faint'>Started</dt>
+            <dd className='tabular-nums text-ink'>{absoluteTime(incident.StartedAt)}</dd>
+          </div>
+          <div className='flex items-center justify-between px-3 py-2'>
+            <dt className='text-ink-faint'>{resolved ? "Resolved" : "Running for"}</dt>
+            <dd className='tabular-nums text-ink'>
+              {resolved ? absoluteTime(incident.ResolvedAt) : incidentDuration(incident, now)}
+            </dd>
+          </div>
+          {resolved && (
+            <div className='flex items-center justify-between px-3 py-2'>
+              <dt className='text-ink-faint'>Duration</dt>
+              <dd className='tabular-nums text-ink'>{incidentDuration(incident, now)}</dd>
+            </div>
+          )}
+        </dl>
+
+        {/* Both events in full, newest first, same order as the timeline. */}
+        <div className='space-y-2'>
+          {resolved && (
+            <div className='rounded-md border border-rim px-3 py-2'>
+              <p className='flex items-center gap-1.5 text-xs text-ink-dim'>
+                <CheckCircle2 className='size-3 shrink-0 text-success' />
+                {resolvedEvent || "Recovered"}
+              </p>
+              {incident.ResolvedDetail && (
+                <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.ResolvedDetail}</p>
+              )}
+            </div>
+          )}
+          <div className='rounded-md border border-rim px-3 py-2'>
+            <p className={cn("flex items-center gap-1.5 text-xs", tone.text)}>
+              <CircleAlert className='size-3 shrink-0' />
+              {openedEvent || incident.Kind}
+            </p>
+            {incident.OpenedDetail && (
+              <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.OpenedDetail}</p>
+            )}
+          </div>
+        </div>
+
+        <div className='flex items-center justify-between gap-2'>
+          {/* Machine id is 0 for conditions that are not about a host - a failing
+              application health check belongs to the project, not to any one machine. */}
+          {incident.MachineID > 0 ? (
+            <Link
+              to={`/hosts/${incident.MachineID}`}
+              onClick={onClose}
+              className='flex items-center gap-1.5 text-xs text-ink-faint transition-colors hover:text-ink'
+            >
+              <ExternalLink className='size-3' />
+              View host
+            </Link>
+          ) : (
+            <span />
+          )}
+          <div className='flex items-center gap-2'>
+            <Button variant='outline' onClick={onClose}>
+              Close
+            </Button>
+            {!resolved && (
+              <Button loading={resolving} disabled={resolving} onClick={() => onResolve(incident)}>
+                <Check className='size-3.5' />
+                Mark as resolved
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -364,6 +540,11 @@ export function IncidentTimeline({
   // instant. Minute resolution is all fmtDuration renders, so ticking faster would just be
   // re-rendering the same text.
   const now = useNow(30_000);
+  const [detail, setDetail] = useState<Incident | null>(null);
+
+  // Kept in sync with the list so a resolution made from inside the modal is reflected
+  // there rather than leaving it showing the incident as still running.
+  const detailIncident = detail ? incidents.find((i) => i.ID === detail.ID) ?? detail : null;
 
   if (isLoading) {
     return (
@@ -425,6 +606,7 @@ export function IncidentTimeline({
               incident={incident}
               now={now}
               onResolve={onResolve}
+              onOpenDetail={setDetail}
               resolving={resolvingId === incident.ID}
               isLastInGroup={i === group.incidents.length - 1}
             />
@@ -432,6 +614,14 @@ export function IncidentTimeline({
         </section>
       ))}
       {footer}
+
+      <IncidentDetailModal
+        incident={detailIncident}
+        now={now}
+        onClose={() => setDetail(null)}
+        onResolve={onResolve}
+        resolving={detailIncident ? resolvingId === detailIncident.ID : false}
+      />
     </div>
   );
 }

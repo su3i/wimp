@@ -178,23 +178,25 @@ export function Activity() {
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className='flex items-center gap-1'>
-        {LEVELS.map((l) => (
-          <button
-            key={l.value}
-            type='button'
-            onClick={() => changeLevel(l.value)}
-            className={cn(
-              "cursor-pointer h-7 px-3 rounded-md text-xs font-medium transition-colors",
-              level === l.value
-                ? "bg-primary/10 text-primary"
-                : "text-ink-faint hover:text-ink hover:bg-surface-high",
-            )}
-          >
-            {l.label}
-          </button>
-        ))}
+      {/* Severity filter. A select rather than a row of pills: the five options are
+          mutually exclusive and only one is ever active, so five persistent buttons spend
+          the width of the page telling you about four states you are not in. */}
+      <div className='flex items-center gap-2'>
+        <label htmlFor='activity-level' className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
+          Severity
+        </label>
+        <select
+          id='activity-level'
+          value={level}
+          onChange={(e) => changeLevel(e.target.value as Level)}
+          className='h-7 cursor-pointer rounded-md border border-rim bg-surface px-2 text-xs text-ink-dim transition-colors hover:text-ink focus:border-primary focus:outline-none'
+        >
+          {LEVELS.map((l) => (
+            <option key={l.value} value={l.value}>
+              {l.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}

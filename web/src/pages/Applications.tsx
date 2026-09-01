@@ -12,6 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useProjectStore } from "@/store/project";
 import { applicationService } from "@/services/application.service";
 import { prometheusService } from "@/services/prometheus.service";
+import { appMatcher, byApplicationId, statusQuery, uptimeQuery } from "@/utils/healthQueries";
 import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import type { Application } from "@/types";
@@ -257,32 +258,27 @@ export function Applications() {
   // for a single app, batched here via a regex label match (same trick used elsewhere
   // for machine_id/application_id label sets).
   const hcAppIds = (appsPage?.applications ?? []).filter((a) => !!a.HealthCheckURL).map((a) => a.ID);
-  const hcIdKey = hcAppIds.slice().sort((a, b) => a - b).join(",");
+  const hcIdKey = appMatcher(hcAppIds);
   const hcEnabled = prometheusService.isConfigured() && hcAppIds.length > 0;
 
   const { data: hcStatusResult } = useQuery({
     queryKey: ["applications-hc-status", hcIdKey],
-    queryFn: () => prometheusService.instant(`probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}`),
+    queryFn: () => prometheusService.instant(statusQuery(hcIdKey)),
     enabled: hcEnabled,
     refetchInterval: 30_000,
   });
   const { data: hcUptimeResult } = useQuery({
     queryKey: ["applications-hc-uptime", hcIdKey],
-    queryFn: () => prometheusService.instant(`avg_over_time(probe_success{job="blackbox_http", application_id=~"${hcIdKey.split(",").join("|")}"}[30d])`),
+    queryFn: () => prometheusService.instant(uptimeQuery(hcIdKey)),
     enabled: hcEnabled,
     refetchInterval: 60_000,
   });
 
   const hcStatusMap: Record<number, "up" | "down"> = {};
-  for (const r of hcStatusResult ?? []) {
-    const id = Number(r.metric.application_id);
-    if (!Number.isNaN(id)) hcStatusMap[id] = r.value[1] === "1" ? "up" : "down";
+  for (const [id, value] of Object.entries(byApplicationId(hcStatusResult))) {
+    hcStatusMap[Number(id)] = value === 1 ? "up" : "down";
   }
-  const hcUptimeMap: Record<number, number> = {};
-  for (const r of hcUptimeResult ?? []) {
-    const id = Number(r.metric.application_id);
-    if (!Number.isNaN(id)) hcUptimeMap[id] = Number(r.value[1]);
-  }
+  const hcUptimeMap = byApplicationId(hcUptimeResult);
 
   function resetCreateForm() {
     setAppName("");
