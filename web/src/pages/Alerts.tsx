@@ -181,10 +181,7 @@ export function Activity() {
       {/* Severity filter. A select rather than a row of pills: the five options are
           mutually exclusive and only one is ever active, so five persistent buttons spend
           the width of the page telling you about four states you are not in. */}
-      <div className='flex items-center gap-2'>
-        <label htmlFor='activity-level' className='text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
-          Severity
-        </label>
+      <div className='flex items-center justify-end gap-2'>
         <select
           id='activity-level'
           value={level}

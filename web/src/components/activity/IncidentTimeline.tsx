@@ -201,8 +201,8 @@ function EventRow({
   // Severity colour, applied to the node only.
   tone: string;
   filled?: boolean;
-  // False only on the last event of a day, where the spine has nothing further to reach.
-  spineToBottom: boolean;
+  // False only on the last row, where the spine has nothing further to reach.
+  spineToBottom?: boolean;
   innerAbove: boolean;
   innerBelow: boolean;
   className?: string;
@@ -210,7 +210,7 @@ function EventRow({
 }) {
   return (
     <div className={cn("relative", className)} style={{ paddingLeft: CONTENT_X }}>
-      {/* The day's spine */}
+      {/* The spine */}
       <span
         className='absolute bg-rim-strong'
         style={
@@ -270,11 +270,7 @@ function IncidentEntry({
   resolving: boolean;
   isLastInGroup: boolean;
 }) {
-  // Collapsed by default. The detail is the measurement behind the alert, which is worth
-  // having but not worth reading on every row while scanning a day.
-  const [showDetail, setShowDetail] = useState(false);
   const tone = levelTone(incident.Level);
-  const hasDetail = !!incident.OpenedDetail;
   const resolved = incident.Status === "resolved";
   const { event: openedEvent } = splitTitle(incident.OpenedTitle);
   const { event: resolvedEvent } = splitTitle(incident.ResolvedTitle);
@@ -294,7 +290,7 @@ function IncidentEntry({
             {resolved ? (
               <Lead>
                 <CheckCircle2 className='size-3 shrink-0 text-success' />
-                <span className='text-xs text-ink-dim'>{resolvedEvent || "Recovered"}</span>
+                <span className='text-xs text-ink'>{resolvedEvent || "Recovered"}</span>
                 <span className='text-[0.625rem] text-ink-faint'>
                   after {incidentDuration(incident, now)}
                 </span>
@@ -341,15 +337,7 @@ function IncidentEntry({
           <div className='min-w-0 flex-1'>
             <Lead>
               <LevelBadge level={incident.Level} />
-              {/* Two distinct affordances rather than one row that does both: the title
-                  opens the full incident, the chevron only peeks at the measurement. */}
-              <button
-                type='button'
-                onClick={() => onOpenDetail(incident)}
-                className='cursor-pointer text-xs font-medium text-ink underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current'
-              >
-                {openedEvent || incident.Kind}
-              </button>
+              <span className='text-xs font-medium text-ink'>{openedEvent || incident.Kind}</span>
               <span className='font-mono text-[0.6875rem] text-ink-dim uppercase'>{incident.Instance}</span>
               {incident.Subject && !incident.Subject.startsWith("application:") && (
                 <span className='rounded border border-rim bg-surface-high px-1.5 py-0.5 font-mono text-[0.625rem] text-ink-faint'>
@@ -357,27 +345,17 @@ function IncidentEntry({
                 </span>
               )}
             </Lead>
-            {/* Only the trigger keeps its detail. It carries the measurement that explains
-                why the alert fired at all; the recovery's detail only restates that things
-                are fine again, which the row above has already said. */}
-            {hasDetail && (
-              <>
-                <button
-                  type='button'
-                  onClick={() => setShowDetail((v) => !v)}
-                  aria-expanded={showDetail}
-                  className='mt-1 flex cursor-pointer items-center gap-1 text-[0.625rem] text-ink-faint transition-colors hover:text-ink-dim'
-                >
-                  <ChevronRight
-                    className={cn("size-3 transition-transform", showDetail && "rotate-90")}
-                  />
-                  {showDetail ? "Hide detail" : "Show detail"}
-                </button>
-                {showDetail && (
-                  <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.OpenedDetail}</p>
-                )}
-              </>
-            )}
+            {/* The one way into the full incident. Always offered, including for incidents
+                with no recorded measurement - the modal carries both events, their
+                timestamps, the entities involved and the actions, not just this one line. */}
+            <button
+              type='button'
+              onClick={() => onOpenDetail(incident)}
+              className='mt-1 flex cursor-pointer items-center gap-1 text-[0.625rem] text-ink-faint transition-colors hover:text-ink-dim'
+            >
+              <ChevronRight className='size-3' />
+              Show detail
+            </button>
           </div>
           <Timestamp at={incident.StartedAt} />
         </div>
@@ -387,9 +365,77 @@ function IncidentEntry({
 }
 
 
-// The full incident, with its actions. The timeline is built for scanning a day; this is
-// where a single incident is read end to end - both events with their details, how long it
-// ran, and what can be done about it.
+// The incident on its own - and it is all one tree. Every fact and every action is a
+// branch off the same spine: the two events at the top, then what the incident was about,
+// then what can be done with it. Nothing sits outside the structure, because a panel of
+// fields bolted under a tree makes the reader work out where one ends and the other begins.
+//
+//   |--|- Recovered                16:44
+//   |  |    cpu back to 41%
+//   |--|- CRITICAL  High CPU       14:02
+//   |       cpu 97% (threshold 95%)
+//   |
+//   |--o Condition       high_cpu
+//   |--o Instance        web01
+//   |--o Started         Aug 30, 14:02
+//   |
+//   |--o [Mark as resolved]  [View host]
+
+// Where an incident points, if anywhere. Machine-scoped conditions carry a host; a health
+// check belongs to an application and encodes it in the subject.
+function relatedEntity(incident: Incident): { to: string; label: string } | null {
+  if (incident.MachineID > 0) {
+    return { to: `/hosts/${incident.MachineID}`, label: `View host` };
+  }
+  const app = /^application:(\d+)$/.exec(incident.Subject);
+  if (app) {
+    return { to: `/applications/${app[1]}`, label: `View application` };
+  }
+  return null;
+}
+
+// Resolved / Ongoing as a badge, so the completion event is labelled the same way the
+// trigger event is by its severity. Same shape, same position, read the same way.
+function StatusBadge({ resolved, tone }: { resolved: boolean; tone: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide",
+        resolved ? "bg-success/10 text-success" : cn("bg-danger/10", tone),
+      )}
+    >
+      {resolved ? <CheckCircle2 className='size-2.5' /> : <CircleDot className='size-2.5 animate-pulse' />}
+      {resolved ? "Resolved" : "Ongoing"}
+    </span>
+  );
+}
+
+// What the incident is about, as tags. Each names its entity as well as its value: on its
+// own "api-pool" leaves the reader to infer what kind of thing that is, and the answer
+// differs by condition.
+function Tag({ entity, name }: { entity: string; name: string }) {
+  return (
+    <span className='inline-flex items-center gap-1 rounded border border-rim bg-surface-high px-1.5 py-0.5 text-[0.625rem]'>
+      <span className='text-ink-faint'>{entity}:</span>
+      <span className='font-mono text-ink-dim'>{name}</span>
+    </span>
+  );
+}
+
+// The instance is a host for anything machine-scoped, and the application itself for a
+// health check - those carry machine id 0 because they are about an endpoint, not a box.
+function instanceEntity(incident: Incident): string {
+  return incident.MachineID > 0 ? "Host" : "Application";
+}
+
+// What the subject names depends on the condition: the same field holds a pool name for
+// one kind and a site name for another.
+function subjectEntity(kind: string): string {
+  if (kind === "app_pool_down") return "App Pool";
+  if (kind === "site_down") return "Site";
+  return "Target";
+}
+
 function IncidentDetailModal({
   incident,
   now,
@@ -409,95 +455,95 @@ function IncidentDetailModal({
   const tone = levelTone(incident.Level);
   const { event: openedEvent } = splitTitle(incident.OpenedTitle);
   const { event: resolvedEvent } = splitTitle(incident.ResolvedTitle);
+  const related = relatedEntity(incident);
+  const hasTarget = !!incident.Subject && !incident.Subject.startsWith("application:");
 
   return (
-    <Modal open onClose={onClose} title={openedEvent || incident.Kind}>
-      <div className='space-y-4'>
-        <div className='flex flex-wrap items-center gap-2'>
-          <LevelBadge level={incident.Level} />
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide",
-              resolved ? "bg-success/10 text-success" : cn("bg-danger/10", tone.text),
-            )}
-          >
-            {resolved ? "Resolved" : "Ongoing"}
-          </span>
-          <span className='font-mono text-[0.6875rem] text-ink-dim uppercase'>{incident.Instance}</span>
-        </div>
-
-        <dl className='divide-y divide-rim rounded-md border border-rim text-xs'>
-          <div className='flex items-center justify-between px-3 py-2'>
-            <dt className='text-ink-faint'>Condition</dt>
-            <dd className='font-mono text-ink'>{incident.Kind}</dd>
-          </div>
-          {incident.Subject && !incident.Subject.startsWith("application:") && (
-            <div className='flex items-center justify-between px-3 py-2'>
-              <dt className='text-ink-faint'>Target</dt>
-              <dd className='font-mono text-ink'>{incident.Subject}</dd>
-            </div>
-          )}
-          <div className='flex items-center justify-between px-3 py-2'>
-            <dt className='text-ink-faint'>Started</dt>
-            <dd className='tabular-nums text-ink'>{absoluteTime(incident.StartedAt)}</dd>
-          </div>
-          <div className='flex items-center justify-between px-3 py-2'>
-            <dt className='text-ink-faint'>{resolved ? "Resolved" : "Running for"}</dt>
-            <dd className='tabular-nums text-ink'>
-              {resolved ? absoluteTime(incident.ResolvedAt) : incidentDuration(incident, now)}
-            </dd>
-          </div>
-          {resolved && (
-            <div className='flex items-center justify-between px-3 py-2'>
-              <dt className='text-ink-faint'>Duration</dt>
-              <dd className='tabular-nums text-ink'>{incidentDuration(incident, now)}</dd>
-            </div>
-          )}
-        </dl>
-
-        {/* Both events in full, newest first, same order as the timeline. */}
-        <div className='space-y-2'>
-          {resolved && (
-            <div className='rounded-md border border-rim px-3 py-2'>
-              <p className='flex items-center gap-1.5 text-xs text-ink-dim'>
-                <CheckCircle2 className='size-3 shrink-0 text-success' />
-                {resolvedEvent || "Recovered"}
+    <Modal open onClose={onClose} title={openedEvent || incident.Kind} className='max-w-[560px]'>
+      <div>
+        {/* ── The two events ──────────────────────────────────────────────── */}
+        <EventRow
+          tone={resolved ? "border-success text-success" : cn(tone.border, tone.text)}
+          filled={!resolved}
+          spineToBottom
+          innerAbove={false}
+          innerBelow
+        >
+          <div className='flex items-start gap-3 pb-4'>
+            <div className='min-w-0 flex-1'>
+              <Lead>
+                <StatusBadge resolved={resolved} tone={tone.text} />
+                <span className={cn("text-xs", resolved ? "text-ink" : cn("font-medium", tone.text))}>
+                  {resolved ? resolvedEvent || "Recovered" : "No recovery yet"}
+                </span>
+                <span className='text-[0.625rem] text-ink-faint'>
+                  {resolved ? "after" : "running for"} {incidentDuration(incident, now)}
+                </span>
+              </Lead>
+              <p className='mt-1 text-[0.6875rem] text-ink-faint'>
+                {resolved
+                  ? incident.ResolvedDetail || "No further detail was recorded."
+                  : "No recovery has been reported yet."}
               </p>
-              {incident.ResolvedDetail && (
-                <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.ResolvedDetail}</p>
+            </div>
+            <Timestamp at={resolved ? incident.ResolvedAt : null} />
+          </div>
+        </EventRow>
+
+        <EventRow
+          tone={tone.border}
+          filled={!resolved}
+          spineToBottom
+          innerAbove
+          innerBelow={false}
+          className='pb-4'
+        >
+          <div className='flex items-start gap-3'>
+            <div className='min-w-0 flex-1'>
+              <Lead>
+                <LevelBadge level={incident.Level} />
+                <span className='text-xs font-medium text-ink'>{openedEvent || incident.Kind}</span>
+              </Lead>
+              {incident.OpenedDetail && (
+                <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.OpenedDetail}</p>
               )}
             </div>
-          )}
-          <div className='rounded-md border border-rim px-3 py-2'>
-            <p className={cn("flex items-center gap-1.5 text-xs", tone.text)}>
-              <CircleAlert className='size-3 shrink-0' />
-              {openedEvent || incident.Kind}
-            </p>
-            {incident.OpenedDetail && (
-              <p className='mt-1 text-[0.6875rem] text-ink-faint'>{incident.OpenedDetail}</p>
+            <Timestamp at={incident.StartedAt} />
+          </div>
+        </EventRow>
+
+        {/* ── What it is about ────────────────────────────────────────────── */}
+        <EventRow
+          tone='border-rim-strong'
+          spineToBottom={false}
+          innerAbove={false}
+          innerBelow={false}
+        >
+          <div className='flex flex-wrap items-center gap-1.5' style={{ minHeight: LEAD }}>
+            <Tag entity={instanceEntity(incident)} name={incident.Instance} />
+            {hasTarget && (
+              <Tag entity={subjectEntity(incident.Kind)} name={incident.Subject} />
             )}
           </div>
-        </div>
+        </EventRow>
 
-        <div className='flex items-center justify-between gap-2'>
-          {/* Machine id is 0 for conditions that are not about a host - a failing
-              application health check belongs to the project, not to any one machine. */}
-          {incident.MachineID > 0 ? (
+        {/* Actions sit outside the tree: the tree is what happened, these are what you can
+            do next, and hanging them off the same spine implied they were part of the
+            record. */}
+        <div className='mt-5 flex items-center justify-between gap-2 border-t border-rim pt-4'>
+          {related ? (
             <Link
-              to={`/hosts/${incident.MachineID}`}
+              to={related.to}
               onClick={onClose}
               className='flex items-center gap-1.5 text-xs text-ink-faint transition-colors hover:text-ink'
             >
               <ExternalLink className='size-3' />
-              View host
+              {related.label}
             </Link>
           ) : (
             <span />
           )}
           <div className='flex items-center gap-2'>
-            <Button variant='outline' onClick={onClose}>
-              Close
-            </Button>
             {!resolved && (
               <Button loading={resolving} disabled={resolving} onClick={() => onResolve(incident)}>
                 <Check className='size-3.5' />
