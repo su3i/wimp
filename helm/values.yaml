@@ -255,6 +255,15 @@ loki:
 
   minio:
     enabled: true
+    # MinIO stopped publishing images (quay.io/minio/* now 401s, Docker Hub repos removed).
+    # pgsty/* is a community rebuild with the same layout (ubi9-micro, /usr/bin/mc,
+    # /usr/bin/docker-entrypoint.sh), so the subchart's commands work unchanged.
+    image:
+      repository: docker.io/pgsty/minio
+      tag: RELEASE.2026-08-04T00-00-00Z
+    mcImage:
+      repository: docker.io/pgsty/mc
+      tag: RELEASE.2026-09-16T00-00-00Z
   gateway:
     enabled: false
 
