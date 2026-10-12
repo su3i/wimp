@@ -15,7 +15,7 @@ import { levelConfig, splitTitle } from "@/utils/notifications";
 import { timeAgo, absoluteTime } from "@/utils/time";
 import { machineService } from "@/services/machine.service";
 import { sqlInstanceService } from "@/services/sqlInstance.service";
-import { SqlCredentialsHint } from "@/components/machine/InstancesTab";
+import { groupInstances } from "@/utils/sql";
 import { applicationService } from "@/services/application.service";
 import { prometheusService, type PromInstantResult, type PromRangeResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
@@ -50,12 +50,6 @@ const PQ = {
   // counterpart of the IIS request rate above.
   batchesPerHost: (ids: number[], win: string) =>
     `sum by (machine_id) (rate(windows_mssql_sqlstats_batch_requests{${mids(ids)}}[${win}]))`,
-
-  blockedRequests: (ids: number[]) => `sum(wimp_mssql_blocked_requests{${mids(ids)}})`,
-
-  failedJobs: (ids: number[]) => `count(wimp_mssql_job_last_run_failed{${mids(ids)}} == 1)`,
-
-  longestRequest: (ids: number[]) => `max(wimp_mssql_longest_request_seconds{${mids(ids)}})`,
 
   // Per-host CPU %, one result per machine_id label - used for the Cpu Usage chart
   cpuPerHost: (ids: number[], win: string) =>
@@ -310,17 +304,22 @@ function isAppHealthy(app: Application, hcStatusMap: Record<number, "up" | "down
   return total > 0 && (app.pool_healthy ?? 0) + (app.sql_healthy ?? 0) === total;
 }
 
-// One tile of the SQL Server row. Same shell as the aggregate tiles above it.
-function SqlStatCard({ label, info, value, tone, sub }: { label: string; info: string; value: string; tone?: string; sub: string }) {
+// The SQL Server counterpart of the Applications tile: same shell, links to its list.
+function SqlInstancesCard({ running, total, ready }: { running: number; total: number; ready: boolean }) {
+  const show = ready && total > 0;
+  const color = !show ? "text-ink" : running === total ? "text-success" : running === 0 ? "text-danger" : "text-warning";
   return (
-    <div className={STAT_CARD}>
+    <Link to='/sql-instances' className={cn(STAT_CARD, 'transition-colors hover:border-rim-strong')}>
       <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
-        {label}
-        <InfoTooltip text={info} />
+        SQL Server
+        <InfoTooltip text='SQL Server instances across the project.' />
       </span>
-      <span className={cn('text-[27px] font-semibold font-mono leading-none', tone ?? 'text-ink')}>{value}</span>
-      <span className='text-[0.625rem] text-ink-faint'>{sub}</span>
-    </div>
+      <span className={cn('flex items-baseline gap-1.5', color)}>
+        <span className='text-[27px] font-semibold font-mono leading-none'>{show ? `${running}/${total}` : "N/A"}</span>
+        {show && <span className='text-xs font-medium'>Running</span>}
+      </span>
+      <span className='text-[0.625rem] text-ink-faint'>{show ? "instances" : "no data"}</span>
+    </Link>
   );
 }
 
@@ -537,25 +536,16 @@ export function Dashboard() {
   );
 
   const { data: sqlInstances } = useQuery({
-    queryKey: ["dashboard-sql-instances", projectKey],
+    queryKey: ["project-sql-instances", projectKey],
     queryFn: async () => (await sqlInstanceService.listProject(projectKey)).data.sql_instances ?? [],
     enabled: !!projectKey && hasSQL,
     refetchInterval: 15_000,
   });
-  // A clustered instance has one row per node; count it once, as running if any online
-  // node reports it running.
+  // Same grouping as the SQL Server Instances page: a clustered instance counts once.
   const sqlSummary = useMemo(() => {
-    const byKey = new Map<string, boolean>();
-    let monitorError = "";
-    for (const i of sqlInstances ?? []) {
-      const key = i.Clustered ? `fci:${i.VirtualServerName}\\${i.Name}` : `${i.MachineID}:${i.Name}`;
-      const up = i.State === "Running" && i.machine.Status === "online";
-      byKey.set(key, (byKey.get(key) ?? false) || up);
-      if (i.Monitored && i.MonitorError && !monitorError) monitorError = i.MonitorError;
-    }
-    const total = byKey.size;
-    const running = [...byKey.values()].filter(Boolean).length;
-    return { total, running, monitorError };
+    const groups = groupInstances(sqlInstances ?? []);
+    const running = groups.filter((g) => g.current.State === "Running" && g.current.machine.Status === "online").length;
+    return { total: groups.length, running };
   }, [sqlInstances]);
 
   const hostNameMap = useMemo(() => {
@@ -631,24 +621,6 @@ export function Dashboard() {
     ...qOpts,
     enabled: sqlProm,
     refetchInterval: RANGES[batchRange].refetchMs,
-  });
-  const { data: rBlocked } = useQuery({
-    queryKey: ["d-sql-blocked", sqlIdKey],
-    queryFn: () => prometheusService.instant(PQ.blockedRequests(sqlHostIds)),
-    ...qOpts,
-    enabled: sqlProm,
-  });
-  const { data: rLongest } = useQuery({
-    queryKey: ["d-sql-longest", sqlIdKey],
-    queryFn: () => prometheusService.instant(PQ.longestRequest(sqlHostIds)),
-    ...qOpts,
-    enabled: sqlProm && !hasIIS,
-  });
-  const { data: rFailedJobs } = useQuery({
-    queryKey: ["d-sql-jobs", sqlIdKey],
-    queryFn: () => prometheusService.instant(PQ.failedJobs(sqlHostIds)),
-    enabled: sqlProm,
-    refetchInterval: 60_000,
   });
 
   const { data: rCpuHost } = useQuery({
@@ -847,10 +819,6 @@ export function Dashboard() {
     [rBatchHost, hostNameMap, batchRange],
   );
   const batchTotal = useMemo(() => seriesLatest(batchPerfData.rows, batchPerfData.keys), [batchPerfData]);
-  const blockedNow = scalar(rBlocked);
-  // count() of nothing returns no series at all, which here means no failed jobs, as long
-  // as the query itself came back.
-  const failedJobs = rFailedJobs === undefined ? null : (scalar(rFailedJobs) ?? 0);
 
   const throughputTotal = useMemo(
     () => seriesLatest(throughputPerfData.rows, throughputPerfData.keys),
@@ -925,9 +893,14 @@ export function Dashboard() {
             and no ratio of fr units can reconcile that - the divisions would land a gap's
             worth apart no matter how they were tuned. */}
         <div className='grid grid-cols-3 gap-[14px]'>
-          <div className='grid grid-cols-2 gap-[14px]'>
+          {/* Workload tiles follow what the project's hosts run, like the sidebar: Applications
+              for IIS, SQL Server Instances for SQL Server. */}
+          <div className={cn('grid gap-[14px]', ['grid-cols-1', 'grid-cols-2', 'grid-cols-3'][Number(hasIIS) + Number(hasSQL)])}>
             <OpenIncidentsCard count={openIncidents} loaded={incidentCounts !== undefined} />
-            <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} ready={appStatusReady} />
+            {hasIIS && (
+              <ApplicationStatusCard apps={dashboardApps} hcStatusMap={hcStatusMap} hcUptimeMap={hcUptimeMap} ready={appStatusReady} />
+            )}
+            {hasSQL && <SqlInstancesCard running={sqlSummary.running} total={sqlSummary.total} ready={!!sqlInstances} />}
           </div>
           <BandwidthCard
             inVal={netInVal}
@@ -986,44 +959,6 @@ export function Dashboard() {
             <HostLineChart rows={memPerfData.rows} keys={memPerfData.keys} colors={hostColorMap} />
           </ChartCard>
         </div>
-
-        {/* ── SQL Server row, only when a host runs SQL Server ────────────── */}
-        {hasSQL && sqlSummary.monitorError && <SqlCredentialsHint error={sqlSummary.monitorError} />}
-        {hasSQL && (
-          <div className='grid grid-cols-3 gap-[14px]'>
-            <div className='grid grid-cols-2 gap-[14px]'>
-              <SqlStatCard
-                label='SQL Instances'
-                info='SQL Server instances across the project. A clustered instance counts once, as running if any node runs it.'
-                value={sqlInstances ? `${sqlSummary.running}/${sqlSummary.total}` : "N/A"}
-                tone={!sqlInstances ? undefined : sqlSummary.running === sqlSummary.total ? 'text-success' : 'text-danger'}
-                sub='running'
-              />
-              <SqlStatCard
-                label='Failed Jobs'
-                info='Enabled SQL Agent jobs whose last run failed. Needs SQL read access.'
-                value={failedJobs != null ? String(failedJobs) : "N/A"}
-                tone={failedJobs == null ? undefined : failedJobs > 0 ? 'text-warning' : 'text-success'}
-                sub='agent jobs'
-              />
-            </div>
-            <SqlStatCard
-              label='Blocked Requests'
-              info='User requests currently waiting on another session, across every instance. Needs SQL read access.'
-              value={blockedNow != null ? String(Math.round(blockedNow)) : "N/A"}
-              tone={blockedNow == null ? undefined : blockedNow > 0 ? 'text-warning' : 'text-success'}
-              sub='right now'
-            />
-            {hasIIS ? batchChart : (
-              <SqlStatCard
-                label='Longest Request'
-                info='Elapsed time of the longest-running user request on any instance right now. Needs SQL read access.'
-                value={scalar(rLongest) != null ? `${Math.round(scalar(rLongest)!)}s` : "N/A"}
-                sub='running now'
-              />
-            )}
-          </div>
-        )}
 
         {/* ── Row 3: Recent Alerts ─────────────────────────────────────── */}
         <div className='rounded-lg border border-rim overflow-hidden'>

@@ -15,6 +15,8 @@ const ApplicationDetail = lazy(() => import('@/pages/ApplicationDetail').then(m 
 const Machines = lazy(() => import('@/pages/Machines').then(m => ({ default: m.Machines })))
 const MachineDetail = lazy(() => import('@/pages/MachineDetail').then(m => ({ default: m.MachineDetail })))
 const Activity = lazy(() => import('@/pages/Alerts').then(m => ({ default: m.Activity })))
+const SqlInstances = lazy(() => import('@/pages/SqlInstances').then(m => ({ default: m.SqlInstances })))
+const SqlInstanceDetail = lazy(() => import('@/pages/SqlInstanceDetail').then(m => ({ default: m.SqlInstanceDetail })))
 const Incidents = lazy(() => import('@/pages/Incidents').then(m => ({ default: m.Incidents })))
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
 
@@ -32,6 +34,8 @@ export const router = createBrowserRouter([
           { path: '/', element: <Dashboard /> },
           { path: '/applications', element: <Applications /> },
           { path: '/applications/:appId', element: <ApplicationDetail /> },
+          { path: '/sql-instances', element: <SqlInstances /> },
+          { path: '/sql-instances/:instanceId', element: <SqlInstanceDetail /> },
           { path: '/hosts', element: <Machines /> },
           { path: '/hosts/:machineId', element: <MachineDetail /> },
           { path: '/activity', element: <Activity /> },

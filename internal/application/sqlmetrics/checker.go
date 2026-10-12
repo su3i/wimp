@@ -23,12 +23,6 @@ import (
 
 const checkInterval = 60 * time.Second
 
-const (
-	defaultBackupHours      = 26
-	defaultLogBackupMinutes = 120
-	defaultBlockingSeconds  = 60
-)
-
 type sample struct {
 	labels map[string]string
 	value  float64
@@ -238,18 +232,11 @@ func fmtAge(seconds float64) string {
 	}
 }
 
-func thresholdOr(configured, fallback int) float64 {
-	if configured > 0 {
-		return float64(configured)
-	}
-	return float64(fallback)
-}
-
 func rules() []rule {
-	a := config.Alerts()
-	backupSec := thresholdOr(a.ThresholdSqlBackupHours, defaultBackupHours) * 3600
-	logBackupSec := thresholdOr(a.ThresholdSqlLogBackupMinutes, defaultLogBackupMinutes) * 60
-	blockingSec := thresholdOr(a.ThresholdSqlBlockingSeconds, defaultBlockingSeconds)
+	t := config.SqlThresholds()
+	backupSec := float64(t.BackupHours) * 3600
+	logBackupSec := float64(t.LogBackupMinutes) * 60
+	blockingSec := float64(t.BlockingSeconds)
 
 	// Backups are only expected of databases that are ONLINE: a RESTORING database (log
 	// shipping secondary, a restore in progress) is not supposed to be backed up.

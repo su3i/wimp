@@ -1,15 +1,16 @@
 import { useState, lazy, Suspense } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Info, Monitor, Network, Power, RotateCw, Server } from 'lucide-react'
+import { ArrowLeft, Database, Info, Monitor, Network, Power, RotateCw, Server } from 'lucide-react'
 import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
+import { sqlInstanceService } from '@/services/sqlInstance.service'
+import { groupInstances } from '@/utils/sql'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
 import { SitesTab } from '@/components/machine/SitesTab'
-import { InstancesTab } from '@/components/machine/InstancesTab'
-import { ClusterTab } from '@/components/machine/ClusterTab'
 import { Button } from '@/components/ui/Button'
+import { InfoTooltip } from '@/components/ui/InfoTooltip'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { cn } from '@/utils/cn'
 import { usePageTitle } from '@/utils/usePageTitle'
@@ -22,6 +23,20 @@ const MetricsTab = lazy(() => import('@/components/machine/MetricsTab').then(m =
 
 function filterIPv4(ips: string[]) {
   return (ips ?? []).filter(ip => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip))
+}
+
+// Header lists show the first few entries; the rest are counted, with the full list behind an
+// info icon, so a host with many addresses or instances keeps a one-line header.
+const HEADER_LIST_MAX = 3
+
+function More({ all }: { all: string[] }) {
+  if (all.length <= HEADER_LIST_MAX) return null
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-ink-faint">+{all.length - HEADER_LIST_MAX} more</span>
+      <InfoTooltip text={all.join(', ')} />
+    </span>
+  )
 }
 
 function MetricsTabSkeleton() {
@@ -48,16 +63,14 @@ const machineStatusCfg: Record<MachineStatus, { dot: string; label: string; text
   reassigned: { dot: 'bg-ink-faint', label: 'Reassigned', text: 'text-ink-faint', pill: 'bg-surface-high text-ink-faint' },
 }
 
-type Tab = 'metrics' | 'pools' | 'sites' | 'instances' | 'cluster'
+type Tab = 'metrics' | 'pools' | 'sites'
 
-// Each tab after Overview belongs to a role discovery found on the host, so a SQL Server box
-// never shows empty IIS tabs and an IIS box never shows SQL ones.
+// The IIS tabs belong to hosts that run IIS. SQL Server has its own pages (SQL Server Instances),
+// linked from the header, since an instance can outlive or move between hosts.
 const TABS: { id: Tab; label: string; role?: HostRole }[] = [
-  { id: 'metrics',   label: 'Overview' },
-  { id: 'pools',     label: 'App Pools',     role: 'iis' },
-  { id: 'sites',     label: 'Sites',         role: 'iis' },
-  { id: 'instances', label: 'SQL Instances', role: 'sql' },
-  { id: 'cluster',   label: 'Cluster',       role: 'cluster' },
+  { id: 'metrics', label: 'Overview' },
+  { id: 'pools',   label: 'App Pools', role: 'iis' },
+  { id: 'sites',   label: 'Sites',     role: 'iis' },
 ]
 
 export function MachineDetail() {
@@ -83,6 +96,15 @@ export function MachineDetail() {
   })
 
   const machine = machines?.find(m => m.ID === numericId)
+
+  // SQL Server lives on its own pages; the header links to every instance installed here.
+  const { data: sqlRows } = useQuery({
+    queryKey: ['project-sql-instances', activeProject?.Key],
+    enabled: !!activeProject && !!machine?.roles?.includes('sql'),
+    refetchInterval: 30_000,
+    queryFn: async () => (await sqlInstanceService.listProject(activeProject!.Key)).data.sql_instances ?? [],
+  })
+  const sqlGroups = groupInstances(sqlRows ?? []).filter(g => g.rows.some(r => r.MachineID === numericId))
   usePageTitle(machine?.Hostname?.toLowerCase() ?? undefined)
   const machineCfg = machine ? machineStatusCfg[machine.Status] : null
   const ipv4s = machine ? filterIPv4(machine.IPs) : []
@@ -145,13 +167,28 @@ export function MachineDetail() {
                 {ipv4s.length > 0 && (
                   <p className="flex items-center gap-1.5 text-xs text-ink-faint">
                     <Network className="size-3 shrink-0" />
-                    {ipv4s.join(' · ')}
+                    {ipv4s.slice(0, HEADER_LIST_MAX).join(' · ')}
+                    <More all={ipv4s} />
                   </p>
                 )}
                 {machine.WindowsVersion && (
                   <p className="flex items-center gap-1.5 text-xs text-ink-faint">
                     <Monitor className="size-3 shrink-0" />
                     {machine.WindowsVersion}
+                  </p>
+                )}
+                {sqlGroups.length > 0 && (
+                  <p className="flex items-center gap-1.5 text-xs text-ink-faint">
+                    <Database className="size-3 shrink-0" />
+                    {sqlGroups.slice(0, HEADER_LIST_MAX).map((g, i) => (
+                      <span key={g.key}>
+                        {i > 0 && ' · '}
+                        <Link to={`/sql-instances/${g.current.ID}`} className="font-mono text-ink-dim hover:text-ink underline underline-offset-2">
+                          {g.name.toLowerCase()}
+                        </Link>
+                      </span>
+                    ))}
+                    <More all={sqlGroups.map(g => g.name.toLowerCase())} />
                   </p>
                 )}
               </div>
@@ -237,18 +274,7 @@ export function MachineDetail() {
         {currentTab === 'sites' && activeProject && (
           <SitesTab projectKey={activeProject.Key} machineId={numericId} isOffline={isOffline} />
         )}
-        {currentTab === 'instances' && activeProject && machine && (
-          <InstancesTab
-            projectKey={activeProject.Key}
-            machineId={numericId}
-            hostname={machine.Hostname}
-            cluster={machine.Cluster}
-            isOffline={isOffline}
-          />
-        )}
-        {currentTab === 'cluster' && activeProject && machine && (
-          <ClusterTab projectKey={activeProject.Key} machineId={numericId} cluster={machine.Cluster} isOffline={isOffline} />
-        )}
+
       </div>
 
       <ConfirmModal

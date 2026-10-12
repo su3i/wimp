@@ -984,7 +984,7 @@ export function ApplicationDetail() {
         <>
           {/* Header */}
           {(() => {
-            // Health covers every member: app pools and SQL instances alike.
+            // Health covers every member: app pools and SQL Server instances alike.
             const poolTotal = app.app_pools?.length ?? 0;
             const sqlMembers = app.sql_instances ?? [];
             const total = poolTotal + sqlMembers.length;
@@ -1084,7 +1084,7 @@ export function ApplicationDetail() {
           {app.HealthCheckURL && <HealthMonitor app={app} />}
 
           {/* Pool list - sticky header, flows to its full height. An application made only of
-              SQL instances has no use for the empty-pools prompt. */}
+              SQL Server instances has no use for the empty-pools prompt. */}
           {!app.app_pools?.length ? (
             !app.sql_instances?.length && <EmptyPools onAdd={() => setModalOpen(true)} />
           ) : (

@@ -128,7 +128,7 @@ config:
       sqlDatabaseRecovered: info
       sqlBackupOverdue: critical
       sqlBackupRecovered: info
-      sqlLogBackupOverdue: critical
+      sqlLogBackupOverdue: warning
       sqlLogBackupRecovered: info
       sqlJobFailed: warning
       sqlJobRecovered: info

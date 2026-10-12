@@ -82,3 +82,26 @@ type AlertConfig struct {
 	// are forwarded to Alertmanager. Empty resolves to "warning" at the call site.
 	ReceiverMinSeverity string `envconfig:"ALERTRECEIVERMINSEVERITY" required:"false"`
 }
+
+// SqlThresholdValues are the SQL alert thresholds in effect, with defaults applied. Resolved
+// here so the alert checker and the UI, which colours values against them, cannot disagree.
+type SqlThresholdValues struct {
+	BackupHours      int `json:"backup_hours"`
+	LogBackupMinutes int `json:"log_backup_minutes"`
+	BlockingSeconds  int `json:"blocking_seconds"`
+}
+
+func SqlThresholds() SqlThresholdValues {
+	or := func(v, fallback int) int {
+		if v > 0 {
+			return v
+		}
+		return fallback
+	}
+	a := Alerts()
+	return SqlThresholdValues{
+		BackupHours:      or(a.ThresholdSqlBackupHours, 26),
+		LogBackupMinutes: or(a.ThresholdSqlLogBackupMinutes, 120),
+		BlockingSeconds:  or(a.ThresholdSqlBlockingSeconds, 60),
+	}
+}

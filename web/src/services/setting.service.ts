@@ -34,6 +34,8 @@ export interface Settings {
   enforce_mfa: ToggleSetting;
   alert_severities: AlertSeverity[];
   agent: AgentSettings;
+  // Same limits the SQL alerts use, so the UI colours values exactly where an alert would fire.
+  sql_thresholds: { backup_hours: number; log_backup_minutes: number; blocking_seconds: number };
 }
 
 // A null value resets the key to its deployment default, which is a different outcome

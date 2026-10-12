@@ -276,6 +276,11 @@ func collectRequests(ctx context.Context, db *sql.DB, w *promWriter, base []labe
 	w.add("wimp_mssql_blocked_requests", "gauge", "User requests currently blocked by another session.", base, float64(blocked))
 	w.add("wimp_mssql_longest_block_seconds", "gauge", "How long the longest-blocked request has been waiting.", base, float64(longestBlockMs)/1000)
 	w.add("wimp_mssql_longest_request_seconds", "gauge", "Elapsed time of the longest-running user request.", base, float64(longestRequestSec))
+
+	var uptime int64
+	if err := db.QueryRowContext(ctx, `SELECT DATEDIFF(SECOND, sqlserver_start_time, GETDATE()) FROM sys.dm_os_sys_info`).Scan(&uptime); err == nil {
+		w.add("wimp_mssql_uptime_seconds", "gauge", "Seconds since the instance last started.", base, float64(uptime))
+	}
 	return nil
 }
 
@@ -389,15 +394,19 @@ var liveQueries = map[string]string{
 		OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
 		WHERE s.is_user_process = 1 AND r.session_id <> @@SPID
 		ORDER BY r.total_elapsed_time DESC`,
+	// msdb stores job times in server local time with no zone, so how long ago and how soon are
+	// computed here against the server's own clock rather than left to the viewer's.
 	protocol.SqlQueryJobs: `SELECT j.name, j.enabled, c.name AS category, h.run_status AS last_run_status,
-			CASE WHEN h.run_date > 0 THEN DATETIMEFROMPARTS(h.run_date / 10000, h.run_date / 100 % 100, h.run_date % 100,
-				h.run_time / 10000, h.run_time / 100 % 100, h.run_time % 100, 0) END AS last_run_at,
+			lr.at AS last_run_at, DATEDIFF(SECOND, lr.at, GETDATE()) AS last_run_ago_seconds,
 			h.run_duration AS last_run_duration_hhmmss, LEFT(h.message, 1000) AS last_message,
-			a.next_scheduled_run_date AS next_run_at
+			a.next_scheduled_run_date AS next_run_at,
+			DATEDIFF(SECOND, GETDATE(), a.next_scheduled_run_date) AS next_run_in_seconds
 		FROM msdb.dbo.sysjobs j
 		LEFT JOIN msdb.dbo.syscategories c ON c.category_id = j.category_id
 		OUTER APPLY (SELECT TOP 1 run_status, run_date, run_time, run_duration, message FROM msdb.dbo.sysjobhistory h
 			WHERE h.job_id = j.job_id AND h.step_id = 0 ORDER BY h.instance_id DESC) h
+		OUTER APPLY (SELECT CASE WHEN h.run_date > 0 THEN DATETIMEFROMPARTS(h.run_date / 10000, h.run_date / 100 % 100,
+			h.run_date % 100, h.run_time / 10000, h.run_time / 100 % 100, h.run_time % 100, 0) END AS at) lr
 		OUTER APPLY (SELECT TOP 1 next_scheduled_run_date FROM msdb.dbo.sysjobactivity a
 			WHERE a.job_id = j.job_id ORDER BY a.session_id DESC) a
 		ORDER BY j.name`,

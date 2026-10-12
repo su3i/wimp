@@ -1,11 +1,15 @@
 import { useNavigate } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Boxes, HardDrive, Bell, CircleAlert, Settings, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+import { LayoutDashboard, Boxes, Database, HardDrive, Bell, CircleAlert, Settings, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/auth'
 import { useUIStore } from '@/store/ui'
 import { authService } from '@/services/auth.service'
+import { machineService } from '@/services/machine.service'
+import { useProjectStore } from '@/store/project'
+import { useQuery } from '@tanstack/react-query'
+import type { HostRole } from '@/types'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import iconSrc from '@/assets/icon.svg'
 
@@ -14,12 +18,16 @@ interface NavItem {
   icon: LucideIcon
   label: string
   end?: boolean
+  // Shown only when some host in the project runs this workload, so a project without IIS
+  // has no Applications entry leading to an empty page.
+  role?: HostRole
 }
 
 // What the platform is for: the fleet, what runs on it, and what is broken.
 const NAV_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Overview', end: true },
-  { to: '/applications', icon: Boxes, label: 'Applications' },
+  { to: '/applications', icon: Boxes, label: 'Applications', role: 'iis' },
+  { to: '/sql-instances', icon: Database, label: 'SQL Server Instances', role: 'sql' },
   { to: '/hosts', icon: HardDrive, label: 'Hosts' },
   { to: '/incidents', icon: CircleAlert, label: 'Incidents' },
 ]
@@ -66,6 +74,17 @@ export function Sidebar() {
   const navigate = useNavigate()
 
   const { sidebarExpanded: expanded, setSidebarExpanded } = useUIStore()
+  const { activeProject } = useProjectStore()
+
+  // Same query and cache key as the dashboard and host pages, so this costs no extra request.
+  const { data: machines } = useQuery({
+    queryKey: ['machines', activeProject?.Key],
+    enabled: !!activeProject,
+    staleTime: 60_000,
+    queryFn: async () => (await machineService.list(activeProject!.Key, { per_page: 100 })).data.machines ?? [],
+  })
+  const roles = new Set((machines ?? []).flatMap(m => m.roles ?? []))
+  const navItems = NAV_ITEMS.filter(item => !item.role || roles.has(item.role))
 
   function setExpanded(v: boolean) {
     localStorage.setItem('wimp_sidebar_expanded', String(v))
@@ -98,7 +117,7 @@ export function Sidebar() {
       {/* Primary nav. flex-1 so it takes the slack, which is what pushes the secondary
           group down to sit against the account row. */}
       <nav className='flex-1 py-3 px-2 space-y-0.5 overflow-hidden'>
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavItemLink key={item.to} item={item} expanded={expanded} />
         ))}
       </nav>

@@ -6,9 +6,11 @@ import { Database, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Modal } from '@/components/ui/Modal'
-import { SqlStateBadge } from '@/components/machine/InstancesTab'
+import { SqlStateBadge, SqlStatusBadge } from '@/components/sql/SqlBadges'
 import { sqlInstanceService } from '@/services/sqlInstance.service'
 import { cn } from '@/utils/cn'
+import { usePaged } from '@/utils/usePaged'
+import { Pagination } from '@/components/ui/Pagination'
 import { apiError, instanceLabel } from '@/utils/sql'
 import type { SqlInstanceWithMachine } from '@/types'
 
@@ -60,19 +62,19 @@ function AddSqlInstanceModal({
       onAdded()
       onClose()
     } catch (err) {
-      toast.error(apiError(err, 'Failed to add SQL instances.'))
+      toast.error(apiError(err, 'Failed to add SQL Server instances.'))
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title='Add SQL Instances' description='Instances discovered on hosts in this project.'>
+    <Modal open={open} onClose={onClose} title='Add SQL Server Instances' description='Instances discovered on hosts in this project.'>
       <div className='space-y-4'>
         {!all ? (
           <div className='h-24 rounded-md bg-surface-high animate-pulse' />
         ) : choices.length === 0 ? (
-          <p className='text-xs text-ink-faint'>Every SQL instance in this project is already part of this application.</p>
+          <p className='text-xs text-ink-faint'>Every SQL Server instance in this project is already part of this application.</p>
         ) : (
           <div className='max-h-80 overflow-y-auto rounded-md border border-rim'>
             {choices.map(i => {
@@ -123,6 +125,7 @@ export function SqlMembers({
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<SqlInstanceWithMachine | null>(null)
 
+  const paged = usePaged(members)
   const { data: projectHasSql } = useQuery({
     queryKey: ['project-sql-instances', projectKey],
     enabled: members.length === 0,
@@ -131,49 +134,45 @@ export function SqlMembers({
   })
   if (members.length === 0 && !projectHasSql) return null
 
-  const cols = 'grid-cols-[2fr_1.5fr_1fr_1fr_auto]'
+  const cols = 'grid-cols-[2fr_1.5fr_1.2fr_auto]'
 
   return (
-    <div className='rounded-lg border border-rim overflow-hidden'>
-      <div className='flex items-center justify-between border-b border-rim bg-surface-alt px-4 py-2.5'>
+    // No overflow-hidden: it would clip the status tooltips. Header and last row carry the rounding.
+    <div className='rounded-lg border border-rim'>
+      <div className='flex items-center justify-between rounded-t-lg border-b border-rim bg-surface-alt px-4 py-2.5'>
         <p className='flex items-center gap-2 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint'>
           <Database className='size-3' />
-          SQL Instances
+          SQL Server Instances
         </p>
         <Button size='sm' variant='outline' onClick={() => setAdding(true)}>
           <Plus className='size-3' />
-          Add SQL Instance
+          Add SQL Server Instance
         </Button>
       </div>
 
       {members.length === 0 ? (
-        <p className='px-4 py-6 text-center text-xs text-ink-faint'>No SQL instances in this application yet.</p>
+        <p className='px-4 py-6 text-center text-xs text-ink-faint'>No SQL Server instances in this application yet.</p>
       ) : (
         <>
           <div className={cn('grid border-b border-rim bg-surface', cols)}>
             <div className={TH}>Instance</div>
             <div className={TH}>Server</div>
-            <div className={TH}>Engine</div>
-            <div className={TH}>Agent</div>
+            <div className={TH}>Status</div>
             <div className='px-4 py-2.5' />
           </div>
-          {members.map(i => {
-            const offline = i.machine.Status !== 'online'
+          {paged.items.map(i => {
             return (
               <div
                 key={i.ID}
-                onClick={() => navigate(`/hosts/${i.MachineID}`)}
-                className={cn('grid items-center border-b border-rim last:border-0 bg-surface hover:bg-surface-alt cursor-pointer', cols)}
+                onClick={() => navigate(`/sql-instances/${i.ID}`)}
+                className={cn('grid items-center border-b border-rim last:border-0 last:rounded-b-lg bg-surface hover:bg-surface-alt cursor-pointer', cols)}
               >
                 <div className='px-4 py-3 font-mono text-xs text-ink'>{instanceLabel(i)}</div>
                 <div className='px-4 py-3 text-xs text-ink-dim'>
                   <span className='font-mono'>{serverName(i)}</span>
                   {i.Clustered && i.OwnerNode && <span className='text-ink-faint'> on {i.OwnerNode.toLowerCase()}</span>}
                 </div>
-                <div className='px-4 py-3'><SqlStateBadge state={offline ? 'Unknown' : i.State} /></div>
-                <div className='px-4 py-3'>
-                  {!offline && i.State === 'Running' ? <SqlStateBadge state={i.AgentState} /> : <span className='text-xs text-ink-faint'>N/A</span>}
-                </div>
+                <div className='px-4 py-3'><SqlStatusBadge instance={i} /></div>
                 <div className='px-3 py-2'>
                   <button
                     type='button'
@@ -190,6 +189,11 @@ export function SqlMembers({
               </div>
             )
           })}
+          {paged.totalPages > 1 && (
+            <div className='rounded-b-lg bg-surface px-4 py-2.5'>
+              <Pagination page={paged.page} totalPages={paged.totalPages} total={paged.total} pageSize={paged.pageSize} onPageChange={paged.setPage} />
+            </div>
+          )}
         </>
       )}
 
@@ -204,7 +208,7 @@ export function SqlMembers({
 
       <ConfirmModal
         open={!!removing}
-        title='Remove SQL Instance'
+        title='Remove SQL Server Instance'
         description={removing ? `Remove ${instanceLabel(removing)} on ${serverName(removing)} from this application? The instance itself is not touched.` : ''}
         confirmLabel='Remove'
         onClose={() => setRemoving(null)}
@@ -214,7 +218,7 @@ export function SqlMembers({
             await sqlInstanceService.removeFromApplication(projectKey, appId, removing.ID)
             onChange()
           } catch (err) {
-            toast.error(apiError(err, 'Failed to remove SQL instance.'))
+            toast.error(apiError(err, 'Failed to remove SQL Server instance.'))
           }
           setRemoving(null)
         }}

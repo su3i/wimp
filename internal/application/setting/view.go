@@ -44,6 +44,9 @@ type View struct {
 	EnforceMfa          ToggleView          `json:"enforce_mfa"`
 	AlertSeverities     []AlertSeverityView `json:"alert_severities"`
 	Agent               AgentView           `json:"agent"`
+	// SqlThresholds lets the UI colour backup ages and blocking against the same limits the
+	// alerts use.
+	SqlThresholds config.SqlThresholdValues `json:"sql_thresholds"`
 }
 
 // Levels is the set a severity may be set to, in ascending order of urgency. Disabled is
@@ -105,6 +108,7 @@ func Current() View {
 			Overridden: mfaOverridden,
 		},
 		AlertSeverities: severities,
+		SqlThresholds:   config.SqlThresholds(),
 		Agent: AgentView{
 			Version:     common.AgentVersion,
 			AutoUpdate:  common.AutoUpdateAgent,

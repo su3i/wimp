@@ -126,7 +126,7 @@ var AlertTypeRegistry = map[AlertType]AlertTypeMeta{
 	AlertSqlDatabaseRecovered:  {CategorySql, LevelInfo},
 	AlertSqlBackupOverdue:      {CategorySql, LevelCritical},
 	AlertSqlBackupRecovered:    {CategorySql, LevelInfo},
-	AlertSqlLogBackupOverdue:   {CategorySql, LevelCritical},
+	AlertSqlLogBackupOverdue:   {CategorySql, LevelWarning},
 	AlertSqlLogBackupRecovered: {CategorySql, LevelInfo},
 	AlertSqlJobFailed:          {CategorySql, LevelWarning},
 	AlertSqlJobRecovered:       {CategorySql, LevelInfo},
