@@ -907,11 +907,10 @@ export function Dashboard() {
         {showGetStarted && (
           <Hint onDismiss={() => markEmptyProjectPrompted(projectKey)}>
             <p>
-              This project has no hosts yet. Add your first one and this dashboard comes alive: it takes about a
-              minute, and all you run is one command on the machine.{" "}
+              This project has no hosts yet. Add your first one and this dashboard comes alive.
               <Link
                 to='/hosts'
-                className='inline-flex items-center gap-0.5 text-ink hover:text-primary underline underline-offset-2 transition-colors'
+                className='inline-flex items-center gap-0.5 text-ink hover:text-primary underline underline-offset-2 transition-colors pl-2'
               >
                 Add a host <ChevronRight className='size-2.5' />
               </Link>
