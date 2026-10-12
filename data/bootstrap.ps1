@@ -60,8 +60,11 @@ $msi = "$TmpDir\windows_exporter.msi"
 Get-File "https://github.com/prometheus-community/windows_exporter/releases/download/v$WinExpVersion/windows_exporter-$WinExpVersion-amd64.msi" $msi
 
 # Collectors follow what the host runs, detected the same way the agent discovers it.
-# Workloads installed after bootstrap need bootstrap re-run to get their collector.
-$collectors = @("cpu", "cs", "logical_disk", "memory", "net", "os", "service", "system", "tcp", "textfile")
+# Names must exist in the pinned $WinExpVersion: windows_exporter refuses to start at all on
+# an unknown one (0.30 removed "cs", for example).
+# Workloads installed after bootstrap need bootstrap re-run to get their collector, which works
+# because an existing install is removed first (below).
+$collectors = @("cpu", "logical_disk", "memory", "net", "os", "service", "system", "tcp", "textfile")
 if (Test-Path "$env:SystemRoot\System32\inetsrv\appcmd.exe") {
     $collectors += "iis"
     Write-Host "  IIS detected"
@@ -74,6 +77,18 @@ $clusSvc = Get-Service -Name "ClusSvc" -ErrorAction SilentlyContinue
 if ($clusSvc -and $clusSvc.Status -eq "Running") {
     $collectors += "mscluster"
     Write-Host "  Failover cluster node detected"
+}
+
+# Installing the MSI over an existing install of the same version is a no-op that keeps the old
+# collector list, so a re-run would silently change nothing. Remove it first.
+$existing = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" -ErrorAction SilentlyContinue |
+    Get-ItemProperty |
+    Where-Object { $_.DisplayName -like "*windows_exporter*" } |
+    Select-Object -First 1
+if ($existing) {
+    Write-Host "  Removing existing windows_exporter $($existing.DisplayVersion)..."
+    Stop-Service -Name "windows_exporter" -Force -ErrorAction SilentlyContinue
+    Start-Process msiexec.exe -Wait -ArgumentList "/x `"$($existing.PSChildName)`" /quiet"
 }
 
 Start-Process msiexec.exe -Wait -ArgumentList @(
@@ -171,6 +186,15 @@ Write-Host "Verifying..."
 $allOk = $true
 foreach ($svc in @("windows_exporter", "fluent-bit", "wimp-agent")) {
     if (-not (Test-ServiceRunning $svc)) { $allOk = $false }
+}
+
+# windows_exporter exits at startup on a bad collector or flag and says why only in the event
+# log, so surface that here rather than leaving it to be dug out by hand.
+if (-not (Get-Service "windows_exporter" -ErrorAction SilentlyContinue | Where-Object Status -eq "Running")) {
+    $why = Get-EventLog -LogName Application -Source windows_exporter -Newest 5 -ErrorAction SilentlyContinue |
+        Where-Object { $_.Message -match 'err=|level=error' } |
+        Select-Object -First 1
+    if ($why) { Write-Host "         windows_exporter: $($why.Message)" -ForegroundColor Yellow }
 }
 
 Write-Host ""
