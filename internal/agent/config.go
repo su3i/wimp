@@ -15,6 +15,9 @@ type Config struct {
 	AgentDir          string `json:"agent_dir"`
 	FluentBitDir      string `json:"fluent_bit_dir"`
 	TmpDir            string `json:"tmp_dir"`
+	// TextfileDir is where the agent writes .prom files for windows_exporter's textfile
+	// collector. Empty on hosts bootstrapped before it existed, which disables those metrics.
+	TextfileDir string `json:"textfile_dir"`
 }
 
 func LoadConfig() (*Config, error) {

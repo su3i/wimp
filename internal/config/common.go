@@ -25,4 +25,9 @@ type CommonConfig struct {
 	// AppUrl, which is the control plane's own address - frontend and backend commonly
 	// live on different hosts/ingresses. Leave empty to omit links from alerts.
 	WebUrl string `required:"false"`
+	// SqlMonitorUsername and SqlMonitorPassword are one SQL login, created with the same name
+	// and password on every monitored instance, that agents use to read DMVs. Leave both
+	// empty to have agents use Windows authentication as their own service identity instead.
+	SqlMonitorUsername string `required:"false"`
+	SqlMonitorPassword string `required:"false"`
 }

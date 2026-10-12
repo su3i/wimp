@@ -17,7 +17,7 @@ webUrl: ""
 
 image:
   repository: darksueii/wimp
-  tag: "1.0.11"
+  tag: "1.0.12"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
@@ -55,7 +55,7 @@ persistence:
 
 config:
   appEnv: production
-  agentVersion: "1.0.1"
+  agentVersion: "1.0.2"
   autoUpdateAgent: false
   enforceMfa: false
 
@@ -78,6 +78,14 @@ config:
   #   http://<release>-kube-prometheus-stack-prometheus.<namespace>.svc:9090
   prometheusUrl: ""
 
+  # SQL Server DMV monitoring. One SQL login with the same name and password on every
+  # instance, granted VIEW SERVER STATE, VIEW ANY DEFINITION and db_datareader in msdb.
+  # Leave both empty to use Windows authentication as the agent's own account
+  # (NT AUTHORITY\SYSTEM) instead, granted the same on each instance.
+  sqlMonitor:
+    username: ""
+    password: ""
+
   alerts:
     # Per-alert-type severity override. Values: info | warning | critical | sev | disabled
     # ("disabled" = the event is never even created). Pre-filled with the built-in
@@ -85,7 +93,6 @@ config:
     severity:
       machineConnected: info
       machineDisconnected: critical
-      machineShutdown: info
       machineRestarting: info
       agentUpdated: info
       # Fires in the project a host just left, when that same physical machine is
@@ -111,6 +118,26 @@ config:
       highMemoryRecovered: info
       lowDisk: critical
       lowDiskRecovered: info
+      sqlInstanceStopped: sev
+      sqlInstanceStarted: info
+      sqlAgentStopped: critical
+      sqlAgentStarted: info
+      sqlInstanceFailover: warning
+      sqlAgFailover: warning
+      sqlDatabaseUnhealthy: sev
+      sqlDatabaseRecovered: info
+      sqlBackupOverdue: critical
+      sqlBackupRecovered: info
+      sqlLogBackupOverdue: critical
+      sqlLogBackupRecovered: info
+      sqlJobFailed: warning
+      sqlJobRecovered: info
+      sqlAgUnhealthy: critical
+      sqlAgHealthy: info
+      sqlBlocking: warning
+      sqlBlockingCleared: info
+      clusterNodeDown: critical
+      clusterNodeUp: info
 
     # Numeric thresholds for the metric-based alerts, pre-filled with the hardcoded
     # default from internal/application/metrics/checker.go.
@@ -118,6 +145,9 @@ config:
       highCpuPercent: 95
       highMemoryPercent: 95
       lowDiskPercent: 5  # alert fires when free space drops BELOW this
+      sqlBackupHours: 26          # since the last full or differential backup
+      sqlLogBackupMinutes: 120    # since the last log backup (FULL/BULK_LOGGED databases)
+      sqlBlockingSeconds: 60      # longest a request may be blocked
       # Response time above which a responding endpoint is alerted on as slow.
       healthCheckSlowSeconds: 5
 
@@ -158,7 +188,7 @@ config:
 web:
   image:
     repository: darksueii/wimp-web
-    tag: "1.0.11"
+    tag: "1.0.12"
     pullPolicy: IfNotPresent
 
   replicaCount: 1

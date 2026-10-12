@@ -24,4 +24,11 @@ type ApplicationRepository interface {
 	UpdateAppPoolRelation(rel *ApplicationAppPool) error
 	FindAppPoolRelationsByPoolIDs(poolIDs []uint) (*[]ApplicationAppPool, error)
 	Delete(id uint) error
+
+	AddSqlInstance(rel *ApplicationSqlInstance) error
+	RemoveSqlInstance(applicationID, sqlInstanceID uint) error
+	FindSqlInstanceRelations(applicationID uint) (*[]ApplicationSqlInstance, error)
+	// FindSqlCountsByApplicationIDs counts member instances and how many are running on an
+	// online host. A clustered instance counts as running if it runs on any of its nodes.
+	FindSqlCountsByApplicationIDs(appIDs []uint) (map[uint]PoolCounts, error)
 }

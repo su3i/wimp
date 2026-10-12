@@ -188,6 +188,9 @@ func (r *applicationRepository) Delete(id uint) error {
 		if err := tx.Unscoped().Where("application_id = ?", id).Delete(&application.ApplicationAppPool{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Unscoped().Where("application_id = ?", id).Delete(&application.ApplicationSqlInstance{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&application.Application{}, id).Error
 	})
 }

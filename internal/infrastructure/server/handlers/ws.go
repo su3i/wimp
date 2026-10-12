@@ -13,6 +13,7 @@ import (
 	machineService "github.com/su3i/wimp/internal/application/machine"
 	notificationService "github.com/su3i/wimp/internal/application/notification"
 	siteService "github.com/su3i/wimp/internal/application/site"
+	sqlInstanceService "github.com/su3i/wimp/internal/application/sqlinstance"
 	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	machineDomain "github.com/su3i/wimp/internal/domain/machine"
@@ -104,15 +105,10 @@ func AgentWebSocket(c *gin.Context) {
 		m.Status = machineDomain.Offline
 		repo.Update(m)
 		log.Printf("machine (%d) agent disconnected", m.ID)
-		if action, ok := cache.GetMachineActionPending(m.ID); ok {
+		if _, ok := cache.GetMachineActionPending(m.ID); ok {
 			cache.ClearMachineActionPending(m.ID)
-			if action == "shutdown" {
-				go notificationService.EmitAlert(notification.AlertMachineShutdown, m.ProjectID, m.ID, m.Hostname, "",
-					notificationService.AlertTitle(m.Hostname, "Machine Shut Down"), m.Hostname+" was shut down", cfg)
-			} else {
-				go notificationService.EmitAlert(notification.AlertMachineRestarting, m.ProjectID, m.ID, m.Hostname, "",
-					notificationService.AlertTitle(m.Hostname, "Machine Restarting"), m.Hostname+" is restarting", cfg)
-			}
+			go notificationService.EmitAlert(notification.AlertMachineRestarting, m.ProjectID, m.ID, m.Hostname, "",
+				notificationService.AlertTitle(m.Hostname, "Machine Restarting"), m.Hostname+" is restarting", cfg)
 		} else {
 			go notificationService.EmitAlert(notification.AlertMachineDisconnected, m.ProjectID, m.ID, m.Hostname, "",
 				notificationService.AlertTitle(m.Hostname, "Machine Offline"), m.Hostname+" went offline unexpectedly", cfg)
@@ -185,6 +181,17 @@ func AgentWebSocket(c *gin.Context) {
 				}
 			}(m.ID)
 
+			// Sent to every agent, SQL or not: it is how a host that gains an instance later
+			// already has what it needs, and credentials are never written to the host's disk.
+			sqlCfgPayload, _ := json.Marshal(protocol.SqlMonitorConfigPayload{
+				Username: config.Common().SqlMonitorUsername,
+				Password: config.Common().SqlMonitorPassword,
+			})
+			sqlCfg, _ := json.Marshal(protocol.Message{Type: protocol.TypeSqlMonitorConfig, Payload: sqlCfgPayload})
+			if err := hub.Get().Send(m.ID, sqlCfg); err != nil {
+				log.Printf("machine (%d) sql monitor config send failed: %v", m.ID, err)
+			}
+
 			if reg.Version != "dev" && reg.Version != config.Common().AgentVersion && shouldAutoUpdate(m.ProjectID) {
 				go func(machineID uint, reportedVersion string) {
 					log.Printf("machine (%d) agent version %q is outdated (latest %q) - pushing auto-update", machineID, reportedVersion, config.Common().AgentVersion)
@@ -206,6 +213,12 @@ func AgentWebSocket(c *gin.Context) {
 			if err := siteService.UpsertFromDiscovery(m.ID, disc.Sites, cfg); err != nil {
 				log.Printf("machine (%d) site upsert failed: %v", m.ID, err)
 			}
+			if err := sqlInstanceService.Sync(m.ID, disc.SqlInstances, cfg); err != nil {
+				log.Printf("machine (%d) sql instance sync failed: %v", m.ID, err)
+			}
+			// Discovery is authoritative for cluster membership, including leaving a cluster.
+			// The next heartbeat's save persists it.
+			m.Cluster = sqlInstanceService.ToCluster(disc.Cluster)
 
 		case protocol.TypeHeartbeat:
 			var hb protocol.HeartbeatPayload
@@ -214,6 +227,11 @@ func AgentWebSocket(c *gin.Context) {
 			}
 			t := time.Now()
 			m.LastSeenAt = &t
+			// A heartbeat without a cluster may be a failed cluster query rather than a host
+			// that left its cluster, so only discovery clears it.
+			if hb.Cluster != nil {
+				m.Cluster = sqlInstanceService.ToCluster(hb.Cluster)
+			}
 			repo.Update(m)
 			stoppedPools, startedPools, _ := appPoolService.SyncHeartbeat(m.ID, hb.AppPools, cfg)
 			cache.InvalidatePoolsByMachine(m.ID)
@@ -254,6 +272,13 @@ func AgentWebSocket(c *gin.Context) {
 			}
 			cache.SetSidecarHealth(m.ID, hb.WindowsExporterHealthy, hb.FluentBitHealthy)
 
+			if err := sqlInstanceService.UpdateStates(m.ID, hb.SqlInstances, cfg); err != nil {
+				log.Printf("machine (%d) sql instance state update failed: %v", m.ID, err)
+			}
+			for _, a := range sqlInstanceService.Evaluate(m.ProjectID, m.ID, m.Hostname, hb.SqlInstances, hb.Cluster) {
+				go notificationService.EmitAlert(a.Type, m.ProjectID, a.MachineID, a.Instance, a.Subject, a.Title, a.Detail, cfg)
+			}
+
 		case protocol.TypeCommandResult:
 			var result protocol.CommandResultPayload
 			if err := json.Unmarshal(msg.Payload, &result); err != nil {
@@ -285,6 +310,18 @@ func AgentWebSocket(c *gin.Context) {
 			hub.ResolveCommand(result.RequestID, hub.CommandResult{
 				Success: result.Error == "",
 				Output:  result.Data,
+				Error:   result.Error,
+			})
+
+		case protocol.TypeSqlQueryResult:
+			var result protocol.SqlQueryResultPayload
+			if err := json.Unmarshal(msg.Payload, &result); err != nil {
+				continue
+			}
+			rowsJSON, _ := json.Marshal(result.Rows)
+			hub.ResolveCommand(result.RequestID, hub.CommandResult{
+				Success: result.Error == "",
+				Output:  string(rowsJSON),
 				Error:   result.Error,
 			})
 

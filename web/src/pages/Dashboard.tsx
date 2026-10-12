@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, Monitor, Layers, X, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Monitor, Layers, Database, Network, X, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { Hint } from "@/components/ui/Hint";
 import { DiskGauges } from "@/components/dashboard/DiskGauges";
 import { useAuthStore } from "@/store/auth";
 import { useProjectStore } from "@/store/project";
@@ -15,6 +14,8 @@ import { cn } from "@/utils/cn";
 import { levelConfig, splitTitle } from "@/utils/notifications";
 import { timeAgo, absoluteTime } from "@/utils/time";
 import { machineService } from "@/services/machine.service";
+import { sqlInstanceService } from "@/services/sqlInstance.service";
+import { SqlCredentialsHint } from "@/components/machine/InstancesTab";
 import { applicationService } from "@/services/application.service";
 import { prometheusService, type PromInstantResult, type PromRangeResult } from "@/services/prometheus.service";
 import { dashboardService, type ActiveAlert, type DashboardNotification } from "@/services/dashboard.service";
@@ -44,6 +45,17 @@ const PQ = {
   // series so each host is its own line).
   throughputPerHost: (ids: number[], win: string) =>
     `sum by (machine_id) (rate(windows_iis_requests_total{${mids(ids)}}[${win}]))`,
+
+  // Per-host SQL Server batch request rate, summed across a host's instances. The SQL
+  // counterpart of the IIS request rate above.
+  batchesPerHost: (ids: number[], win: string) =>
+    `sum by (machine_id) (rate(windows_mssql_sqlstats_batch_requests{${mids(ids)}}[${win}]))`,
+
+  blockedRequests: (ids: number[]) => `sum(wimp_mssql_blocked_requests{${mids(ids)}})`,
+
+  failedJobs: (ids: number[]) => `count(wimp_mssql_job_last_run_failed{${mids(ids)}} == 1)`,
+
+  longestRequest: (ids: number[]) => `max(wimp_mssql_longest_request_seconds{${mids(ids)}})`,
 
   // Per-host CPU %, one result per machine_id label - used for the Cpu Usage chart
   cpuPerHost: (ids: number[], win: string) =>
@@ -235,6 +247,8 @@ function fmtBytes(v: number) {
 function alertIcon(cat: string | null | undefined): LucideIcon {
   if (cat === "machine") return Monitor;
   if (cat === "apppool" || cat === "app_pool") return Layers;
+  if (cat === "sql") return Database;
+  if (cat === "cluster") return Network;
   return AlertTriangle;
 }
 
@@ -292,8 +306,22 @@ function OpenIncidentsCard({ count, loaded }: { count: number; loaded: boolean }
 // Applications list page, just rolled up into one count here.
 function isAppHealthy(app: Application, hcStatusMap: Record<number, "up" | "down">): boolean {
   if (app.HealthCheckURL) return hcStatusMap[app.ID] === "up";
-  const total = app.pool_total ?? 0;
-  return total > 0 && app.pool_healthy === total;
+  const total = (app.pool_total ?? 0) + (app.sql_total ?? 0);
+  return total > 0 && (app.pool_healthy ?? 0) + (app.sql_healthy ?? 0) === total;
+}
+
+// One tile of the SQL Server row. Same shell as the aggregate tiles above it.
+function SqlStatCard({ label, info, value, tone, sub }: { label: string; info: string; value: string; tone?: string; sub: string }) {
+  return (
+    <div className={STAT_CARD}>
+      <span className='flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint leading-none'>
+        {label}
+        <InfoTooltip text={info} />
+      </span>
+      <span className={cn('text-[27px] font-semibold font-mono leading-none', tone ?? 'text-ink')}>{value}</span>
+      <span className='text-[0.625rem] text-ink-faint'>{sub}</span>
+    </div>
+  );
 }
 
 function ApplicationStatusCard({
@@ -478,38 +506,6 @@ function ChartCard({
   );
 }
 
-// Nudges a fresh project toward its first host - a project with no hosts has nothing to
-// show anywhere in the app, and the fix is always the same one action. Shown once per
-// project (see useUIStore.emptyProjectPrompted), so switching away and back re-prompts
-// while staying put doesn't. Same shape as ui/ConfirmModal, just with its own decline
-// label; Continue drops the user on the hosts page rather than acting in place.
-function GetStartedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const navigate = useNavigate();
-  return (
-    <Modal open={open} onClose={onClose} title='Add your first host'>
-      <div className='space-y-4'>
-        <p className='text-sm text-ink-dim'>
-          Add your first host and this whole dashboard comes alive. It takes about a minute,
-          and all you run is one command on the machine.
-        </p>
-        <div className='flex justify-end gap-2'>
-          <Button variant='outline' onClick={onClose}>
-            I'll do this later
-          </Button>
-          <Button
-            onClick={() => {
-              onClose();
-              navigate("/hosts");
-            }}
-          >
-            Continue
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 export function Dashboard() {
   usePageTitle("Overview");
   const queryClient = useQueryClient();
@@ -531,6 +527,36 @@ export function Dashboard() {
   });
 
   const machineIds = useMemo(() => (machines ?? []).map((m) => m.ID), [machines]);
+
+  // Sections follow what the project's hosts actually run, as discovered by their agents.
+  const hasIIS = (machines ?? []).some((m) => m.roles?.includes("iis"));
+  const hasSQL = (machines ?? []).some((m) => m.roles?.includes("sql"));
+  const sqlHostIds = useMemo(
+    () => (machines ?? []).filter((m) => m.roles?.includes("sql")).map((m) => m.ID),
+    [machines],
+  );
+
+  const { data: sqlInstances } = useQuery({
+    queryKey: ["dashboard-sql-instances", projectKey],
+    queryFn: async () => (await sqlInstanceService.listProject(projectKey)).data.sql_instances ?? [],
+    enabled: !!projectKey && hasSQL,
+    refetchInterval: 15_000,
+  });
+  // A clustered instance has one row per node; count it once, as running if any online
+  // node reports it running.
+  const sqlSummary = useMemo(() => {
+    const byKey = new Map<string, boolean>();
+    let monitorError = "";
+    for (const i of sqlInstances ?? []) {
+      const key = i.Clustered ? `fci:${i.VirtualServerName}\\${i.Name}` : `${i.MachineID}:${i.Name}`;
+      const up = i.State === "Running" && i.machine.Status === "online";
+      byKey.set(key, (byKey.get(key) ?? false) || up);
+      if (i.Monitored && i.MonitorError && !monitorError) monitorError = i.MonitorError;
+    }
+    const total = byKey.size;
+    const running = [...byKey.values()].filter(Boolean).length;
+    return { total, running, monitorError };
+  }, [sqlInstances]);
 
   const hostNameMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -593,6 +619,38 @@ export function Dashboard() {
     ...qOpts,
     refetchInterval: RANGES[throughputRange].refetchMs,
   });
+  const sqlIdKey = sqlHostIds.join(",");
+  const sqlProm = promOk && sqlHostIds.length > 0;
+  const [batchRange, setBatchRange] = useState<RangeKey>("1h");
+  const { data: rBatchHost } = useQuery({
+    queryKey: ["d-batchhost", sqlIdKey, batchRange],
+    queryFn: () => {
+      const { start, end, step, rateWindow } = rangeWindow(batchRange);
+      return prometheusService.range(PQ.batchesPerHost(sqlHostIds, rateWindow), start, end, step);
+    },
+    ...qOpts,
+    enabled: sqlProm,
+    refetchInterval: RANGES[batchRange].refetchMs,
+  });
+  const { data: rBlocked } = useQuery({
+    queryKey: ["d-sql-blocked", sqlIdKey],
+    queryFn: () => prometheusService.instant(PQ.blockedRequests(sqlHostIds)),
+    ...qOpts,
+    enabled: sqlProm,
+  });
+  const { data: rLongest } = useQuery({
+    queryKey: ["d-sql-longest", sqlIdKey],
+    queryFn: () => prometheusService.instant(PQ.longestRequest(sqlHostIds)),
+    ...qOpts,
+    enabled: sqlProm && !hasIIS,
+  });
+  const { data: rFailedJobs } = useQuery({
+    queryKey: ["d-sql-jobs", sqlIdKey],
+    queryFn: () => prometheusService.instant(PQ.failedJobs(sqlHostIds)),
+    enabled: sqlProm,
+    refetchInterval: 60_000,
+  });
+
   const { data: rCpuHost } = useQuery({
     queryKey: ["d-cpuhost", idKey, cpuRange],
     queryFn: () => {
@@ -677,8 +735,8 @@ export function Dashboard() {
   }, []);
 
   // Derived rather than held in local state, so dismissing it is the single act of
-  // recording the prompt against this project key. `machines === undefined` means the
-  // host query is still in flight, which must not be mistaken for an empty project.
+  // recording it against this project key. `machines === undefined` means the host query
+  // is still in flight, which must not be mistaken for an empty project.
   const showGetStarted =
     !!projectKey &&
     machines !== undefined &&
@@ -784,6 +842,16 @@ export function Dashboard() {
     [rMemHost, hostNameMap, memRange],
   );
 
+  const batchPerfData = useMemo(
+    () => toHostRows(rBatchHost, hostNameMap, batchRange),
+    [rBatchHost, hostNameMap, batchRange],
+  );
+  const batchTotal = useMemo(() => seriesLatest(batchPerfData.rows, batchPerfData.keys), [batchPerfData]);
+  const blockedNow = scalar(rBlocked);
+  // count() of nothing returns no series at all, which here means no failed jobs, as long
+  // as the query itself came back.
+  const failedJobs = rFailedJobs === undefined ? null : (scalar(rFailedJobs) ?? 0);
+
   const throughputTotal = useMemo(
     () => seriesLatest(throughputPerfData.rows, throughputPerfData.keys),
     [throughputPerfData],
@@ -797,6 +865,21 @@ export function Dashboard() {
     [memPerfData],
   );
 
+  // Declared here rather than as a component outside: it reads this render's data, and
+  // appears in either row depending on whether the project also runs IIS.
+  const batchChart = (
+    <ChartCard
+      title='SQL Batch Rate'
+      info="Live per-host SQL Server batch requests per second, summed across each host's instances. The headline sums every host at the most recent sample."
+      range={batchRange}
+      onRangeChange={setBatchRange}
+      summary={batchTotal != null ? fmtRate(batchTotal) : null}
+      summaryLabel='total now'
+    >
+      <HostLineChart rows={batchPerfData.rows} keys={batchPerfData.keys} colors={hostColorMap} format='rate' />
+    </ChartCard>
+  );
+
   const visibleAlerts = alerts.filter((a) => a.id && !dismissed.has(a.id));
   function dismiss(id: string) {
     setDismissed((prev) => new Set([...prev, id]));
@@ -804,10 +887,6 @@ export function Dashboard() {
 
   return (
     <>
-      <GetStartedModal
-        open={showGetStarted}
-        onClose={() => markEmptyProjectPrompted(projectKey)}
-      />
 
       {/* Alert Banner */}
       {visibleAlerts.length > 0 && (
@@ -825,6 +904,21 @@ export function Dashboard() {
       </div>
 
       <div className='space-y-[14px]'>
+        {showGetStarted && (
+          <Hint onDismiss={() => markEmptyProjectPrompted(projectKey)}>
+            <p>
+              This project has no hosts yet. Add your first one and this dashboard comes alive: it takes about a
+              minute, and all you run is one command on the machine.{" "}
+              <Link
+                to='/hosts'
+                className='inline-flex items-center gap-0.5 text-ink hover:text-primary underline underline-offset-2 transition-colors'
+              >
+                Add a host <ChevronRight className='size-2.5' />
+              </Link>
+            </p>
+          </Hint>
+        )}
+
         {/* ── Row 1: aggregate stat cards + per-host disk ─────────────── */}
         {/* Same grid-cols-3 as the charts row below, so the column boundaries line up
             between the two rows. The first third is a nested 2-up rather than four tracks
@@ -847,23 +941,29 @@ export function Dashboard() {
           />
         </div>
 
-        {/* ── Row 2: Request Throughput + Cpu Usage + Memory Usage ──────── */}
-        <div className='grid grid-cols-3 gap-[14px]'>
-          <ChartCard
-            title='Request Rate'
-            info='Live per-host IIS request rate. The headline sums every host at the most recent sample, matching the right-hand edge of the chart.'
-            range={throughputRange}
-            onRangeChange={setThroughputRange}
-            summary={throughputTotal != null ? fmtRate(throughputTotal) : null}
-            summaryLabel='total now'
-          >
-            <HostLineChart
-              rows={throughputPerfData.rows}
-              keys={throughputPerfData.keys}
-              colors={hostColorMap}
-              format='rate'
-            />
-          </ChartCard>
+        {/* ── Row 2: workload rate + Cpu Usage + Memory Usage ──────────── */}
+        {/* The first chart is the workload's own rate: IIS requests when the project runs IIS,
+            SQL batches when it only runs SQL Server, and absent when it runs neither. */}
+        <div className={cn('grid gap-[14px]', hasIIS || hasSQL ? 'grid-cols-3' : 'grid-cols-2')}>
+          {hasIIS ? (
+            <ChartCard
+              title='Request Rate'
+              info='Live per-host IIS request rate. The headline sums every host at the most recent sample, matching the right-hand edge of the chart.'
+              range={throughputRange}
+              onRangeChange={setThroughputRange}
+              summary={throughputTotal != null ? fmtRate(throughputTotal) : null}
+              summaryLabel='total now'
+            >
+              <HostLineChart
+                rows={throughputPerfData.rows}
+                keys={throughputPerfData.keys}
+                colors={hostColorMap}
+                format='rate'
+              />
+            </ChartCard>
+          ) : hasSQL ? (
+            batchChart
+          ) : null}
 
           <ChartCard
             title='Cpu Usage'
@@ -887,6 +987,44 @@ export function Dashboard() {
             <HostLineChart rows={memPerfData.rows} keys={memPerfData.keys} colors={hostColorMap} />
           </ChartCard>
         </div>
+
+        {/* ── SQL Server row, only when a host runs SQL Server ────────────── */}
+        {hasSQL && sqlSummary.monitorError && <SqlCredentialsHint error={sqlSummary.monitorError} />}
+        {hasSQL && (
+          <div className='grid grid-cols-3 gap-[14px]'>
+            <div className='grid grid-cols-2 gap-[14px]'>
+              <SqlStatCard
+                label='SQL Instances'
+                info='SQL Server instances across the project. A clustered instance counts once, as running if any node runs it.'
+                value={sqlInstances ? `${sqlSummary.running}/${sqlSummary.total}` : "N/A"}
+                tone={!sqlInstances ? undefined : sqlSummary.running === sqlSummary.total ? 'text-success' : 'text-danger'}
+                sub='running'
+              />
+              <SqlStatCard
+                label='Failed Jobs'
+                info='Enabled SQL Agent jobs whose last run failed. Needs SQL read access.'
+                value={failedJobs != null ? String(failedJobs) : "N/A"}
+                tone={failedJobs == null ? undefined : failedJobs > 0 ? 'text-warning' : 'text-success'}
+                sub='agent jobs'
+              />
+            </div>
+            <SqlStatCard
+              label='Blocked Requests'
+              info='User requests currently waiting on another session, across every instance. Needs SQL read access.'
+              value={blockedNow != null ? String(Math.round(blockedNow)) : "N/A"}
+              tone={blockedNow == null ? undefined : blockedNow > 0 ? 'text-warning' : 'text-success'}
+              sub='right now'
+            />
+            {hasIIS ? batchChart : (
+              <SqlStatCard
+                label='Longest Request'
+                info='Elapsed time of the longest-running user request on any instance right now. Needs SQL read access.'
+                value={scalar(rLongest) != null ? `${Math.round(scalar(rLongest)!)}s` : "N/A"}
+                sub='running now'
+              />
+            )}
+          </div>
+        )}
 
         {/* ── Row 3: Recent Alerts ─────────────────────────────────────── */}
         <div className='rounded-lg border border-rim overflow-hidden'>

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/su3i/wimp/internal/config"
+	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/infrastructure/server/handlers"
 	middleware "github.com/su3i/wimp/internal/infrastructure/server/middlewares"
 )
@@ -89,7 +90,9 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/machines/:machineId/bootstrap", middleware.AuthMiddleware(), handlers.GetBootstrapToken)
 	router.GET("/projects/:key/machines/:machineId/uninstall", middleware.AuthMiddleware(), handlers.GetUninstallCommand)
 	router.DELETE("/projects/:key/machines/:machineId", middleware.AuthMiddleware(), handlers.DeleteMachine)
-	router.POST("/projects/:key/machines/:machineId/shutdown", middleware.AuthMiddleware(), handlers.MachineCommand("shutdown"))
+	// Remote shutdown is deliberately not implemented: a host shut down remotely stays down
+	// until someone physically powers it back on.
+	router.POST("/projects/:key/machines/:machineId/shutdown", middleware.AuthMiddleware(), handlers.NotImplemented)
 	router.POST("/projects/:key/machines/:machineId/restart", middleware.AuthMiddleware(), handlers.MachineCommand("restart"))
 	router.POST("/projects/:key/machines/:machineId/agent/update", middleware.AuthMiddleware(), handlers.UpdateAgentCommand)
 	router.GET("/projects/:key/machines/:machineId/logs/download", middleware.AuthMiddleware(), handlers.DownloadLogs)
@@ -107,12 +110,24 @@ func InitializeRouter() *gin.Engine {
 	router.GET("/projects/:key/applications/:appId/logs", middleware.AuthMiddleware(), handlers.QueryLogs)
 	router.DELETE("/projects/:key/applications/:appId/logs", middleware.AuthMiddleware(), handlers.ClearLogs)
 	router.DELETE("/projects/:key/applications/:appId", middleware.AuthMiddleware(), handlers.DeleteApplication)
+	router.POST("/projects/:key/applications/:appId/sql-instances", middleware.AuthMiddleware(), handlers.AddSqlInstancesToApplication)
+	router.DELETE("/projects/:key/applications/:appId/sql-instances/:instanceId", middleware.AuthMiddleware(), handlers.RemoveSqlInstanceFromApplication)
+	router.GET("/projects/:key/sql-instances", middleware.AuthMiddleware(), handlers.RetrieveProjectSqlInstances)
 
 	router.GET("/projects/:key/machines/:machineId/app-pools", middleware.AuthMiddleware(), handlers.RetrieveAppPools)
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/start", middleware.AuthMiddleware(), handlers.AppPoolCommand("start"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/stop", middleware.AuthMiddleware(), handlers.AppPoolCommand("stop"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/restart", middleware.AuthMiddleware(), handlers.AppPoolCommand("restart"))
 	router.POST("/projects/:key/machines/:machineId/app-pools/:poolId/recycle", middleware.AuthMiddleware(), handlers.AppPoolCommand("recycle"))
+
+	router.GET("/projects/:key/machines/:machineId/sql-instances", middleware.AuthMiddleware(), handlers.RetrieveSqlInstances)
+	router.GET("/projects/:key/machines/:machineId/sql-instances/:name/live/:kind", middleware.AuthMiddleware(), handlers.QuerySqlInstance)
+	router.POST("/projects/:key/machines/:machineId/sql-instances/:name/start", middleware.AuthMiddleware(), handlers.SqlInstanceCommand(protocol.SqlActionStart))
+	router.POST("/projects/:key/machines/:machineId/sql-instances/:name/restart", middleware.AuthMiddleware(), handlers.SqlInstanceCommand(protocol.SqlActionRestart))
+	router.POST("/projects/:key/machines/:machineId/sql-instances/:name/move", middleware.AuthMiddleware(), handlers.SqlInstanceCommand(protocol.SqlActionMove))
+	// Stopping SQL Server remotely is deliberately not implemented, like host shutdown.
+	router.POST("/projects/:key/machines/:machineId/sql-instances/:name/stop", middleware.AuthMiddleware(), handlers.NotImplemented)
+	router.POST("/projects/:key/machines/:machineId/availability-groups/:ag/failover", middleware.AuthMiddleware(), handlers.FailoverAvailabilityGroup)
 
 	router.GET("/projects/:key/machines/:machineId/sites", middleware.AuthMiddleware(), handlers.RetrieveSites)
 	router.POST("/projects/:key/machines/:machineId/sites/:siteId/start", middleware.AuthMiddleware(), handlers.SiteCommand("start"))

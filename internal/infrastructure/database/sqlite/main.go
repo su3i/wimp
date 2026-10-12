@@ -20,6 +20,7 @@ import (
 	"github.com/su3i/wimp/internal/domain/project"
 	"github.com/su3i/wimp/internal/domain/setting"
 	"github.com/su3i/wimp/internal/domain/site"
+	"github.com/su3i/wimp/internal/domain/sqlinstance"
 )
 
 var DB *gorm.DB
@@ -82,9 +83,19 @@ func Migrate() {
 		log.Fatalf("failed to migrate sqlite database (site): %v", err)
 	}
 
+	err = DB.AutoMigrate(&sqlinstance.SqlInstance{})
+	if err != nil {
+		log.Fatalf("failed to migrate sqlite database (sql_instance): %v", err)
+	}
+
 	err = DB.AutoMigrate(&application.Application{})
 	if err != nil {
 		log.Fatalf("failed to migrate sqlite database (application): %v", err)
+	}
+
+	err = DB.AutoMigrate(&application.ApplicationSqlInstance{})
+	if err != nil {
+		log.Fatalf("failed to migrate sqlite database (application_sql_instance): %v", err)
 	}
 
 	err = DB.AutoMigrate(&application.ApplicationAppPool{})

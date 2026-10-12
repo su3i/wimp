@@ -19,6 +19,15 @@ type Application struct {
 	SlowAlertFired  bool `gorm:"not null;default:false"`
 }
 
+// ApplicationSqlInstance makes a SQL Server instance part of an application, the way
+// ApplicationAppPool does for an app pool.
+type ApplicationSqlInstance struct {
+	gorm.Model
+
+	ApplicationID uint `gorm:"not null;uniqueIndex:idx_application_sql_instance"`
+	SqlInstanceID uint `gorm:"not null;uniqueIndex:idx_application_sql_instance"`
+}
+
 type ApplicationAppPool struct {
 	gorm.Model
 

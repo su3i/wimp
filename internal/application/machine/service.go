@@ -16,13 +16,35 @@ import (
 type MachineWithPools struct {
 	machine.Machine
 	AppPools []apppool.AppPool `json:"app_pools"`
+	// Roles is what discovery found the host running, for the UI to decide which views a
+	// host gets. Derived on read rather than stored, so it can never disagree with the rows
+	// it is derived from.
+	Roles []Role `json:"roles"`
 }
+
+type Role string
+
+const (
+	RoleIIS     Role = "iis"
+	RoleSQL     Role = "sql"
+	RoleCluster Role = "cluster"
+)
 
 // tokenNeverExpires is used as the agent token's expiry from the moment it's issued -
 // there's no rotation path for it, so it just doesn't expire.
 const tokenNeverExpires = 100 * 365 * 24 * time.Hour
 
-func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine, error) {
+// ErrUnsupportedOs is returned for an OS the platform has no agent for yet.
+var ErrUnsupportedOs = errors.New("this operating system is not supported yet")
+
+func NewMachine(projectKey string, osType machine.OsType, cfg *config.DatabaseConfig) (*machine.Machine, error) {
+	if osType == "" {
+		osType = machine.OsWindows
+	}
+	if !osType.Supported() {
+		return nil, ErrUnsupportedOs
+	}
+
 	proj, err := projectService.RetrieveProject(projectKey, cfg)
 	if err != nil || proj == nil {
 		return nil, errors.New("project not found")
@@ -35,6 +57,7 @@ func NewMachine(projectKey string, cfg *config.DatabaseConfig) (*machine.Machine
 
 	m := &machine.Machine{
 		ProjectID:      proj.ID,
+		OsType:         osType,
 		Status:         machine.Pending,
 		Token:          token,
 		TokenExpiresAt: time.Now().Add(tokenNeverExpires),
@@ -186,6 +209,7 @@ func RetrieveMachines(projectKey string, page, perPage int, status string, cfg *
 	}
 
 	appPoolRepo := database.NewAppPoolRepository(cfg)
+	sqlRepo := database.NewSqlInstanceRepository(cfg)
 	result := make([]MachineWithPools, len(*machines))
 	for i, m := range *machines {
 		pools, err := appPoolRepo.FindByMachineID(m.ID)
@@ -195,7 +219,22 @@ func RetrieveMachines(projectKey string, page, perPage int, status string, cfg *
 		if pools == nil {
 			pools = &[]apppool.AppPool{}
 		}
-		result[i] = MachineWithPools{Machine: m, AppPools: *pools}
+		instances, err := sqlRepo.FindByMachineID(m.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		roles := []Role{}
+		if len(*pools) > 0 {
+			roles = append(roles, RoleIIS)
+		}
+		if instances != nil && len(*instances) > 0 {
+			roles = append(roles, RoleSQL)
+		}
+		if m.Cluster != nil {
+			roles = append(roles, RoleCluster)
+		}
+		result[i] = MachineWithPools{Machine: m, AppPools: *pools, Roles: roles}
 	}
 
 	return result, total, nil
@@ -226,6 +265,9 @@ func RequestDeletion(id uint, projectKey string, appUrl string, appEnv string, c
 // HardDelete permanently removes a machine and all its app pools.
 func HardDelete(id uint, cfg *config.DatabaseConfig) error {
 	if err := database.NewAppPoolRepository(cfg).DeleteByMachineID(id); err != nil {
+		return err
+	}
+	if err := database.NewSqlInstanceRepository(cfg).DeleteByMachineID(id); err != nil {
 		return err
 	}
 	return database.NewMachineRepository(cfg).Delete(id)

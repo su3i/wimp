@@ -105,10 +105,15 @@ func (a *Agent) dial(ctx context.Context) error {
 // after registering and on every heartbeat tick, so a freshly (re)connected agent
 // reports the same snapshot a periodic tick would.
 func (a *Agent) buildHeartbeat() protocol.HeartbeatPayload {
+	sqlInstances, cluster := discoverSql()
+	hostname, _ := os.Hostname()
+	sqlInstances = a.sqlmon.observe(sqlInstances, hostname)
 	return protocol.HeartbeatPayload{
 		MachineId:              a.cfg.MachineId,
 		AppPools:               runningAppPools(),
 		Sites:                  runningSites(),
+		SqlInstances:           sqlInstances,
+		Cluster:                cluster,
 		WindowsExporterHealthy: checkWindowsExporterHealthy(),
 		FluentBitHealthy:       checkFluentBitHealthy(),
 	}
@@ -156,9 +161,12 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 		switch msg.Type {
 		case protocol.TypeRegisterAck:
 			a.logger().Info("registration acknowledged by control plane")
+			sqlInstances, cluster := discoverSql()
 			disc := protocol.DiscoveryPayload{
-				AppPools: discoverAppPools(),
-				Sites:    discoverSites(),
+				AppPools:     discoverAppPools(),
+				Sites:        discoverSites(),
+				SqlInstances: sqlInstances,
+				Cluster:      cluster,
 			}
 			if err := wc.writeJSON(protocol.Message{
 				Type:    protocol.TypeDiscovery,
@@ -173,7 +181,13 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 				continue
 			}
 			go func(c protocol.CommandPayload) {
-				output, err := executeCommand(c.Action, c.TargetType, c.Target)
+				var output string
+				var err error
+				if c.TargetType == protocol.TargetSqlInstance || c.TargetType == protocol.TargetAvailabilityGroup {
+					output, err = a.executeSqlCommand(ctx, c)
+				} else {
+					output, err = executeCommand(c.Action, c.TargetType, c.Target)
+				}
 				result := protocol.CommandResultPayload{
 					CommandID: c.CommandID,
 					Success:   err == nil,
@@ -235,6 +249,33 @@ func (a *Agent) readLoop(ctx context.Context, wc *safeConn) error {
 				}
 				wc.writeJSON(protocol.Message{ //nolint:errcheck
 					Type:    protocol.TypeDownloadLogsResult,
+					Payload: mustMarshal(result),
+				})
+			}(req)
+
+		case protocol.TypeSqlMonitorConfig:
+			var cfg protocol.SqlMonitorConfigPayload
+			if err := json.Unmarshal(msg.Payload, &cfg); err != nil {
+				a.logger().Warningf("bad sql monitor config payload: %v", err)
+				continue
+			}
+			a.sqlmon.setConfig(cfg)
+
+		case protocol.TypeSqlQuery:
+			var req protocol.SqlQueryPayload
+			if err := json.Unmarshal(msg.Payload, &req); err != nil {
+				continue
+			}
+			go func(r protocol.SqlQueryPayload) {
+				hostname, _ := os.Hostname()
+				result := protocol.SqlQueryResultPayload{RequestID: r.RequestID}
+				rows, err := a.sqlmon.query(ctx, r.Instance, r.Kind, hostname)
+				if err != nil {
+					result.Error = err.Error()
+				}
+				result.Rows = rows
+				wc.writeJSON(protocol.Message{ //nolint:errcheck
+					Type:    protocol.TypeSqlQueryResult,
 					Payload: mustMarshal(result),
 				})
 			}(req)

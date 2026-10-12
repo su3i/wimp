@@ -7,12 +7,14 @@ import { useProjectStore } from '@/store/project'
 import { machineService } from '@/services/machine.service'
 import { AppPoolsTab } from '@/components/machine/AppPoolsTab'
 import { SitesTab } from '@/components/machine/SitesTab'
+import { InstancesTab } from '@/components/machine/InstancesTab'
+import { ClusterTab } from '@/components/machine/ClusterTab'
 import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { cn } from '@/utils/cn'
 import { usePageTitle } from '@/utils/usePageTitle'
 import { useActionCooldown } from '@/utils/useActionCooldown'
-import type { MachineStatus } from '@/types'
+import type { HostRole, MachineStatus } from '@/types'
 
 // MetricsTab pulls in recharts (a large dependency) - split into its own chunk so the
 // page shell (header, tab bar, actions) can paint before it's fetched.
@@ -46,12 +48,16 @@ const machineStatusCfg: Record<MachineStatus, { dot: string; label: string; text
   reassigned: { dot: 'bg-ink-faint', label: 'Reassigned', text: 'text-ink-faint', pill: 'bg-surface-high text-ink-faint' },
 }
 
-type Tab = 'metrics' | 'pools' | 'sites'
+type Tab = 'metrics' | 'pools' | 'sites' | 'instances' | 'cluster'
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'metrics', label: 'Overview' },
-  { id: 'pools',   label: 'App Pools' },
-  { id: 'sites',   label: 'Sites' },
+// Each tab after Overview belongs to a role discovery found on the host, so a SQL Server box
+// never shows empty IIS tabs and an IIS box never shows SQL ones.
+const TABS: { id: Tab; label: string; role?: HostRole }[] = [
+  { id: 'metrics',   label: 'Overview' },
+  { id: 'pools',     label: 'App Pools',     role: 'iis' },
+  { id: 'sites',     label: 'Sites',         role: 'iis' },
+  { id: 'instances', label: 'SQL Instances', role: 'sql' },
+  { id: 'cluster',   label: 'Cluster',       role: 'cluster' },
 ]
 
 export function MachineDetail() {
@@ -60,7 +66,7 @@ export function MachineDetail() {
   const { activeProject } = useProjectStore()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('metrics')
-  const [confirmAction, setConfirmAction] = useState<'shutdown' | 'restart' | null>(null)
+  const [confirmAction, setConfirmAction] = useState(false)
   const [actingOnMachine, setActingOnMachine] = useState(false)
   const cooldown = useActionCooldown()
 
@@ -85,15 +91,18 @@ export function MachineDetail() {
   // elsewhere, so everything below the header is a frozen snapshot rather than live state.
   const isReassigned = machine?.Status === 'reassigned'
   const cooling = cooldown.isCooling(numericId)
+  const tabs = TABS.filter(t => !t.role || machine?.roles?.includes(t.role))
+  // A tab whose role disappeared (the workload was removed) falls back to Overview.
+  const currentTab = tabs.some(t => t.id === activeTab) ? activeTab : 'metrics'
 
   async function handleMachineCommand() {
     if (!confirmAction || !activeProject) return
     setActingOnMachine(true)
     cooldown.start(numericId)
     try {
-      await machineService.command(activeProject.Key, numericId, confirmAction)
+      await machineService.restart(activeProject.Key, numericId)
       queryClient.invalidateQueries({ queryKey: ['machines', activeProject.Key] })
-      setConfirmAction(null)
+      setConfirmAction(false)
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -153,7 +162,7 @@ export function MachineDetail() {
               size="sm"
               variant="outline"
               disabled={actingOnMachine || isOffline || cooling}
-              onClick={() => setConfirmAction('restart')}
+              onClick={() => setConfirmAction(true)}
             >
               <RotateCw className="size-3" />
               Restart
@@ -162,8 +171,7 @@ export function MachineDetail() {
               size="sm"
               variant="danger"
               disabled
-              title="Remote shutdown is temporarily disabled"
-              onClick={() => setConfirmAction('shutdown')}
+              title="Remote shutdown is not implemented"
             >
               <Power className="size-3" />
               Shutdown
@@ -200,13 +208,13 @@ export function MachineDetail() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-rim">
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
               'cursor-pointer px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
-              activeTab === tab.id
+              currentTab === tab.id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-ink-faint hover:text-ink',
             )}
@@ -218,30 +226,38 @@ export function MachineDetail() {
 
       {/* Tab content */}
       <div className={cn((isOffline || isReassigned) && 'opacity-40 pointer-events-none select-none')}>
-        {activeTab === 'metrics' && (
+        {currentTab === 'metrics' && (
           <Suspense fallback={<MetricsTabSkeleton />}>
             <MetricsTab machineId={numericId} />
           </Suspense>
         )}
-        {activeTab === 'pools' && activeProject && (
+        {currentTab === 'pools' && activeProject && (
           <AppPoolsTab projectKey={activeProject.Key} machineId={numericId} isOffline={isOffline} />
         )}
-        {activeTab === 'sites' && activeProject && (
+        {currentTab === 'sites' && activeProject && (
           <SitesTab projectKey={activeProject.Key} machineId={numericId} isOffline={isOffline} />
+        )}
+        {currentTab === 'instances' && activeProject && machine && (
+          <InstancesTab
+            projectKey={activeProject.Key}
+            machineId={numericId}
+            hostname={machine.Hostname}
+            cluster={machine.Cluster}
+            isOffline={isOffline}
+          />
+        )}
+        {currentTab === 'cluster' && activeProject && machine && (
+          <ClusterTab projectKey={activeProject.Key} machineId={numericId} cluster={machine.Cluster} isOffline={isOffline} />
         )}
       </div>
 
       <ConfirmModal
-        open={!!confirmAction}
-        title={confirmAction === 'shutdown' ? 'Shutdown Host' : 'Restart Host'}
-        description={
-          confirmAction === 'shutdown'
-            ? `Are you sure you want to shut down "${machine?.Hostname || 'this host'}"? It will go offline until someone powers it back on.`
-            : `Are you sure you want to restart "${machine?.Hostname || 'this host'}"? It will be briefly unreachable.`
-        }
-        confirmLabel={confirmAction === 'shutdown' ? 'Shutdown' : 'Restart'}
+        open={confirmAction}
+        title='Restart Host'
+        description={`Are you sure you want to restart "${machine?.Hostname || 'this host'}"? It will be briefly unreachable.`}
+        confirmLabel='Restart'
         loading={actingOnMachine}
-        onClose={() => setConfirmAction(null)}
+        onClose={() => setConfirmAction(false)}
         onConfirm={() => void handleMachineCommand()}
       />
     </div>

@@ -4,6 +4,7 @@ $ErrorActionPreference = "SilentlyContinue"
 $FBDir    = ".\fluent-bit"
 $AgentDir = ".\agent"
 $TmpDir   = ".\tmp"
+$TextfileDir = ".\textfile"
 
 function Remove-Svc($name) {
     $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -55,6 +56,10 @@ if (Test-Path $AgentDir) {
 }
 
 # ── Cleanup tmp ───────────────────────────────────────────────────────────────
+if (Test-Path $TextfileDir) {
+    Remove-Item -Path $TextfileDir -Recurse -Force
+    Write-Host "  [DEL]  $TextfileDir"
+}
 if (Test-Path $TmpDir) {
     Remove-Item -Path $TmpDir -Recurse -Force
     Write-Host "  [DEL]  $TmpDir"

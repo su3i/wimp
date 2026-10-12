@@ -1,7 +1,5 @@
 import { api } from '@/lib/axios'
-import type { MachineWithPools } from '@/types'
-
-type MachineCommand = 'shutdown' | 'restart'
+import type { MachineWithPools, OsType } from '@/types'
 
 export const machineService = {
   list: (projectKey: string, params?: { page?: number; per_page?: number; status?: string }) =>
@@ -10,14 +8,15 @@ export const machineService = {
       { params },
     ),
 
-  create: (projectKey: string) =>
+  create: (projectKey: string, osType: OsType) =>
     api.post<{ message: string; machine: MachineWithPools; download_command: string; run_command: string }>(
       `/projects/${projectKey}/machines`,
+      { os_type: osType },
     ),
 
   delete: (projectKey: string, machineId: number) =>
     api.delete<{ message: string; uninstall_command: string }>(`/projects/${projectKey}/machines/${machineId}`),
 
-  command: (projectKey: string, machineId: number, cmd: MachineCommand) =>
-    api.post(`/projects/${projectKey}/machines/${machineId}/${cmd}`),
+  restart: (projectKey: string, machineId: number) =>
+    api.post(`/projects/${projectKey}/machines/${machineId}/restart`),
 }

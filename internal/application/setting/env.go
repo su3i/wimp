@@ -15,8 +15,6 @@ func envSeverity(alertType notification.AlertType) string {
 		return a.SeverityMachineConnected
 	case notification.AlertMachineDisconnected:
 		return a.SeverityMachineDisconnected
-	case notification.AlertMachineShutdown:
-		return a.SeverityMachineShutdown
 	case notification.AlertMachineRestarting:
 		return a.SeverityMachineRestarting
 	case notification.AlertAgentUpdated:
@@ -59,6 +57,46 @@ func envSeverity(alertType notification.AlertType) string {
 		return a.SeverityLowDisk
 	case notification.AlertLowDiskRecovered:
 		return a.SeverityLowDiskRecovered
+	case notification.AlertSqlInstanceStopped:
+		return a.SeveritySqlInstanceStopped
+	case notification.AlertSqlInstanceStarted:
+		return a.SeveritySqlInstanceStarted
+	case notification.AlertSqlAgentStopped:
+		return a.SeveritySqlAgentStopped
+	case notification.AlertSqlAgentStarted:
+		return a.SeveritySqlAgentStarted
+	case notification.AlertSqlInstanceFailover:
+		return a.SeveritySqlInstanceFailover
+	case notification.AlertSqlAgFailover:
+		return a.SeveritySqlAgFailover
+	case notification.AlertSqlDatabaseUnhealthy:
+		return a.SeveritySqlDatabaseUnhealthy
+	case notification.AlertSqlDatabaseRecovered:
+		return a.SeveritySqlDatabaseRecovered
+	case notification.AlertSqlBackupOverdue:
+		return a.SeveritySqlBackupOverdue
+	case notification.AlertSqlBackupRecovered:
+		return a.SeveritySqlBackupRecovered
+	case notification.AlertSqlLogBackupOverdue:
+		return a.SeveritySqlLogBackupOverdue
+	case notification.AlertSqlLogBackupRecovered:
+		return a.SeveritySqlLogBackupRecovered
+	case notification.AlertSqlJobFailed:
+		return a.SeveritySqlJobFailed
+	case notification.AlertSqlJobRecovered:
+		return a.SeveritySqlJobRecovered
+	case notification.AlertSqlAgUnhealthy:
+		return a.SeveritySqlAgUnhealthy
+	case notification.AlertSqlAgHealthy:
+		return a.SeveritySqlAgHealthy
+	case notification.AlertSqlBlocking:
+		return a.SeveritySqlBlocking
+	case notification.AlertSqlBlockingCleared:
+		return a.SeveritySqlBlockingCleared
+	case notification.AlertClusterNodeDown:
+		return a.SeverityClusterNodeDown
+	case notification.AlertClusterNodeUp:
+		return a.SeverityClusterNodeUp
 	default:
 		return ""
 	}

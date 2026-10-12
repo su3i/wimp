@@ -45,7 +45,7 @@ A one-line PowerShell bootstrap command is all it takes to bring a new machine o
 - Add a host by hostname, get back a one-line PowerShell bootstrap command, done.
 - IIS sites, app pools, bindings, and physical paths auto-discover on connect, nothing to register by hand.
 - Live status per host (online, offline, pending) via a 30-second heartbeat, with hostname, IP addresses, Windows version, and agent version all visible at a glance.
-- Remote shutdown and restart from the browser, with a confirmation step in front of both.
+- Remote restart from the browser, with a confirmation step in front of it. Remote shutdown is deliberately not implemented.
 - Fleet-wide agent self-update: bump the target version once, every machine updates itself on its next connect. No manual re-install across a fleet of any size.
 
 **IIS control**
@@ -58,6 +58,15 @@ A one-line PowerShell bootstrap command is all it takes to bring a new machine o
 - Group the app pools that make up one logical product across one or more hosts, and see aggregated health (e.g. "5/5 healthy") without cross-referencing five separate host pages.
 - Optional HTTP health checks per application, configurable interval, feeding straight into the same alert pipeline as every other event in the system.
 - A log viewer scoped to the whole application: pick a host and app pool, search, scroll to load more, expand to a full-screen view. Download as a zip or clear logs entirely, with a confirmation step before anything gets deleted.
+
+**SQL Server**
+
+- SQL Server instances, SQL Agent, and Windows Server Failover Clusters are discovered on connect, the same way IIS is. Standalone instances, failover cluster instances, and Always On availability groups are all detected without any SQL credentials.
+- Instance and Agent state, cluster node health, and FCI and AG failovers alert through the same pipeline as everything else. A clustered instance is tracked as one thing across all its nodes, so a failover closes the incident it opened on another node instead of leaving it dangling.
+- With one least-privilege SQL login (or Windows authentication as the agent's own account), agents also read DMVs: wait stats, blocking, the longest-running request, database state, backup age per database, failed Agent jobs, and AG replica health. Missing backups and failed jobs alert; an AG database counts as backed up when any replica has a recent backup.
+- Start and restart instances, move a failover cluster instance to another node, and fail an availability group over to a synchronized replica, all from the browser. Stopping SQL Server remotely is deliberately not offered, and a planned failover refuses unless the target replica is synchronous-commit with every database SYNCHRONIZED. A restart you asked for does not page anyone unless the instance fails to come back.
+- SQL instances can be members of an application next to its app pools, and count toward its health.
+- Performance counters (batch requests, page life expectancy, buffer cache, locks, deadlocks, memory grants, AG queues) come from `windows_exporter`'s `mssql` collector, enabled automatically on hosts where bootstrap finds SQL Server.
 
 **Metrics**
 
@@ -80,7 +89,7 @@ A one-line PowerShell bootstrap command is all it takes to bring a new machine o
 This is the deepest part of the platform, and it's had the most engineering attention.
 
 - Five-tier severity system: Info, Warning, Critical, Sev, Disabled. Disabled means the event is never even recorded, not just silenced. Sev is reserved for the alerts that mean drop everything.
-- Every alert-worthy event in the system funnels through a single registry: machine connect/disconnect, planned shutdown/restart, fleet-wide agent updates, app pool and site start/stop, sidecar health (`windows_exporter`, Fluent Bit), HTTP health check up/down, and high CPU, high memory, and low disk, each with a matching "recovered" alert.
+- Every alert-worthy event in the system funnels through a single registry: machine connect/disconnect, planned restart, fleet-wide agent updates, app pool and site start/stop, sidecar health (`windows_exporter`, Fluent Bit), HTTP health check up/down, and high CPU, high memory, and low disk, each with a matching "recovered" alert.
 - Every alert type's severity, and every numeric threshold behind the metric-based alerts, is configurable per deployment via environment variables, with sensible defaults out of the box.
 - A sustained Sev-level incident gets a repeat reminder every 15 minutes instead of going silent until it resolves. The dashboard still counts it as one incident, not a wall of duplicate notifications, so the numbers stay honest.
 - Alertmanager grouping is keyed by machine instance, not just alert name, so ten machines alerting at once produce ten separate, correctly-grouped notifications instead of nine of them waiting behind Alertmanager's group window for the first one to resolve.
@@ -120,6 +129,23 @@ helm upgrade --install wimp oci://ghcr.io/su3i/charts/wimp -n wimp --create-name
 ```
 
 No repo checkout needed, the chart is published straight from GHCR on every change to `helm/`. Pin an exact release with `--version x.y.z` if you don't want to track the latest. Bundles Loki, Prometheus, and Alertmanager as optional subcharts. Bring your own observability stack, or let the chart stand one up for you.
+
+**SQL Server monitoring (optional)**
+
+Instance state and failover alerts need nothing extra. For DMV metrics, give agents read access on every instance, either with one SQL login (same name and password everywhere, set as `config.sqlMonitor.username` / `password`) or, leaving those empty, with Windows authentication as the agent's own account:
+
+```sql
+-- [login] is the SQL login, or [NT AUTHORITY\SYSTEM] for Windows authentication
+GRANT VIEW SERVER STATE TO [login];
+GRANT VIEW ANY DEFINITION TO [login];
+USE msdb;
+CREATE USER [login] FOR LOGIN [login];
+ALTER ROLE db_datareader ADD MEMBER [login];
+```
+
+Credentials are sent to agents over their WebSocket and never written to disk, so serve the control plane over `https` when using a SQL login.
+
+Planned availability group failover from the Cluster tab also needs `ALTER ANY AVAILABILITY GROUP`. `NT AUTHORITY\SYSTEM` normally has it on availability group replicas already; a SQL login has to be granted it. Starting, restarting and moving instances go through Windows and the cluster, so they need no SQL permissions.
 
 ---
 

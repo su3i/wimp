@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/kardianos/service"
 )
@@ -15,10 +16,11 @@ type Agent struct {
 	cfg    *Config
 	log    service.Logger
 	cancel context.CancelFunc
+	sqlmon *sqlMonitor
 }
 
 func New(cfg *Config) *Agent {
-	return &Agent{cfg: cfg}
+	return &Agent{cfg: cfg, sqlmon: newSqlMonitor()}
 }
 
 // Start is called by the service manager on startup. Must return quickly.
@@ -47,6 +49,11 @@ func (a *Agent) Stop(svc service.Service) error {
 func (a *Agent) run(ctx context.Context) {
 	a.logger().Infof("wimp agent starting - version %s", Version)
 	a.logger().Infof("control plane: %s  machine_id: %d", a.cfg.ControlPlaneUrl, a.cfg.MachineId)
+
+	// Outlives individual connections: metrics keep flowing to Prometheus while the control
+	// plane is unreachable, using the last credentials it sent.
+	hostname, _ := os.Hostname()
+	a.sqlmon.start(ctx, a.cfg.TextfileDir, hostname)
 
 	a.connect(ctx)
 

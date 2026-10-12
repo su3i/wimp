@@ -185,7 +185,6 @@ func TestInformationalAlertsTrackNothing(t *testing.T) {
 	// unexplained disconnect opens an incident.
 	Record(alert(notification.AlertMachineRestarting, 7, ""), cfg)
 	Record(alert(notification.AlertAgentUpdated, 7, ""), cfg)
-	Record(alert(notification.AlertMachineShutdown, 7, ""), cfg)
 
 	if got := list(t, cfg); len(got) != 0 {
 		t.Fatalf("informational alerts must not open incidents, got %d", len(got))

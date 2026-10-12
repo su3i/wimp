@@ -32,6 +32,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { Modal } from "@/components/ui/Modal";
 import { useProjectStore } from "@/store/project";
 import { LogsViewer, type LogsViewerHandle } from "@/components/application/LogsViewer";
+import { SqlMembers } from "@/components/application/SqlMembers";
 import { applicationService } from "@/services/application.service";
 import { appPoolService } from "@/services/appPool.service";
 import { machineService } from "@/services/machine.service";
@@ -983,10 +984,13 @@ export function ApplicationDetail() {
         <>
           {/* Header */}
           {(() => {
-            const total = app.app_pools?.length ?? 0;
-            const healthy = (app.app_pools ?? []).filter(
-              (p) => p.State === "Started" && p.machine?.Status === "online"
-            ).length;
+            // Health covers every member: app pools and SQL instances alike.
+            const poolTotal = app.app_pools?.length ?? 0;
+            const sqlMembers = app.sql_instances ?? [];
+            const total = poolTotal + sqlMembers.length;
+            const healthy =
+              (app.app_pools ?? []).filter((p) => p.State === "Started" && p.machine?.Status === "online").length +
+              sqlMembers.filter((i) => i.State === "Running" && i.machine?.Status === "online").length;
             const dotColor =
               total === 0 ? "bg-ink-faint"
               : healthy === total ? "bg-success"
@@ -1036,7 +1040,7 @@ export function ApplicationDetail() {
                   </div>
                 </div>
                 <div className='flex items-center gap-2 shrink-0 pt-1'>
-                  {total > 0 && (
+                  {poolTotal > 0 && (
                     <>
                       <Button
                         size='sm'
@@ -1079,9 +1083,10 @@ export function ApplicationDetail() {
           {/* Health monitor - shown when health check URL is configured */}
           {app.HealthCheckURL && <HealthMonitor app={app} />}
 
-          {/* Pool list - sticky header, flows to its full height */}
+          {/* Pool list - sticky header, flows to its full height. An application made only of
+              SQL instances has no use for the empty-pools prompt. */}
           {!app.app_pools?.length ? (
-            <EmptyPools onAdd={() => setModalOpen(true)} />
+            !app.sql_instances?.length && <EmptyPools onAdd={() => setModalOpen(true)} />
           ) : (
             <div className='rounded-lg border border-rim'>
               <PoolList
@@ -1093,6 +1098,13 @@ export function ApplicationDetail() {
               />
             </div>
           )}
+
+          <SqlMembers
+            projectKey={activeProject.Key}
+            appId={numericId}
+            members={app.sql_instances ?? []}
+            onChange={handleSuccess}
+          />
 
           {/* Logs - only shown when pools are assigned */}
           {(app.app_pools?.length ?? 0) > 0 && (

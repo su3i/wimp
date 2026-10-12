@@ -143,6 +143,7 @@ func (r *machineRepository) SetIdentity(id uint, hostname string, ips []string, 
 func (r *machineRepository) Create(payload *machine.Machine) (*machine.Machine, error) {
 	m := machine.Machine{
 		ProjectID:      payload.ProjectID,
+		OsType:         payload.OsType,
 		Hostname:       payload.Hostname,
 		Status:         payload.Status,
 		Token:          payload.Token,

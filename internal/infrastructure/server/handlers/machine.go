@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	authorizationDomain "github.com/su3i/wimp/internal/domain/authorization"
+	machineDomain "github.com/su3i/wimp/internal/domain/machine"
 	"github.com/su3i/wimp/internal/domain/protocol"
 	"github.com/su3i/wimp/internal/hub"
 	"github.com/su3i/wimp/internal/infrastructure/server/utils"
@@ -29,7 +31,17 @@ func NewMachine(c *gin.Context) {
 		return
 	}
 
-	m, err := machineService.NewMachine(projectKey, config.Database())
+	// The body is optional: callers that predate the OS choice send none and get Windows.
+	var body struct {
+		OsType machineDomain.OsType `json:"os_type"`
+	}
+	_ = c.ShouldBindJSON(&body)
+
+	m, err := machineService.NewMachine(projectKey, body.OsType, config.Database())
+	if errors.Is(err, machineService.ErrUnsupportedOs) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err != nil {
 		log.Printf("Error creating machine: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -234,6 +246,12 @@ func MachineCommand(action string) gin.HandlerFunc {
 			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "command timed out"})
 		}
 	}
+}
+
+// NotImplemented answers routes that exist for a disabled action, so the API says so
+// explicitly instead of 404ing.
+func NotImplemented(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
 }
 
 func shouldAutoUpdate(_ uint) bool {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	projectService "github.com/su3i/wimp/internal/application/project"
+	sqlInstanceService "github.com/su3i/wimp/internal/application/sqlinstance"
 	"github.com/su3i/wimp/internal/cache"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/domain/apppool"
@@ -30,13 +31,16 @@ type AppPoolWithDetails struct {
 
 type ApplicationDetail struct {
 	application.Application
-	AppPools []AppPoolWithDetails `json:"app_pools"`
+	AppPools     []AppPoolWithDetails                    `json:"app_pools"`
+	SqlInstances []sqlInstanceService.InstanceWithMachine `json:"sql_instances"`
 }
 
 type ApplicationListItem struct {
 	application.Application
 	PoolTotal   int64 `json:"pool_total"`
 	PoolHealthy int64 `json:"pool_healthy"`
+	SqlTotal    int64 `json:"sql_total"`
+	SqlHealthy  int64 `json:"sql_healthy"`
 }
 
 func Create(name, projectKey string, healthCheckURL *string, intervalSeconds int, cfg *config.DatabaseConfig) (*application.Application, error) {
@@ -100,10 +104,14 @@ func RetrieveAll(projectKey string, page, perPage int, cfg *config.DatabaseConfi
 	if err != nil {
 		return nil, 0, err
 	}
+	sqlCounts, err := repo.FindSqlCountsByApplicationIDs(appIDs)
+	if err != nil {
+		return nil, 0, err
+	}
 	items := make([]ApplicationListItem, 0, len(*apps))
 	for _, a := range *apps {
-		c := counts[a.ID]
-		items = append(items, ApplicationListItem{Application: a, PoolTotal: c.Total, PoolHealthy: c.Healthy})
+		c, s := counts[a.ID], sqlCounts[a.ID]
+		items = append(items, ApplicationListItem{Application: a, PoolTotal: c.Total, PoolHealthy: c.Healthy, SqlTotal: s.Total, SqlHealthy: s.Healthy})
 	}
 	return items, total, nil
 }
@@ -215,10 +223,99 @@ func GetDetail(id uint, projectKey string, cfg *config.DatabaseConfig) (*Applica
 		})
 	}
 
+	sqlMembers, err := sqlMembers(app, cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ApplicationDetail{
-		Application: *app,
-		AppPools:    poolDetails,
+		Application:  *app,
+		AppPools:     poolDetails,
+		SqlInstances: sqlMembers,
 	}, nil
+}
+
+func sqlMembers(app *application.Application, cfg *config.DatabaseConfig) ([]sqlInstanceService.InstanceWithMachine, error) {
+	rels, err := database.NewApplicationRepository(cfg).FindSqlInstanceRelations(app.ID)
+	if err != nil {
+		return nil, err
+	}
+	members := []sqlInstanceService.InstanceWithMachine{}
+	if len(*rels) == 0 {
+		return members, nil
+	}
+	all, err := sqlInstanceService.ListByProject(app.ProjectID, cfg)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[uint]sqlInstanceService.InstanceWithMachine, len(all))
+	for _, i := range all {
+		byID[i.ID] = i
+	}
+	for _, rel := range *rels {
+		if row, ok := byID[rel.SqlInstanceID]; ok {
+			members = append(members, sqlInstanceService.Current(row, all))
+		}
+	}
+	return members, nil
+}
+
+// AddSqlInstances adds instances to an application. Each must be on a host in the
+// application's own project.
+func AddSqlInstances(applicationID uint, ids []uint, projectKey string, cfg *config.DatabaseConfig) error {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return errors.New("project not found")
+	}
+	appRepo := database.NewApplicationRepository(cfg)
+	app, err := appRepo.FindOneByID(applicationID)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return errors.New("application not found")
+	}
+
+	all, err := sqlInstanceService.ListByProject(proj.ID, cfg)
+	if err != nil {
+		return err
+	}
+	inProject := make(map[uint]bool, len(all))
+	for _, i := range all {
+		inProject[i.ID] = true
+	}
+	existing, err := appRepo.FindSqlInstanceRelations(applicationID)
+	if err != nil {
+		return err
+	}
+	have := make(map[uint]bool, len(*existing))
+	for _, rel := range *existing {
+		have[rel.SqlInstanceID] = true
+	}
+
+	for _, id := range ids {
+		if !inProject[id] {
+			return errors.New("sql instance not found")
+		}
+		if have[id] {
+			continue
+		}
+		if err := appRepo.AddSqlInstance(&application.ApplicationSqlInstance{ApplicationID: applicationID, SqlInstanceID: id}); err != nil {
+			return err
+		}
+		have[id] = true
+	}
+	return nil
+}
+
+func RemoveSqlInstance(applicationID, sqlInstanceID uint, projectKey string, cfg *config.DatabaseConfig) error {
+	proj, err := projectService.RetrieveProject(projectKey, cfg)
+	if err != nil || proj == nil {
+		return errors.New("project not found")
+	}
+	appRepo := database.NewApplicationRepository(cfg)
+	app, err := appRepo.FindOneByID(applicationID)
+	if err != nil || app == nil || app.ProjectID != proj.ID {
+		return errors.New("application not found")
+	}
+	return appRepo.RemoveSqlInstance(applicationID, sqlInstanceID)
 }
 
 func Delete(id uint, projectKey string, cfg *config.DatabaseConfig) error {

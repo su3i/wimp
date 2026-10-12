@@ -16,6 +16,22 @@ const (
 	Deleting   MachineStatus = "deleting"
 )
 
+// OsType is chosen by the operator when the host is added, since it decides which install
+// command they get. Everything about what the host runs (IIS, SQL Server, a cluster) is
+// discovered by the agent instead.
+type OsType string
+
+const (
+	OsWindows OsType = "windows"
+	OsLinux   OsType = "linux"
+)
+
+// Supported reports whether an agent exists for this OS yet. Linux is accepted as a value
+// so the data model is ready for it, but no install path exists.
+func (o OsType) Supported() bool {
+	return o == OsWindows
+}
+
 // Terminal reports whether a status means the row will never come back online on its own.
 // Used to keep stale rows out of scrape targets and out of anything that assumes a status
 // is merely transient.

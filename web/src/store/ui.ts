@@ -4,10 +4,9 @@ interface UIState {
   sidebarExpanded: boolean
   setSidebarExpanded: (v: boolean) => void
 
-  // Project key the Dashboard's get-started modal has already been shown for. Held in
-  // memory rather than localStorage on purpose: the prompt should fire once per project
-  // per session, so navigating Overview -> Hosts -> Overview stays quiet, while switching
-  // to another project and back prompts again (the key no longer matches).
+  // Project key the Dashboard's add-a-host hint was dismissed for. Held in memory rather
+  // than localStorage on purpose: dismissing it lasts for the session, while switching to
+  // another project and back shows it again (the key no longer matches).
   emptyProjectPrompted: string | null
   markEmptyProjectPrompted: (projectKey: string) => void
 }

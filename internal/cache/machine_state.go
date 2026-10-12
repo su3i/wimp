@@ -17,7 +17,7 @@ var (
 	machineActionPending = map[uint]machineActionEntry{}
 )
 
-// Marks a machine as having a deliberate shutdown/restart in flight, so the WebSocket
+// Marks a machine as having a deliberate restart in flight, so the WebSocket
 // disconnect handler can tell it apart from a real outage.
 func SetMachineActionPending(machineID uint, action string) {
 	machineActionMu.Lock()

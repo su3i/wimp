@@ -15,6 +15,7 @@ import (
 	"github.com/su3i/wimp/internal/domain/project"
 	"github.com/su3i/wimp/internal/domain/setting"
 	"github.com/su3i/wimp/internal/domain/site"
+	"github.com/su3i/wimp/internal/domain/sqlinstance"
 	"github.com/su3i/wimp/internal/infrastructure/database/postgres"
 	postgresRepository "github.com/su3i/wimp/internal/infrastructure/database/postgres/repositories"
 	"github.com/su3i/wimp/internal/infrastructure/database/sqlite"
@@ -95,6 +96,10 @@ func NewSettingRepository(config *config.DatabaseConfig) setting.Repository {
 
 func NewMachineRepository(config *config.DatabaseConfig) machine.MachineRepository {
 	return newRepository(config, postgresRepository.NewMachineRepository, sqliteRepository.NewMachineRepository)
+}
+
+func NewSqlInstanceRepository(config *config.DatabaseConfig) sqlinstance.SqlInstanceRepository {
+	return newRepository(config, postgresRepository.NewSqlInstanceRepository, sqliteRepository.NewSqlInstanceRepository)
 }
 
 func NewAppPoolRepository(config *config.DatabaseConfig) apppool.AppPoolRepository {

@@ -163,8 +163,6 @@ func runningSites() []string {
 func executeCommand(action, targetType, target string) (string, error) {
 	if targetType == "machine" {
 		switch action {
-		case "shutdown":
-			return run("shutdown", "/s", "/t", "5")
 		case "restart":
 			return run("shutdown", "/r", "/t", "5")
 		default:

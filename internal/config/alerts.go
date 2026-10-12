@@ -7,7 +7,6 @@ package config
 type AlertConfig struct {
 	SeverityMachineConnected    string `envconfig:"ALERTSEVERITY_MACHINECONNECTED" required:"false"`
 	SeverityMachineDisconnected string `envconfig:"ALERTSEVERITY_MACHINEDISCONNECTED" required:"false"`
-	SeverityMachineShutdown     string `envconfig:"ALERTSEVERITY_MACHINESHUTDOWN" required:"false"`
 	SeverityMachineRestarting   string `envconfig:"ALERTSEVERITY_MACHINERESTARTING" required:"false"`
 	SeverityAgentUpdated        string `envconfig:"ALERTSEVERITY_AGENTUPDATED" required:"false"`
 	SeverityMachineReassigned   string `envconfig:"ALERTSEVERITY_MACHINEREASSIGNED" required:"false"`
@@ -35,9 +34,38 @@ type AlertConfig struct {
 	SeverityLowDisk             string `envconfig:"ALERTSEVERITY_LOWDISK" required:"false"`
 	SeverityLowDiskRecovered    string `envconfig:"ALERTSEVERITY_LOWDISKRECOVERED" required:"false"`
 
+	SeveritySqlInstanceStopped  string `envconfig:"ALERTSEVERITY_SQLINSTANCESTOPPED" required:"false"`
+	SeveritySqlInstanceStarted  string `envconfig:"ALERTSEVERITY_SQLINSTANCESTARTED" required:"false"`
+	SeveritySqlAgentStopped     string `envconfig:"ALERTSEVERITY_SQLAGENTSTOPPED" required:"false"`
+	SeveritySqlAgentStarted     string `envconfig:"ALERTSEVERITY_SQLAGENTSTARTED" required:"false"`
+	SeveritySqlInstanceFailover string `envconfig:"ALERTSEVERITY_SQLINSTANCEFAILOVER" required:"false"`
+	SeveritySqlAgFailover       string `envconfig:"ALERTSEVERITY_SQLAGFAILOVER" required:"false"`
+
+	SeveritySqlDatabaseUnhealthy  string `envconfig:"ALERTSEVERITY_SQLDATABASEUNHEALTHY" required:"false"`
+	SeveritySqlDatabaseRecovered  string `envconfig:"ALERTSEVERITY_SQLDATABASERECOVERED" required:"false"`
+	SeveritySqlBackupOverdue      string `envconfig:"ALERTSEVERITY_SQLBACKUPOVERDUE" required:"false"`
+	SeveritySqlBackupRecovered    string `envconfig:"ALERTSEVERITY_SQLBACKUPRECOVERED" required:"false"`
+	SeveritySqlLogBackupOverdue   string `envconfig:"ALERTSEVERITY_SQLLOGBACKUPOVERDUE" required:"false"`
+	SeveritySqlLogBackupRecovered string `envconfig:"ALERTSEVERITY_SQLLOGBACKUPRECOVERED" required:"false"`
+	SeveritySqlJobFailed          string `envconfig:"ALERTSEVERITY_SQLJOBFAILED" required:"false"`
+	SeveritySqlJobRecovered       string `envconfig:"ALERTSEVERITY_SQLJOBRECOVERED" required:"false"`
+	SeveritySqlAgUnhealthy        string `envconfig:"ALERTSEVERITY_SQLAGUNHEALTHY" required:"false"`
+	SeveritySqlAgHealthy          string `envconfig:"ALERTSEVERITY_SQLAGHEALTHY" required:"false"`
+	SeveritySqlBlocking           string `envconfig:"ALERTSEVERITY_SQLBLOCKING" required:"false"`
+	SeveritySqlBlockingCleared    string `envconfig:"ALERTSEVERITY_SQLBLOCKINGCLEARED" required:"false"`
+
+	SeverityClusterNodeDown string `envconfig:"ALERTSEVERITY_CLUSTERNODEDOWN" required:"false"`
+	SeverityClusterNodeUp   string `envconfig:"ALERTSEVERITY_CLUSTERNODEUP" required:"false"`
+
 	ThresholdHighCPUPercent    int `envconfig:"THRESHOLD_HIGHCPU_PERCENT" required:"false"`
 	ThresholdHighMemoryPercent int `envconfig:"THRESHOLD_HIGHMEMORY_PERCENT" required:"false"`
 	ThresholdLowDiskPercent    int `envconfig:"THRESHOLD_LOWDISK_PERCENT" required:"false"`
+
+	// SQL thresholds. Backup age counts full and differential backups alike, so a weekly
+	// full with nightly differentials is healthy under a daily threshold.
+	ThresholdSqlBackupHours      int `envconfig:"THRESHOLD_SQL_BACKUP_HOURS" required:"false"`
+	ThresholdSqlLogBackupMinutes int `envconfig:"THRESHOLD_SQL_LOG_BACKUP_MINUTES" required:"false"`
+	ThresholdSqlBlockingSeconds  int `envconfig:"THRESHOLD_SQL_BLOCKING_SECONDS" required:"false"`
 
 	// ThresholdHealthCheckSlowSeconds is the probe duration above which a responding
 	// endpoint counts as slow. Must stay comfortably below the probe timeout (see

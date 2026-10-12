@@ -9,7 +9,6 @@ type AlertType string
 const (
 	AlertMachineConnected    AlertType = "machine_connected"
 	AlertMachineDisconnected AlertType = "machine_disconnected" // unplanned
-	AlertMachineShutdown     AlertType = "machine_shutdown"     // planned
 	AlertMachineRestarting   AlertType = "machine_restarting"   // planned
 	AlertAgentUpdated        AlertType = "agent_updated"
 	// AlertMachineReassigned fires in the project a host just left, when that same
@@ -42,6 +41,35 @@ const (
 	AlertHighMemoryRecovered AlertType = "high_memory_recovered"
 	AlertLowDisk             AlertType = "low_disk"
 	AlertLowDiskRecovered    AlertType = "low_disk_recovered"
+
+	AlertSqlInstanceStopped AlertType = "sql_instance_stopped"
+	AlertSqlInstanceStarted AlertType = "sql_instance_started"
+	AlertSqlAgentStopped    AlertType = "sql_agent_stopped"
+	AlertSqlAgentStarted    AlertType = "sql_agent_started"
+	// AlertSqlInstanceFailover fires when a failover cluster instance moves to another node,
+	// AlertSqlAgFailover when an availability group's primary replica changes. Neither is a
+	// fault on its own: a failover that worked is the cluster doing its job, and anything it
+	// failed to bring back is reported by the stopped alerts.
+	AlertSqlInstanceFailover AlertType = "sql_instance_failover"
+	AlertSqlAgFailover       AlertType = "sql_ag_failover"
+
+	// Alerts below need SQL credentials: they are read from DMVs by the agent and evaluated
+	// from Prometheus by internal/application/sqlmetrics.
+	AlertSqlDatabaseUnhealthy  AlertType = "sql_database_unhealthy"
+	AlertSqlDatabaseRecovered  AlertType = "sql_database_recovered"
+	AlertSqlBackupOverdue      AlertType = "sql_backup_overdue"
+	AlertSqlBackupRecovered    AlertType = "sql_backup_recovered"
+	AlertSqlLogBackupOverdue   AlertType = "sql_log_backup_overdue"
+	AlertSqlLogBackupRecovered AlertType = "sql_log_backup_recovered"
+	AlertSqlJobFailed          AlertType = "sql_job_failed"
+	AlertSqlJobRecovered       AlertType = "sql_job_recovered"
+	AlertSqlAgUnhealthy        AlertType = "sql_ag_unhealthy"
+	AlertSqlAgHealthy          AlertType = "sql_ag_healthy"
+	AlertSqlBlocking           AlertType = "sql_blocking"
+	AlertSqlBlockingCleared    AlertType = "sql_blocking_cleared"
+
+	AlertClusterNodeDown AlertType = "cluster_node_down"
+	AlertClusterNodeUp   AlertType = "cluster_node_up"
 )
 
 type AlertTypeMeta struct {
@@ -55,7 +83,6 @@ type AlertTypeMeta struct {
 var AlertTypeRegistry = map[AlertType]AlertTypeMeta{
 	AlertMachineConnected:    {CategoryMachine, LevelInfo},
 	AlertMachineDisconnected: {CategoryMachine, LevelSev},
-	AlertMachineShutdown:     {CategoryMachine, LevelInfo},
 	AlertMachineRestarting:   {CategoryMachine, LevelInfo},
 	AlertAgentUpdated:        {CategoryMachine, LevelInfo},
 	AlertMachineReassigned:   {CategoryMachine, LevelWarning},
@@ -82,6 +109,34 @@ var AlertTypeRegistry = map[AlertType]AlertTypeMeta{
 	AlertHighMemoryRecovered: {CategoryMetrics, LevelInfo},
 	AlertLowDisk:             {CategoryMetrics, LevelCritical},
 	AlertLowDiskRecovered:    {CategoryMetrics, LevelInfo},
+
+	// An instance stopping takes every database on it down, which is a drop-everything
+	// event, unlike a single app pool. SQL Agent stopping is Critical: nothing is down yet,
+	// but scheduled jobs, backups included, have stopped running.
+	AlertSqlInstanceStopped:  {CategorySql, LevelSev},
+	AlertSqlInstanceStarted:  {CategorySql, LevelInfo},
+	AlertSqlAgentStopped:     {CategorySql, LevelCritical},
+	AlertSqlAgentStarted:     {CategorySql, LevelInfo},
+	AlertSqlInstanceFailover: {CategorySql, LevelWarning},
+	AlertSqlAgFailover:       {CategorySql, LevelWarning},
+
+	// A database in SUSPECT, RECOVERY_PENDING or EMERGENCY is unreadable to every application
+	// using it, the same drop-everything tier as its instance stopping.
+	AlertSqlDatabaseUnhealthy:  {CategorySql, LevelSev},
+	AlertSqlDatabaseRecovered:  {CategorySql, LevelInfo},
+	AlertSqlBackupOverdue:      {CategorySql, LevelCritical},
+	AlertSqlBackupRecovered:    {CategorySql, LevelInfo},
+	AlertSqlLogBackupOverdue:   {CategorySql, LevelCritical},
+	AlertSqlLogBackupRecovered: {CategorySql, LevelInfo},
+	AlertSqlJobFailed:          {CategorySql, LevelWarning},
+	AlertSqlJobRecovered:       {CategorySql, LevelInfo},
+	AlertSqlAgUnhealthy:        {CategorySql, LevelCritical},
+	AlertSqlAgHealthy:          {CategorySql, LevelInfo},
+	AlertSqlBlocking:           {CategorySql, LevelWarning},
+	AlertSqlBlockingCleared:    {CategorySql, LevelInfo},
+
+	AlertClusterNodeDown: {CategoryCluster, LevelCritical},
+	AlertClusterNodeUp:   {CategoryCluster, LevelInfo},
 }
 
 // ── Incident bindings ──────────────────────────────────────────────────────────
@@ -106,6 +161,15 @@ const (
 	IncidentHighCPU         IncidentKind = "high_cpu"
 	IncidentHighMemory      IncidentKind = "high_memory"
 	IncidentLowDisk         IncidentKind = "low_disk"
+	IncidentSqlInstanceDown IncidentKind = "sql_instance_down"
+	IncidentSqlAgentDown    IncidentKind = "sql_agent_down"
+	IncidentClusterNodeDown IncidentKind = "cluster_node_down"
+	IncidentSqlDatabase     IncidentKind = "sql_database_unhealthy"
+	IncidentSqlBackup       IncidentKind = "sql_backup_overdue"
+	IncidentSqlLogBackup    IncidentKind = "sql_log_backup_overdue"
+	IncidentSqlJob          IncidentKind = "sql_job_failed"
+	IncidentSqlAg           IncidentKind = "sql_ag_unhealthy"
+	IncidentSqlBlocking     IncidentKind = "sql_blocking"
 )
 
 type IncidentRole string
@@ -125,10 +189,10 @@ type IncidentBinding struct {
 
 // IncidentBindings maps the alert types that participate in an incident lifecycle. Types
 // absent from this map are informational and never open or close anything: an agent
-// updating, a planned shutdown, or a machine being reassigned are all events worth
+// updating, a planned restart, or a machine being reassigned are all events worth
 // recording in the activity feed but none of them is a fault with a duration.
 //
-// Note machine_shutdown and machine_restarting are deliberately excluded while
+// Note machine_restarting is deliberately excluded while
 // machine_disconnected opens an incident - the difference between a host going away
 // because someone asked it to and a host going away on its own is the entire point.
 var IncidentBindings = map[AlertType]IncidentBinding{
@@ -157,4 +221,25 @@ var IncidentBindings = map[AlertType]IncidentBinding{
 	AlertHighMemoryRecovered: {IncidentHighMemory, RoleCloses},
 	AlertLowDisk:             {IncidentLowDisk, RoleOpens},
 	AlertLowDiskRecovered:    {IncidentLowDisk, RoleCloses},
+
+	AlertSqlInstanceStopped: {IncidentSqlInstanceDown, RoleOpens},
+	AlertSqlInstanceStarted: {IncidentSqlInstanceDown, RoleCloses},
+	AlertSqlAgentStopped:    {IncidentSqlAgentDown, RoleOpens},
+	AlertSqlAgentStarted:    {IncidentSqlAgentDown, RoleCloses},
+
+	AlertSqlDatabaseUnhealthy:  {IncidentSqlDatabase, RoleOpens},
+	AlertSqlDatabaseRecovered:  {IncidentSqlDatabase, RoleCloses},
+	AlertSqlBackupOverdue:      {IncidentSqlBackup, RoleOpens},
+	AlertSqlBackupRecovered:    {IncidentSqlBackup, RoleCloses},
+	AlertSqlLogBackupOverdue:   {IncidentSqlLogBackup, RoleOpens},
+	AlertSqlLogBackupRecovered: {IncidentSqlLogBackup, RoleCloses},
+	AlertSqlJobFailed:          {IncidentSqlJob, RoleOpens},
+	AlertSqlJobRecovered:       {IncidentSqlJob, RoleCloses},
+	AlertSqlAgUnhealthy:        {IncidentSqlAg, RoleOpens},
+	AlertSqlAgHealthy:          {IncidentSqlAg, RoleCloses},
+	AlertSqlBlocking:           {IncidentSqlBlocking, RoleOpens},
+	AlertSqlBlockingCleared:    {IncidentSqlBlocking, RoleCloses},
+
+	AlertClusterNodeDown: {IncidentClusterNodeDown, RoleOpens},
+	AlertClusterNodeUp:   {IncidentClusterNodeDown, RoleCloses},
 }

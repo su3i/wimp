@@ -322,3 +322,63 @@ func ListApplicationAppPools(c *gin.Context) {
 		"per_page":  perPage,
 	})
 }
+
+func AddSqlInstancesToApplication(c *gin.Context) {
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	appId, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+
+	var req struct {
+		SqlInstanceIDs []uint `json:"sql_instance_ids"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"message": "Validation failed.",
+			"errors":  utils.FormatValidationErrors(err),
+		})
+		return
+	}
+
+	if err := applicationService.AddSqlInstances(uint(appId), req.SqlInstanceIDs, c.Param("key"), config.Database()); err != nil {
+		log.Printf("Error adding sql instances to application: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+func RemoveSqlInstanceFromApplication(c *gin.Context) {
+	allow, err := authorizationService.EnforceRoles(utils.GetUserRolesFromContext(c), authorizationDomain.AuthorizationDomainProject, authorizationDomain.Project, "write")
+	if err != nil || !allow {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	appId, err := strconv.ParseUint(c.Param("appId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid application id"})
+		return
+	}
+	instanceId, err := strconv.ParseUint(c.Param("instanceId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sql instance id"})
+		return
+	}
+
+	if err := applicationService.RemoveSqlInstance(uint(appId), uint(instanceId), c.Param("key"), config.Database()); err != nil {
+		log.Printf("Error removing sql instance from application: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}

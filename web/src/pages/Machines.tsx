@@ -16,9 +16,38 @@ import { cn } from "@/utils/cn";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { useActionCooldown } from "@/utils/useActionCooldown";
 import { formatUptime } from "@/utils/time";
-import type { Machine } from "@/types";
+import type { Machine, OsType } from "@/types";
 
 const PAGE_SIZE = 20;
+
+function WindowsLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox='0 0 24 24' fill='currentColor' aria-hidden className={className}>
+      <path d='M3 3h8.5v8.5H3zM12.5 3H21v8.5h-8.5zM3 12.5h8.5V21H3zM12.5 12.5H21V21h-8.5z' />
+    </svg>
+  );
+}
+
+function LinuxLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox='0 0 24 24' fill='currentColor' aria-hidden className={className}>
+      <ellipse cx='12' cy='14.5' rx='6.5' ry='7.5' />
+      <circle cx='12' cy='6.5' r='4.5' />
+      <ellipse cx='12' cy='15' rx='4' ry='5.5' className='fill-canvas' />
+      <circle cx='10.4' cy='6' r='0.9' className='fill-canvas' />
+      <circle cx='13.6' cy='6' r='0.9' className='fill-canvas' />
+      <path d='M10.3 8.2h3.4L12 9.8z' className='fill-warning' />
+      <ellipse cx='8.5' cy='21.6' rx='2.6' ry='1.1' className='fill-warning' />
+      <ellipse cx='15.5' cy='21.6' rx='2.6' ry='1.1' className='fill-warning' />
+    </svg>
+  );
+}
+
+const OS_OPTIONS: { value: OsType; label: string; logo: (p: { className?: string }) => React.ReactElement; supported: boolean }[] = [
+  { value: "windows", label: "Windows", logo: WindowsLogo, supported: true },
+  // Selectable once a Linux agent exists; until then it is shown, but out of reach.
+  { value: "linux", label: "Linux", logo: LinuxLogo, supported: false },
+];
 
 const FIREWALL_COMMAND =
   `New-NetFirewallRule \`\n` +
@@ -175,13 +204,14 @@ export function Machines() {
   const [page, setPage] = useState(1);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [osType, setOsType] = useState<OsType>("windows");
   const [downloadCommand, setDownloadCommand] = useState("");
   const [runCommand, setRunCommand] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Machine | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [commandTarget, setCommandTarget] = useState<{ machine: Machine; action: "shutdown" | "restart" } | null>(null);
+  const [commandTarget, setCommandTarget] = useState<Machine | null>(null);
   const [commandLoading, setCommandLoading] = useState(false);
   const [uninstallCmd, setUninstallCmd] = useState<string | null>(null);
   const cooldown = useActionCooldown();
@@ -226,7 +256,7 @@ export function Machines() {
   async function handleConfirmAdd() {
     setCreating(true);
     try {
-      const { data } = await machineService.create(activeProject!.Key);
+      const { data } = await machineService.create(activeProject!.Key, osType);
       setDownloadCommand(data.download_command);
       setRunCommand(data.run_command);
       queryClient.invalidateQueries({ queryKey: ["machines", activeProject!.Key] });
@@ -258,9 +288,9 @@ export function Machines() {
   async function handleMachineCommand() {
     if (!commandTarget || !activeProject) return;
     setCommandLoading(true);
-    cooldown.start(commandTarget.machine.ID);
+    cooldown.start(commandTarget.ID);
     try {
-      await machineService.command(activeProject.Key, commandTarget.machine.ID, commandTarget.action);
+      await machineService.restart(activeProject.Key, commandTarget.ID);
       queryClient.invalidateQueries({ queryKey: ["machines", activeProject.Key] });
       setCommandTarget(null);
     } catch (err: unknown) {
@@ -374,14 +404,14 @@ export function Machines() {
                       {
                         icon: RotateCw,
                         label: "Restart",
-                        onClick: () => setCommandTarget({ machine, action: "restart" }),
+                        onClick: () => setCommandTarget(machine),
                       },
                       {
                         icon: Power,
                         label: "Shutdown",
                         variant: "danger",
                         disabled: true,
-                        onClick: () => setCommandTarget({ machine, action: "shutdown" }),
+                        onClick: () => {},
                       },
                       { type: "separator" },
                       {
@@ -419,31 +449,67 @@ export function Machines() {
         onConfirm={() => void handleDelete()}
       />
 
-      {/* Shutdown/restart confirm */}
+      {/* Restart confirm */}
       <ConfirmModal
         open={!!commandTarget}
-        title={commandTarget?.action === "shutdown" ? "Shutdown Host" : "Restart Host"}
-        description={
-          commandTarget?.action === "shutdown"
-            ? `Are you sure you want to shut down "${commandTarget?.machine.Hostname || "this host"}"? It will go offline until someone powers it back on.`
-            : `Are you sure you want to restart "${commandTarget?.machine.Hostname || "this host"}"? It will be briefly unreachable.`
-        }
-        confirmLabel={commandTarget?.action === "shutdown" ? "Shutdown" : "Restart"}
+        title='Restart Host'
+        description={`Are you sure you want to restart "${commandTarget?.Hostname || "this host"}"? It will be briefly unreachable.`}
+        confirmLabel='Restart'
         loading={commandLoading}
         onClose={() => setCommandTarget(null)}
         onConfirm={() => void handleMachineCommand()}
       />
 
-      {/* New machine confirm */}
-      <ConfirmModal
+      {/* New machine: the OS decides which install command comes back. What the host runs
+          (IIS, SQL Server, a cluster) is discovered by the agent, never asked here. */}
+      <Modal
         open={confirmOpen}
-        title='New Host'
-        description="Add a new host to this project? You'll get a bootstrap command to run on the target machine."
-        confirmLabel='Proceed'
-        loading={creating}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmAdd}
-      />
+        title='New Host'
+        description="Pick the host's operating system. You'll get a bootstrap command to run on it."
+      >
+        <div className='space-y-4'>
+          <div className='grid grid-cols-2 gap-3'>
+            {OS_OPTIONS.map((opt) => {
+              const selected = osType === opt.value;
+              const Logo = opt.logo;
+              return (
+                <button
+                  key={opt.value}
+                  type='button'
+                  disabled={!opt.supported}
+                  aria-pressed={selected}
+                  aria-label={opt.supported ? opt.label : `${opt.label} (not available yet)`}
+                  onClick={() => setOsType(opt.value)}
+                  className={cn(
+                    "relative flex h-36 flex-col items-center justify-center gap-3.5 rounded-lg border transition-all duration-150",
+                    "disabled:cursor-not-allowed disabled:opacity-30 disabled:blur-[1.5px] disabled:grayscale disabled:select-none",
+                    selected
+                      ? "border-primary/70 bg-primary/[0.06] ring-1 ring-primary/30"
+                      : "border-rim bg-surface-alt enabled:cursor-pointer enabled:hover:border-rim-strong enabled:hover:bg-surface-high",
+                  )}
+                >
+                  {selected && (
+                    <span className='absolute right-2.5 top-2.5 flex size-4 items-center justify-center rounded-full bg-primary text-canvas'>
+                      <Check className='size-2.5' strokeWidth={3} />
+                    </span>
+                  )}
+                  <Logo className={cn("size-10 transition-colors", selected ? "text-ink" : "text-ink-dim")} />
+                  <span className={cn("text-sm font-medium", selected ? "text-ink" : "text-ink-dim")}>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className='flex justify-end gap-2'>
+            <Button variant='outline' onClick={() => setConfirmOpen(false)} disabled={creating}>
+              Cancel
+            </Button>
+            <Button loading={creating} onClick={handleConfirmAdd}>
+              Proceed
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Bootstrap command */}
       <Modal

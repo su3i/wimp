@@ -107,13 +107,20 @@ spec:
             - name: PROMETHEUSURL
               value: {{ .Values.config.prometheusUrl | default "" | quote }}
 
+            # ── SQL Server monitoring ──────────────────────
+            - name: SQLMONITORUSERNAME
+              value: {{ .Values.config.sqlMonitor.username | default "" | quote }}
+            - name: SQLMONITORPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wimp.fullname" . }}
+                  key: sql-monitor-password
+
             # ── Alerts ───────────────────────────────────────
             - name: ALERTSEVERITY_MACHINECONNECTED
               value: {{ .Values.config.alerts.severity.machineConnected | quote }}
             - name: ALERTSEVERITY_MACHINEDISCONNECTED
               value: {{ .Values.config.alerts.severity.machineDisconnected | quote }}
-            - name: ALERTSEVERITY_MACHINESHUTDOWN
-              value: {{ .Values.config.alerts.severity.machineShutdown | quote }}
             - name: ALERTSEVERITY_MACHINERESTARTING
               value: {{ .Values.config.alerts.severity.machineRestarting | quote }}
             - name: ALERTSEVERITY_AGENTUPDATED
@@ -156,12 +163,58 @@ spec:
               value: {{ .Values.config.alerts.severity.lowDisk | quote }}
             - name: ALERTSEVERITY_LOWDISKRECOVERED
               value: {{ .Values.config.alerts.severity.lowDiskRecovered | quote }}
+            - name: ALERTSEVERITY_SQLINSTANCESTOPPED
+              value: {{ .Values.config.alerts.severity.sqlInstanceStopped | quote }}
+            - name: ALERTSEVERITY_SQLINSTANCESTARTED
+              value: {{ .Values.config.alerts.severity.sqlInstanceStarted | quote }}
+            - name: ALERTSEVERITY_SQLAGENTSTOPPED
+              value: {{ .Values.config.alerts.severity.sqlAgentStopped | quote }}
+            - name: ALERTSEVERITY_SQLAGENTSTARTED
+              value: {{ .Values.config.alerts.severity.sqlAgentStarted | quote }}
+            - name: ALERTSEVERITY_SQLINSTANCEFAILOVER
+              value: {{ .Values.config.alerts.severity.sqlInstanceFailover | quote }}
+            - name: ALERTSEVERITY_SQLAGFAILOVER
+              value: {{ .Values.config.alerts.severity.sqlAgFailover | quote }}
+            - name: ALERTSEVERITY_SQLDATABASEUNHEALTHY
+              value: {{ .Values.config.alerts.severity.sqlDatabaseUnhealthy | quote }}
+            - name: ALERTSEVERITY_SQLDATABASERECOVERED
+              value: {{ .Values.config.alerts.severity.sqlDatabaseRecovered | quote }}
+            - name: ALERTSEVERITY_SQLBACKUPOVERDUE
+              value: {{ .Values.config.alerts.severity.sqlBackupOverdue | quote }}
+            - name: ALERTSEVERITY_SQLBACKUPRECOVERED
+              value: {{ .Values.config.alerts.severity.sqlBackupRecovered | quote }}
+            - name: ALERTSEVERITY_SQLLOGBACKUPOVERDUE
+              value: {{ .Values.config.alerts.severity.sqlLogBackupOverdue | quote }}
+            - name: ALERTSEVERITY_SQLLOGBACKUPRECOVERED
+              value: {{ .Values.config.alerts.severity.sqlLogBackupRecovered | quote }}
+            - name: ALERTSEVERITY_SQLJOBFAILED
+              value: {{ .Values.config.alerts.severity.sqlJobFailed | quote }}
+            - name: ALERTSEVERITY_SQLJOBRECOVERED
+              value: {{ .Values.config.alerts.severity.sqlJobRecovered | quote }}
+            - name: ALERTSEVERITY_SQLAGUNHEALTHY
+              value: {{ .Values.config.alerts.severity.sqlAgUnhealthy | quote }}
+            - name: ALERTSEVERITY_SQLAGHEALTHY
+              value: {{ .Values.config.alerts.severity.sqlAgHealthy | quote }}
+            - name: ALERTSEVERITY_SQLBLOCKING
+              value: {{ .Values.config.alerts.severity.sqlBlocking | quote }}
+            - name: ALERTSEVERITY_SQLBLOCKINGCLEARED
+              value: {{ .Values.config.alerts.severity.sqlBlockingCleared | quote }}
+            - name: ALERTSEVERITY_CLUSTERNODEDOWN
+              value: {{ .Values.config.alerts.severity.clusterNodeDown | quote }}
+            - name: ALERTSEVERITY_CLUSTERNODEUP
+              value: {{ .Values.config.alerts.severity.clusterNodeUp | quote }}
             - name: THRESHOLD_HIGHCPU_PERCENT
               value: {{ .Values.config.alerts.threshold.highCpuPercent | toString | quote }}
             - name: THRESHOLD_HIGHMEMORY_PERCENT
               value: {{ .Values.config.alerts.threshold.highMemoryPercent | toString | quote }}
             - name: THRESHOLD_LOWDISK_PERCENT
               value: {{ .Values.config.alerts.threshold.lowDiskPercent | toString | quote }}
+            - name: THRESHOLD_SQL_BACKUP_HOURS
+              value: {{ .Values.config.alerts.threshold.sqlBackupHours | toString | quote }}
+            - name: THRESHOLD_SQL_LOG_BACKUP_MINUTES
+              value: {{ .Values.config.alerts.threshold.sqlLogBackupMinutes | toString | quote }}
+            - name: THRESHOLD_SQL_BLOCKING_SECONDS
+              value: {{ .Values.config.alerts.threshold.sqlBlockingSeconds | toString | quote }}
             - name: THRESHOLD_HEALTHCHECK_SLOW_SECONDS
               value: {{ .Values.config.alerts.threshold.healthCheckSlowSeconds | toString | quote }}
             - name: HEALTHCHECK_TIMEOUT_SECONDS

@@ -18,8 +18,11 @@ $BaseDir  = [System.IO.Path]::GetFullPath(".")
 $FBDir    = [System.IO.Path]::GetFullPath(".\fluent-bit")
 $AgentDir = [System.IO.Path]::GetFullPath(".\wimp")
 $TmpDir   = [System.IO.Path]::GetFullPath(".\tmp")
+# Prometheus text files the agent writes for windows_exporter to serve (SQL metrics that need
+# a SQL login, which windows_exporter's own collectors cannot read).
+$TextfileDir = [System.IO.Path]::GetFullPath(".\textfile")
 
-foreach ($d in @($BaseDir, $FBDir, $AgentDir, $TmpDir)) {
+foreach ($d in @($BaseDir, $FBDir, $AgentDir, $TmpDir, $TextfileDir)) {
     if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
 }
 
@@ -55,9 +58,28 @@ Write-Host ""
 Write-Host "[1/3] Installing windows_exporter v$WinExpVersion..."
 $msi = "$TmpDir\windows_exporter.msi"
 Get-File "https://github.com/prometheus-community/windows_exporter/releases/download/v$WinExpVersion/windows_exporter-$WinExpVersion-amd64.msi" $msi
+
+# Collectors follow what the host runs, detected the same way the agent discovers it.
+# Workloads installed after bootstrap need bootstrap re-run to get their collector.
+$collectors = @("cpu", "cs", "logical_disk", "memory", "net", "os", "service", "system", "tcp", "textfile")
+if (Test-Path "$env:SystemRoot\System32\inetsrv\appcmd.exe") {
+    $collectors += "iis"
+    Write-Host "  IIS detected"
+}
+if (Test-Path "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL") {
+    $collectors += "mssql"
+    Write-Host "  SQL Server detected"
+}
+$clusSvc = Get-Service -Name "ClusSvc" -ErrorAction SilentlyContinue
+if ($clusSvc -and $clusSvc.Status -eq "Running") {
+    $collectors += "mscluster"
+    Write-Host "  Failover cluster node detected"
+}
+
 Start-Process msiexec.exe -Wait -ArgumentList @(
     "/i", $msi, "/quiet",
-    "ENABLED_COLLECTORS=cpu,cs,logical_disk,memory,net,os,service,system,tcp,iis",
+    "ENABLED_COLLECTORS=$($collectors -join ',')",
+    "TEXTFILE_DIRS=`"$TextfileDir`"",
     "ADD_FIREWALL_EXCEPTION=yes"
 )
 Write-Host "  Done."
@@ -128,6 +150,7 @@ Get-File $AgentExeUrl $agentExe
     agent_dir          = $AgentDir
     fluent_bit_dir     = $FBDir
     tmp_dir            = $TmpDir
+    textfile_dir       = $TextfileDir
 } | ConvertTo-Json | Set-Content "$AgentDir\config.json"
 
 Install-Service "wimp-agent" $agentExe

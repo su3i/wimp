@@ -22,6 +22,8 @@ const (
 	CategoryService Category = "service"
 	CategorySidecar Category = "sidecar"
 	CategoryMetrics Category = "metrics"
+	CategorySql     Category = "sql"
+	CategoryCluster Category = "cluster"
 )
 
 // levelRank gives an ordinal ranking for severity comparisons (e.g. the receiver

@@ -61,9 +61,12 @@ export interface Project {
 // different host entry (usually in another project), so this one will never come back.
 export type MachineStatus = 'pending' | 'online' | 'offline' | 'reassigned'
 
+export type OsType = 'windows' | 'linux'
+
 export interface Machine {
   ID: number
   ProjectID: number
+  OsType: OsType
   Hostname: string
   IPs: string[]
   Status: MachineStatus
@@ -75,13 +78,50 @@ export interface Machine {
   MachineUID: string
   SupersededByID: number | null
   ReassignedAt: string | null
+  Cluster: Cluster | null
   CreatedAt: string
   UpdatedAt: string
 }
 
 export interface MachineWithPools extends Machine {
   app_pools: AppPool[]
+  roles: HostRole[]
 }
+// What discovery found a host running; decides which views the host gets.
+export type HostRole = 'iis' | 'sql' | 'cluster'
+
+export interface Cluster {
+  name: string
+  nodes: { name: string; state: string }[] | null
+  availability_groups: { name: string; primary_node: string; state: string }[] | null
+}
+
+export type SqlState = 'Running' | 'Stopped' | 'Starting' | 'Stopping' | 'Failed' | 'Unknown'
+
+export interface SqlInstance {
+  ID: number
+  MachineID: number
+  Name: string
+  ServiceName: string
+  AgentServiceName: string
+  Version: string
+  Edition: string
+  Port: string
+  State: SqlState
+  AgentState: SqlState
+  Clustered: boolean
+  VirtualServerName: string
+  OwnerNode: string
+  Monitored: boolean
+  MonitorError: string
+}
+
+export interface SqlInstanceWithMachine extends SqlInstance {
+  machine: Machine
+}
+
+export type SqlLiveKind = 'blocking' | 'requests' | 'jobs'
+
 
 export interface AppPool {
   ID: number
@@ -127,6 +167,8 @@ export interface Application {
   UpdatedAt: string
   pool_total?: number
   pool_healthy?: number
+  sql_total?: number
+  sql_healthy?: number
 }
 
 export interface AppPoolWithDetails extends AppPool {
@@ -137,6 +179,7 @@ export interface AppPoolWithDetails extends AppPool {
 
 export interface ApplicationDetail extends Application {
   app_pools: AppPoolWithDetails[]
+  sql_instances: SqlInstanceWithMachine[]
 }
 
 export interface LokiStream {

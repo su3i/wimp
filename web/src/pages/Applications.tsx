@@ -42,7 +42,7 @@ function PoolSummary({ healthy, total }: { healthy: number; total: number }) {
     total === 0 ? "text-ink-faint" : healthy === total ? "text-success" : healthy === 0 ? "text-danger" : "text-warning";
   return (
     <span className={cn("text-[0.75rem]", text)}>
-      {total === 0 ? "No pools" : `${healthy}/${total} healthy`}
+      {total === 0 ? "No members" : `${healthy}/${total} healthy`}
     </span>
   );
 }
@@ -380,7 +380,9 @@ export function Applications() {
 
           {/* Rows */}
           {paginated.map((app, idx) => {
-            const total = app.pool_total ?? 0;
+            // App pools and SQL instances both count as members of the application.
+            const total = (app.pool_total ?? 0) + (app.sql_total ?? 0);
+            const healthy = (app.pool_healthy ?? 0) + (app.sql_healthy ?? 0);
             const status = healthCheckStatus(app, hcStatusMap, hcUptimeMap);
             const isLast = idx === paginated.length - 1;
             const cellBorder = !isLast && "border-b border-rim";
@@ -421,7 +423,7 @@ export function Applications() {
 
                 {/* Status */}
                 <div className={cn("flex items-center px-5 py-3.5 group-hover:bg-surface-alt transition-colors duration-100", cellBorder)}>
-                  <StatusCell status={status} healthy={app.pool_healthy ?? 0} total={total} />
+                  <StatusCell status={status} healthy={healthy} total={total} />
                 </div>
 
                 {/* Uptime */}

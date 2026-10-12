@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bell, Info, ExternalLink, ShieldAlert, X } from "lucide-react";
+import { AlertTriangle, Bell, ExternalLink, ShieldAlert } from "lucide-react";
 import { useProjectStore } from "@/store/project";
 import { dashboardService } from "@/services/dashboard.service";
 import type { DashboardNotification } from "@/services/dashboard.service";
 import { Pagination } from "@/components/ui/Pagination";
+import { Hint } from "@/components/ui/Hint";
 import { usePageTitle } from "@/utils/usePageTitle";
 import { cn } from "@/utils/cn";
 import { levelConfig, splitTitle } from "@/utils/notifications";
@@ -155,9 +156,8 @@ export function Activity() {
 
       {/* Alertmanager hint */}
       {showHint && (
-        <div className='flex items-start gap-2.5 rounded-lg border border-rim bg-surface px-4 py-3'>
-          <Info className='size-3.5 text-ink-dim shrink-0 mt-0.5' />
-          <p className='text-xs text-ink-dim leading-relaxed flex-1'>
+        <Hint onDismiss={() => setShowHint(false)}>
+          <p>
             Get notified on critical activity via Slack, PagerDuty, email, or Telegram by configuring an{" "}
             <a
               href='https://prometheus.io/docs/alerting/latest/configuration/#receiver'
@@ -168,14 +168,7 @@ export function Activity() {
               Alertmanager receiver <ExternalLink className='size-2.5' />
             </a>{" "}in your deployment settings.
           </p>
-          <button
-            type='button'
-            onClick={() => setShowHint(false)}
-            className='cursor-pointer shrink-0 flex items-center justify-center size-6 rounded-md border-[1.5px] border-rim text-ink-faint hover:text-ink hover:border-ink-faint transition-colors'
-          >
-            <X className='size-3' />
-          </button>
-        </div>
+        </Hint>
       )}
 
       {/* Severity filter. A select rather than a row of pills: the five options are

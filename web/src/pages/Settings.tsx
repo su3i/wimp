@@ -31,6 +31,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   service: "Health Checks",
   sidecar: "Sidecars",
   metrics: "Thresholds",
+  sql: "SQL Server",
+  cluster: "Failover Cluster",
 };
 
 function humanizeAlertType(alertType: string) {

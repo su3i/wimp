@@ -16,6 +16,7 @@ import (
 	metricsService "github.com/su3i/wimp/internal/application/metrics"
 	monitorService "github.com/su3i/wimp/internal/application/monitor"
 	settingService "github.com/su3i/wimp/internal/application/setting"
+	sqlMetricsService "github.com/su3i/wimp/internal/application/sqlmetrics"
 	"github.com/su3i/wimp/internal/config"
 	"github.com/su3i/wimp/internal/infrastructure/database"
 	"github.com/su3i/wimp/internal/infrastructure/server"
@@ -63,6 +64,8 @@ func main() {
 	monitorService.StartChecker(config.Database(), config.Common().PrometheusUrl)
 
 	metricsService.StartChecker(config.Database(), config.Common().PrometheusUrl)
+
+	sqlMetricsService.StartChecker(config.Database(), config.Common().PrometheusUrl)
 
 	router := server.InitializeRouter()
 
