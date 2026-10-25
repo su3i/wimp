@@ -69,6 +69,15 @@ function NavItemLink({ item, expanded }: { item: NavItem; expanded: boolean }) {
   )
 }
 
+function NavItemSkeleton({ expanded }: { expanded: boolean }) {
+  return (
+    <div className={cn('flex h-8 w-full items-center rounded-md animate-pulse', expanded ? 'gap-2.5 px-3' : 'justify-center')} aria-hidden='true'>
+      <span className='size-3.5 shrink-0 rounded bg-surface-high' />
+      {expanded && <span className='h-2.5 w-24 rounded bg-surface-high' />}
+    </div>
+  )
+}
+
 export function Sidebar() {
   const { user, refreshToken, clearAuth } = useAuthStore()
   const navigate = useNavigate()
@@ -77,14 +86,14 @@ export function Sidebar() {
   const { activeProject } = useProjectStore()
 
   // Same query and cache key as the dashboard and host pages, so this costs no extra request.
-  const { data: machines } = useQuery({
+  const { data: machines, isError: machinesError } = useQuery({
     queryKey: ['machines', activeProject?.Key],
     enabled: !!activeProject,
     staleTime: 60_000,
     queryFn: async () => (await machineService.list(activeProject!.Key, { per_page: 100 })).data.machines ?? [],
   })
   const roles = new Set((machines ?? []).flatMap(m => m.roles ?? []))
-  const navItems = NAV_ITEMS.filter(item => !item.role || roles.has(item.role))
+  const rolesLoading = !activeProject || (machines === undefined && !machinesError)
 
   function setExpanded(v: boolean) {
     localStorage.setItem('wimp_sidebar_expanded', String(v))
@@ -103,35 +112,60 @@ export function Sidebar() {
     <aside className={cn(
       'flex shrink-0 flex-col border-r border-rim bg-surface h-screen sticky top-0 transition-[width] duration-200 overflow-hidden',
       expanded ? 'w-52' : 'w-14',
-    )}>
+    )} aria-busy={rolesLoading}>
+      {rolesLoading && <span className='sr-only' role='status'>Loading</span>}
       {/* Brand - icon only, always centered */}
       <div className='flex items-center justify-center border-b border-rim py-3'>
-        <img src={iconSrc} alt='wimp' className='size-[72px]' />
+        {rolesLoading
+          ? <div className='size-[72px] rounded-full bg-surface-high animate-pulse' aria-hidden='true' />
+          : <img src={iconSrc} alt='wimp' className='size-[72px]' />}
       </div>
 
       {/* Project switcher */}
-      <div className='border-b border-rim px-2 py-2'>
-        <ProjectSwitcher expanded={expanded} />
+      <div className='relative border-b border-rim px-2 py-2'>
+        {/* Keep the switcher mounted so it can select the initial project. */}
+        <div className={rolesLoading ? 'invisible' : undefined}>
+          <ProjectSwitcher expanded={expanded} />
+        </div>
+        {rolesLoading && (
+          <div className='absolute inset-x-2 top-2' aria-hidden='true'>
+            <NavItemSkeleton expanded={expanded} />
+          </div>
+        )}
       </div>
 
       {/* Primary nav. flex-1 so it takes the slack, which is what pushes the secondary
           group down to sit against the account row. */}
       <nav className='flex-1 py-3 px-2 space-y-0.5 overflow-hidden'>
-        {navItems.map((item) => (
-          <NavItemLink key={item.to} item={item} expanded={expanded} />
-        ))}
+        {NAV_ITEMS.map((item) =>
+          rolesLoading ? (
+            <NavItemSkeleton key={item.to} expanded={expanded} />
+          ) : !item.role || roles.has(item.role) ? (
+            <NavItemLink key={item.to} item={item} expanded={expanded} />
+          ) : null,
+        )}
       </nav>
 
       {/* Secondary nav */}
       <div className='shrink-0 border-t border-rim px-2 py-2 space-y-0.5'>
         {SECONDARY_NAV_ITEMS.map((item) => (
-          <NavItemLink key={item.to} item={item} expanded={expanded} />
+          rolesLoading
+            ? <NavItemSkeleton key={item.to} expanded={expanded} />
+            : <NavItemLink key={item.to} item={item} expanded={expanded} />
         ))}
       </div>
 
       {/* Bottom */}
       <div className='shrink-0 border-t border-rim px-2 py-3'>
-        {expanded ? (
+        {rolesLoading ? (
+          <div className={cn('animate-pulse', expanded ? 'flex h-7 items-center justify-around' : 'space-y-0.5')} aria-hidden='true'>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={cn('flex items-center justify-center', expanded ? 'h-7 flex-1' : 'h-8 w-full')}>
+                <div className='size-5 rounded-full bg-surface-high' />
+              </div>
+            ))}
+          </div>
+        ) : expanded ? (
           <>
             {/* Avatar + actions in one row */}
             <div className='flex items-center h-7'>

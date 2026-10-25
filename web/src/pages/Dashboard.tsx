@@ -463,7 +463,60 @@ function ChartSkeleton({ height }: { height: number }) {
   );
 }
 
-// Shared shell for the three per-host line charts - title, info tooltip, window toggle,
+// The host list determines which workload cards and rate charts exist. Keep the whole
+// overview in one stable, three-chart loading layout until that decision is available.
+function DashboardSkeleton() {
+  return (
+    <div role='status' aria-label='Loading overview' className='animate-pulse'>
+      <div className='mb-[22px] space-y-2'>
+        <div className='h-2 w-16 rounded bg-surface-high' />
+        <div className='h-6 w-48 rounded bg-surface-high' />
+      </div>
+      <div className='space-y-[14px]'>
+        <div className='grid grid-cols-3 gap-[14px]'>
+          <div className='grid grid-cols-2 gap-[14px]'>
+            {[0, 1].map((i) => (
+              <div key={i} className={STAT_CARD}>
+                <div className='h-2 w-20 rounded bg-surface-high' />
+                <div className='h-7 w-16 rounded bg-surface-high' />
+                <div className='h-2 w-14 rounded bg-surface-high' />
+              </div>
+            ))}
+          </div>
+          <div className={STAT_CARD}>
+            <div className='h-2 w-20 rounded bg-surface-high' />
+            <div className='h-6 w-3/4 rounded bg-surface-high' />
+            <div className='h-2 w-14 rounded bg-surface-high' />
+          </div>
+          <div className={STAT_CARD}>
+            <div className='h-2 w-20 rounded bg-surface-high' />
+            <div className='flex gap-4'><div className='size-14 rounded-full bg-surface-high' /><div className='size-14 rounded-full bg-surface-high' /></div>
+          </div>
+        </div>
+        <div className='grid grid-cols-3 gap-[14px]'>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className='rounded-lg border border-rim bg-surface p-4 flex flex-col gap-[11px]'>
+              <div className='flex items-start justify-between'>
+                <div className='space-y-2'><div className='h-2 w-24 rounded bg-surface-high' /><div className='h-4 w-16 rounded bg-surface-high' /></div>
+                <div className='h-6 w-16 rounded bg-surface-high' />
+              </div>
+              <ChartSkeleton height={234} />
+            </div>
+          ))}
+        </div>
+        <div className='rounded-lg border border-rim overflow-hidden bg-surface'>
+          <div className='flex items-center justify-between px-4 py-3 border-b border-rim bg-surface-alt'>
+            <div className='h-2 w-28 rounded bg-surface-high' />
+            <div className='h-2 w-14 rounded bg-surface-high' />
+          </div>
+          {Array.from({ length: 4 }).map((_, i) => <NotifRowSkeleton key={i} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shared shell for the per-host line charts - title, info tooltip, window toggle,
 // and the Suspense boundary the lazily-loaded recharts chunk lands in.
 function ChartCard({
   title,
@@ -515,7 +568,7 @@ export function Dashboard() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const { emptyProjectPrompted, markEmptyProjectPrompted } = useUIStore();
 
-  const { data: machines } = useQuery({
+  const { data: machines, isError: machinesError, refetch: refetchMachines } = useQuery({
     queryKey: ["machines", projectKey],
     queryFn: async () => {
       const { data } = await machineService.list(projectKey, { per_page: 100 });
@@ -853,6 +906,16 @@ export function Dashboard() {
     setDismissed((prev) => new Set([...prev, id]));
   }
 
+  if (!projectKey || (machines === undefined && !machinesError)) return <DashboardSkeleton />;
+  if (machines === undefined) {
+    return (
+      <div role='alert' className='rounded-lg border border-rim bg-surface p-6 text-sm text-ink-dim'>
+        Could not load this project's hosts.
+        <button type='button' className='ml-3 text-primary hover:underline cursor-pointer' onClick={() => void refetchMachines()}>Retry</button>
+      </div>
+    );
+  }
+
   return (
     <>
 
@@ -913,10 +976,10 @@ export function Dashboard() {
           />
         </div>
 
-        {/* ── Row 2: workload rate + Cpu Usage + Memory Usage ──────────── */}
-        {/* The first chart is the workload's own rate: IIS requests when the project runs IIS,
-            SQL batches when it only runs SQL Server, and absent when it runs neither. */}
-        <div className={cn('grid gap-[14px]', hasIIS || hasSQL ? 'grid-cols-3' : 'grid-cols-2')}>
+        {/* ── Row 2: workload rates + Cpu Usage + Memory Usage ─────────── */}
+        {/* Show each workload's rate when present. Projects running both workloads get
+            both rate charts; the usual single-workload layout stays three columns. */}
+        <div className={cn('grid gap-[14px]', hasIIS && hasSQL ? 'grid-cols-2' : hasIIS || hasSQL ? 'grid-cols-3' : 'grid-cols-2')}>
           {hasIIS ? (
             <ChartCard
               title='Request Rate'
@@ -936,6 +999,8 @@ export function Dashboard() {
           ) : hasSQL ? (
             batchChart
           ) : null}
+
+          {hasIIS && hasSQL && batchChart}
 
           <ChartCard
             title='Cpu Usage'

@@ -16,14 +16,6 @@ export function LoadingScreen({ label = "Loading" }: LoadingScreenProps) {
       style={{ animation: "loading-screen-fade-in 0.25s ease-out" }}
     >
       <img src={iconSrc} alt="" className="loading-mark-pulse size-24" />
-      <p className="flex items-center gap-2 text-[0.625rem] font-semibold uppercase tracking-widest text-ink-faint">
-        {label}
-        <span className="flex items-center gap-0.5">
-          <span className="loading-dot" style={{ animationDelay: "0s" }} />
-          <span className="loading-dot" style={{ animationDelay: "0.15s" }} />
-          <span className="loading-dot" style={{ animationDelay: "0.3s" }} />
-        </span>
-      </p>
     </div>
   );
 }
