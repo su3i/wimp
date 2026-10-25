@@ -13,7 +13,7 @@ func Health(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Healthy",
-		"version": "v1.1.2",
+		"version": "v1.1.3",
 		"environment": config.Common().AppEnv,
 	  })
 }

@@ -2,8 +2,8 @@ apiVersion: v2
 name: wimp
 description: Windows Infrastructure Management Platform - control plane, web frontend, and optional observability stack
 type: application
-version: 0.0.23
-appVersion: "1.1.2"
+version: 0.0.24
+appVersion: "1.1.3"
 
 dependencies:
   - name: loki
